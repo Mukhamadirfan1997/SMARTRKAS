@@ -41,6 +41,12 @@
                 <input id="remember_me" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" name="remember">
                 <span class="text-sm text-slate-600">Ingat saya</span>
             </label>
+
+            @if (Route::has('password.request'))
+                <a class="text-sm text-blue-600 hover:text-blue-800 font-medium" href="{{ route('password.request') }}">
+                    Lupa password?
+                </a>
+            @endif
         </div>
 
         <button type="submit" id="loginBtn" class="btn-primary w-full justify-center">
