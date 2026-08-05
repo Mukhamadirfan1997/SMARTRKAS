@@ -7,6 +7,8 @@
 
         <title>{{ config('app.name', 'SmartRKAS') }}</title>
 
+        <link rel="icon" type="image/png" href="/icons/smartrkas.png">
+
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -50,8 +52,8 @@
         <div class="hidden lg:flex lg:w-1/2 guest-left bg-gradient-to-br from-blue-900 via-blue-900 to-teal-800 relative overflow-hidden items-center justify-center p-12">
             <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNiI+PHBhdGggZD0iTTM2IDE4YzEuNjU3IDAgMy0xLjM0MyAzLTNzLTEuMzQzLTMtMy0zLTMgMS4zNDMtMyAzIDEuMzQzIDMgMyAzem0tMjQgMGMxLjY1NyAwIDMtMS4zNDMgMy0zcy0xLjM0My0zLTMtMy0zIDEuMzQzLTMgMyAxLjM0MyAzIDMgM3oiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30"></div>
             <div class="relative z-10 text-center max-w-md">
-                <div class="w-24 h-24 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-7 shadow-2xl shadow-blue-900/30 guest-logo">
-                    <span class="text-white font-black text-4xl">SR</span>
+                <div class="w-24 h-24 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-7 shadow-2xl shadow-blue-900/30 guest-logo overflow-hidden">
+                    <img src="/icons/smartrkas.png" alt="SmartRKAS" class="w-20 h-20 object-contain">
                 </div>
                 <h1 class="text-5xl font-extrabold text-white mb-3 tracking-tight">SMARTRKAS</h1>
                 <p class="text-white/90 text-xl font-medium">Sistem Informasi Realisasi Anggaran RKAS</p>
@@ -83,8 +85,8 @@
         <div class="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-blue-50/30">
             <div class="w-full max-w-md">
                 <div class="lg:hidden flex items-center gap-3 mb-8 justify-center">
-                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                        SR
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg overflow-hidden">
+                        <img src="/icons/smartrkas.png" alt="SmartRKAS" class="w-9 h-9 object-contain">
                     </div>
                     <div>
                         <div class="text-xl font-bold text-slate-800">SMARTRKAS</div>

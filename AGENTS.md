@@ -232,3 +232,20 @@ Port register + forgot-password + reset-password dari referensi ke target. Verif
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (209 tests, 548 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — Branding: Icon SmartRKAS
+
+## Goal
+Manfaatkan `icon smartrkas.png` (500×500, di root project) sebagai identitas aplikasi: favicon web, logo login (guest layout), logo sidebar, dan icon desktop Tauri.
+
+## Changes
+- `public/icons/smartrkas.png` — salinan ikon (dipakai web/Tauri webview; `frontendDist` = `../public`, jadi path `/icons/smartrkas.png`).
+- `resources/views/layouts/app.blade.php` + `guest.blade.php` — tambah `<link rel="icon" type="image/png" href="/icons/smartrkas.png">`.
+- `resources/views/layouts/guest.blade.php` — ganti placeholder teks "SR" (panel kiri `guest-logo` + header mobile) dengan `<img src="/icons/smartrkas.png">` (`object-contain`).
+- `resources/views/layouts/navigation.blade.php` — `sidebar-logo-icon` berisi teks "SR" → `<img class="w-full h-full object-contain">`.
+- **Tauri**: `npm run tauri -- icon "icon smartrkas.png"` regenerasi semua `src-tauri/icons/*` (32/64/128/128@2x, icon.ico, icon.icns, Square*, android/ios). Salinan ikon ditaruh di `src-tauri/app-icon.png` + `src-tauri/icons/source.png` agar `tauri icon` (tanpa argumen) memakainya lagi.
+
+## Test Status
+- Full suite tetap hijau: `OK (209 tests, 548 assertions)`. Tidak ada perubahan logika app.

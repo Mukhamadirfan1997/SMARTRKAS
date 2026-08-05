@@ -1,7 +1,9 @@
     <aside class="sidebar" id="sira-sidebar" aria-label="Navigasi utama">
 
     <div class="sidebar-logo">
-        <div class="sidebar-logo-icon">SR</div>
+        <div class="sidebar-logo-icon overflow-hidden">
+            <img src="/icons/smartrkas.png" alt="SmartRKAS" class="w-full h-full object-contain">
+        </div>
         <div class="sidebar-logo-text">
             <div class="text-white font-bold text-sm leading-tight">SMARTRKAS</div>
             <div class="text-slate-500 text-[11px]">Sistem Informasi Anggaran</div>
