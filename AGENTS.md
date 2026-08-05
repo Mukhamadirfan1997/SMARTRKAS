@@ -102,3 +102,26 @@ Lengkapi dashboard dengan tabel item RKAS dinamis (rencana/realisasi/sisa + volu
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (178 tests, 490 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M6 Ops: Scheduling Cleanup + Hapus Akun
+
+## Goal
+Port command `audit:clean` + jadwal backup/cleanup dari referensi sira-rkas ke `routes/console.php` target, dan lengkapi hapus akun (route + view `delete-user-form`), karena `ProfileController::destroy` sudah ada.
+
+## Summary
+- 6 test baru (2 `AuditCleanCommandTest`, 4 `ProfileDeleteTest`) → total **184 tests (507 assertions)**, PHPStan level 6: 0 error.
+
+## Changes
+- `app/Console/Commands/CleanAuditLog.php` — signature `audit:clean {days=90}`, hapus `AuditLog::where('created_at','<',cutoff)->delete()`. Auto-registered (default discovery `app/Console/Commands`).
+- `routes/console.php` — jadwal: `backup:clean` 01:00 harian, `backup:run` 01:30 harian, `audit:clean 90` Minggu 02:00, hapus `failed_jobs` >30 hari Minggu 03:00 (`Schedule::call` + `DB::table`), `kwitansi:clean 2` bulanan 04:00. `php artisan schedule:list` → 5 entri OK.
+- `routes/web.php` — `Route::delete('/profile', [ProfileController::class,'destroy'])->name('profile.destroy')`.
+- `resources/views/profile/partials/delete-user-form.blade.php` — diadaptasi dari referensi (pakai `x-modal`, `x-input-label/x-text-input/x-input-error`, `btn-danger`/`btn-secondary`; target sudah load Alpine via `app.js`).
+- `resources/views/profile/edit.blade.php` — tambah include `delete-user-form`.
+- `tests/Feature/Console/AuditCleanCommandTest.php` — old vs recent log, default 90 hari.
+- `tests/Feature/Auth/ProfileDeleteTest.php` — hapus dengan password benar/salah (`assertSessionHasErrorsIn('userDeletion','password')`), guest redirect, page edit menampilkan form.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (184 tests, 507 assertions)`.
