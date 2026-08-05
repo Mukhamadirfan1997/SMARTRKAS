@@ -1,71 +1,60 @@
-# SmartRKAS Desktop — AGENTS.md
+# SmartRKAS — Catatan Pengembangan
 
-Aplikasi desktop Windows offline-first untuk perencanaan & monitoring RKAS
-per sekolah. Proyek BARU, memakai `sira-rkas` sebagai referensi (jangan diubah).
+Proyek target Laravel untuk aplikasi RKAS (versi tanpa `ProfilSekolah`/`sekolah_id`). Referensi/asal fitur ada di `D:\aplikasi sekolah\New folder\sira-rkas` (repo terpisah, punya `sekolah_id` + `RkasItemObserver` — TIDAK ada di sini).
 
-- Blueprint: `SmartRKAS_Blueprint_v2_Integrasi_Monitoring_RKAS_SIRA_RKAS.md` (di repo sira-rkas).
-- Prinsip: "Sederhana di Sekolah, Lengkap di Server."
-- Stack: Laravel 12 + PHP 8.4 (dev 8.2) + Blade + Tailwind + Alpine.js + Tauri 2 + SQLite + Laravel Excel + DomPDF.
-- Login: single user lokal per instalasi. Offline-first. Sinkronisasi = V2, Portal Kecamatan = V3.
+## Perbedaan Kunci vs sira-rkas (referensi)
+- TIDAK ada model `ProfilSekolah`, kolom `sekolah_id`, atau `app/Observers/RkasItemObserver.php`.
+- Struktur: `RkasItem` → `RkasItemBulan` (rencana per bulan), `TransaksiBku`, `MasterProgram`, `MasterKodeRekening`, `SumberDana`, `TahunAnggaran`, `ImportLog`, `AuditLog`, `PengaturanSekolah`, `Kwitansi`, `Outbox`, `User`.
+- Semua id model utama adalah **UUID** (`HasUuids`) — jangan cast `(int)` untuk membandingkan id (mis. hasil JSON select2).
 
-## Struktur
-- `src-tauri/` — shell desktop (Rust). Menjalankan PHP sidecar (`php artisan serve`) lalu membuka window ke `http://127.0.0.1:<port>/`.
-- `bootstrap/app.php` — jika `SMARTRKAS_DATA_DIR` diset, storage di-relokasi ke `{DATA}/storage` dan skeleton dir dibuat.
-- `app/Console/Commands/AppInstall.php` — `php artisan app:install`: migrate + seed (dipanggil Tauri saat first-run).
-- `src-tauri/php/` — runtime PHP yang dibundel (lihat `README.md` di folder itu).
+## Setup & Verifikasi
+- `phpunit.xml`: sqlite `:memory:`, `CACHE_STORE=array`, `QUEUE_CONNECTION=sync`, `SESSION_DRIVER=array`.
+- `phpstan.neon`: level 6, path mencakup `app/`, `config/`, `database/factories/`, `tests/`.
+- Test: `vendor\bin\phpunit` · PHPStan: `vendor\bin\phpstan analyse --no-progress`.
 
-## Env penting (di-set oleh Tauri saat runtime)
-- `SMARTRKAS_DATA_DIR` — data user (AppData). DB ada di `{DATA}/smartrkas.sqlite`.
-- `DB_DATABASE` — path absolut DB SQLite.
-- Larangan: **jangan pernah `config:cache`** di produksi — DB path dibaca runtime dari env.
+## Fitur Import RKAS
+- `app/Imports/RkasImport.php` — konstruktor `(string $tahunAnggaranId, int $bulan, string $sumberDanaId, string $importLogId, ?int $headingRow = null, ?array $columns = null, ?int $startRow = null)`. Tanpa `WithHeadingRow`; identitas item via `(tahun, sumber_dana, program, kode_rekening)` + `normalizeUraian`, bukan `no_urut`.
+- `app/Imports/RkasImportHeaderDetector.php` — `detectColumns(string $filePath): array{start_row: int, columns: array<string,int>}`. Header 2 baris (file PRD): baris 8 = no_urut/kode_rekening/kode_program/uraian/jumlah, baris 9 = volume/satuan/tarif; akses kolom = `$row[columns[field]-1]` (0-based).
+- `app/Jobs/ProcessRkasImport.php` — SYNCHRONOUS (tanpa `ShouldQueue`), `(string $importLogId, string $filePath)`. Alur: hapus `rkas_item_bulan` bulan tsb (idempoten) → `detectColumns` → `Excel::import` → `renumber` (no_urut 1..N) → `syncJumlah` (jumlah = sum rencana) → AuditLog `tabel='import_rkas', aksi='import'` → hapus file + null-kan `file_path`.
+- `ImportRkasController` — `store()` per file bulan: validasi `files.*` (xlsx/xls/csv, max 5MB) + `sumber_dana_id`; simpan ke `storage/app/import_rkas/`; dispatch job; rute `GET/POST /import-rkas`, `/import-rkas/download-template`, `/import-rkas/status`.
 
-## Verifikasi M0 (sudah lulus)
-- `cargo check` di `src-tauri/` → OK.
-- Smoke test: `SMARTRKAS_DATA_DIR` + `DB_DATABASE` di-set → `app:install` → `artisan serve` → `/login` HTTP 200, storage terelokasi.
-- `php artisan test` → 25 pass.
+## Key Patterns
+- **`increment()` pada kolom NULL TIDAK berfungsi** (`NULL + 1 = NULL` di MySQL & SQLite). `ImportLog` wajib punya default `baris_berhasil=0, baris_gagal=0` (model `$attributes`) sebelum di-`increment`.
+- `RkasController::destroyAll` (POST `/rkas/hapus-semua`): bila `tahun` input tidak ditemukan → fallback ke tahun aktif; error hanya saat 0 item cocok.
+- `with(['rel' => fn (Relation $q) => ...])` menerima `Relation`; `withSum([... => fn (Builder $q)])` menerima `Builder`.
+- `updateQuietly` dipakai untuk recompute `no_urut`/`jumlah` agar tidak memicu observer/audit noise.
+- `Excel::store` (FromArray) membuang baris kosong `[]` — untuk test layout baris persis, isi baris antara dengan `' '`.
 
-## Command rutin
-- `php artisan test` — PHPUnit.
-- `vendor/bin/phpstan analyse` — level 6.
-- `npm run tauri dev` — jalankan desktop dev (membutuhkan PHP di PATH).
-- `npm run tauri build` — build installer (membutuhkan PHP dibundel di `src-tauri/php/`).
+## Route (sebagian)
+- `/rkas`, POST `/rkas/hapus-semua`, `/rkas/{item}/edit|update|delete`
+- `/rkas-items/select2` (param `q`, `exclude[]`, `bulan` → sisa kumulatif "Sisa s.d. bulan N")
+- `/import-rkas`, `/import-rkas/download-template`, `/import-rkas/status`
+- resource: `tahun-anggaran`, `sumber-dana`, `jenis-belanja`, `master-program`, `master-kode-rekening` (+ import/hapus-semua)
+- Semua di bawah middleware `auth`; guest diarahkan ke `/login`.
 
-## Sesi
-- **05 Agu 2026 (M0)** — Bootstrap: Laravel 12 + Breeze(blade) + SQLite, dep inti
-  (excel, dompdf, backup, larastan), `phpstan.neon` level 6, command `app:install`,
-  relokasi storage, shell Tauri 2 (spawn PHP server, first-run install, kill saat
-  tutup), ikon, git init. Belum ada modul bisnis — mulai M1.
-- **05 Agu 2026 (M1)** — Master Data & pengaturan:
-  - 14 migrasi (pengaturan_sekolah, tahun_anggaran, sumber_dana, jenis_belanja,
-    master_program, master_kode_rekening, rkas_item, rkas_item_bulan, transaksi_bku,
-    kwitansi, audit_log, import_log, outbox, +auth_columns di users).
-  - 14 model + 11 factory. Semua model PK UUID wajib `use HasUuids` (5 model tanpa
-    HasUuids semula gagal create → sudah ditambah).
-  - `routes/auth.php` = hanya login/logout/confirm-password/password.update.
-    `routes/web.php` = dashboard, profile, pengaturan-sekolah, resource
-    tahun-anggaran/sumber-dana/jenis-belanja/master-program/master-kode-rekening
-    (+ import, download-template, hapus-semua, set-active).
-  - Controller M1: Dashboard (single-sekolah, tanpa kecamatan), 5 resource master,
-    PengaturanSekolah (edit/update). Import/export: `MasterProgramImport` (sheet 1
-    "KEGIATAN"), `MasterKodeRekeningImport` (prefix rules → 8 JenisBelanja),
-    `MasterKodeRekeningTemplateExport`.
-  - DatabaseSeeder: user admin@sekolah.test / password, PengaturanSekolah default,
-    TahunAnggaran 2026 aktif, SumberDana (BOSP-REG/KIN), 8 JenisBelanja.
-  - Login: cek `is_active` (blokir nonaktif) + update `last_login_at`.
-  - Views: layout app/guest + navigation dari sira-rkas (dibuang admin-kecamatan,
-    hanya menu yang route-nya ada), `app.css` 562 baris disalin, `tailwind.config`
-    + `darkMode: 'class'`, 16 view master/dashboard/pengaturan-sekolah.
-  - Fitur Breeze dibuang: register, forgot/reset password, verify email, hapus akun
-    (test + controller terkait dihapus).
-  - `Outbox::push()` → `Outbox::record()` (menimpa `Model::push()` non-static).
-  - Verifikasi: `migrate:fresh --seed` OK, `route:list` OK, `npm run build` OK,
-    `php artisan test` 28 pass, PHPStan level 6: 0 error.
-  - Test M1: `tests/Feature/MasterDataTest.php` (13 kasus: CRUD semua master,
-    set-active, dashboard, login is_active/last_login_at, template, hapus-semua).
+## Command
+- `rkas:dedup` (`DeduplicateRkas`) — gabung duplikat via uraian+program+rekening+sumber dana; `--sekolah` tidak ada di sini (tanpa sekolah_id); opsi `--dry-run`.
+- `rkas:renumber` (`RenumberRkas`) — no_urut unik 1..N.
+- `rkas:sync-jumlah` (`SyncRkasJumlah`) — `jumlah` = sum rencana semua bulan (termasuk soft-deleted).
+- `app:install` (`AppInstall`) — setup awal.
 
-## M2 (belum mulai)
-- SIRA RKAS: index monitoring CRUD + import Excel (RkasImport + header detector 2
-  baris, renumber, sync-jumlah, dedup) + resource rkas/import-rkas + view.
-- Transaksi BKU + Kwitansi, Laporan + Export (Excel/PDF), Backup.
-- Tambah route/menu navigation secara bertahap seiring fitur selesai (jangan
-  pasang link ke route yang belum ada).
+---
+
+# Sesi 05 Agu 2026 — Porting Test RKAS ke SmartRKAS + Fix ImportLog NULL
+
+## Goal
+Port/adapt test suite RKAS import dari repo referensi sira-rkas ke proyek target `SmartRKAS` (tanpa `ProfilSekolah`/`sekolah_id`/`RkasItemObserver`), tambah feature test `RkasController` + `ImportRkasController`, dan jadikan PHPStan level 6 + full suite hijau.
+
+## Summary
+- 9 file test ditulis/diadaptasi; 114 test lulus (328 assertions), PHPStan level 6: 0 error.
+- Ditemukan **bug produksi nyata**: `ImportLog::create` di controller tidak mengisi `baris_berhasil`/`baris_gagal` → NULL, dan `increment()` pada NULL menghasilkan NULL (`NULL + 1 = NULL` di MySQL & SQLite) → job selalu membaca "0 baris" dan menandai import gagal.
+
+## Changes
+- `app/Models/ImportLog.php` — tambah `protected $attributes = ['baris_berhasil' => 0, 'baris_gagal' => 0]`.
+- `tests/Feature/RKAS/RkasControllerTest.php` — `test_destroy_all_returns_error_when_no_match` tidak membuat item (fallback tahun aktif di `RkasController::destroyAll`).
+- `tests/Feature/RkasItemSelect2Test.php` — `findResult()` bandingkan id sebagai string (UUID).
+- `tests/Feature/Import/ImportRkasControllerTest.php` — hapus blok debug `fwrite(STDERR)`.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (114 tests, 328 assertions)`.

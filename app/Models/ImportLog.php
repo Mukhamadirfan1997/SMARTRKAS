@@ -31,6 +31,11 @@ class ImportLog extends Model
 
     protected $table = 'import_log';
 
+    protected $attributes = [
+        'baris_berhasil' => 0,
+        'baris_gagal' => 0,
+    ];
+
     protected $fillable = [
         'tahun_anggaran_id',
         'sumber_dana_id',
