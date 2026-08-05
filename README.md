@@ -104,7 +104,7 @@ Jadwal terdaftar di `routes/console.php` dan berjalan otomatis di mode desktop (
 | Setiap hari 01:30 | `backup:run` (buat backup database + file) |
 | Minggu 02:00 | `audit:clean 90` (hapus audit log > 90 hari) |
 | Minggu 03:00 | hapus `failed_jobs` > 30 hari |
-| Bulanan 04:00 | `kwitansi:clean 2` (hapus kwitansi > 2 bulan) |
+| Bulanan 04:00 | `kwitansi:clean 2` (hapus kwitansi > 2 tahun) |
 
 Lihat daftar dengan `php artisan schedule:list`.
 
