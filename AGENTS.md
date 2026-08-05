@@ -249,3 +249,37 @@ Manfaatkan `icon smartrkas.png` (500×500, di root project) sebagai identitas ap
 
 ## Test Status
 - Full suite tetap hijau: `OK (209 tests, 548 assertions)`. Tidak ada perubahan logika app.
+
+---
+
+# Sesi 05 Agu 2026 — M12 Backup Desktop + UI Backup & Riwayat Aktivitas
+
+## Goal
+Selesaikan 3 item pasca M11: (1) backup terjadwal di mode desktop Tauri, (2) halaman Backup (UI) + halaman Riwayat Aktivitas (viewer AuditLog), (3) verifikasi `tauri build` (nsis/msi) + dokumentasi. Manajemen pengguna & role DIBATALKAN — konfirmasi user: **1 user per sekolah**.
+
+## Summary
+- 12 test baru (7 `BackupPageTest`, 5 `AuditLogPageTest`) → total **221 tests (580 assertions)**, PHPStan level 6: 0 error. `npm run tauri -- build` sukses (nsis + msi).
+- **Temuan**: scheduler `routes/console.php` tidak berjalan di desktop (Tauri hanya spawn `artisan serve`); `src-tauri/php/` kosong (bundling PHP manual); `README.md` masih default Laravel.
+
+## Changes
+- `src-tauri/src/lib.rs` — `struct PhpServer(Mutex<Option<Vec<Child>>>)`; spawn `["artisan","schedule:work"]` (wait=false) bersama `artisan serve`; `on_window_event` (CloseRequested) kill+wait semua children lalu `app.exit(0)`.
+- `app/Http/Controllers/BackupController.php` — konstruktor baca `config('backup.backup.name','laravel-backup')` (env `APP_NAME`) sbg dir di `Storage::disk('local')`; `index()` list `.zip` (name/path/size/mtime) sort mtime desc; `run()` = `Artisan::call('backup:run')` try/catch → flash success/error; `download(string $file)` validasi `basename($file)===$file` + `str_ends_with('.zip')` → 404, lalu `Storage::disk('local')->download`.
+- `app/Http/Controllers/AuditLogController.php` — `AuditLog::with('user')->latest()`; filter `tabel` (opsi dari distinct) + `q` (tabel/aksi/user name/email); `paginate(50)->withQueryString()`; `$tabels` distinct ordered.
+- `routes/web.php` (grup auth): GET `pengaturan/backup` (`pengaturan.backup.index`), POST `pengaturan/backup/now` (`pengaturan.backup.now`), GET `pengaturan/backup/download/{file}` (`pengaturan.backup.download`), GET `pengaturan/riwayat-aktivitas` (`pengaturan.audit.index`).
+- `resources/views/pengaturan/backup.blade.php` — kartu statistik (jumlah/total ukuran/backup terakhir via `\Carbon\Carbon::createFromTimestamp`), form POST "Backup Sekarang", tabel zip + tombol Unduh, empty-state.
+- `resources/views/pengaturan/audit-log.blade.php` — filter GET (select `tabel` + `q` + reset), tabel Waktu/User/Jenis (`Str::headline($log->tabel)`)/Aksi (badge)/Detail (summary `data_baru ?? data_lama`), paginasi.
+- `resources/css/app.css` — tambah `.alert-info` (sky). **Catatan**: badge hanya `badge-green/red/orange/yellow/blue/purple/gray` — peta aksi di audit view memakai `badge-green/blue/red/yellow` + `badge-gray` default, dan pakai `<span class="badge badge-...">`.
+- `resources/views/layouts/navigation.blade.php` — link sidebar Pengaturan: Profil Sekolah, **Backup & Pemulihan**, **Riwayat Aktivitas**.
+- `README.md` — ganti konten default Laravel dgn dokumentasi lengkap (mode web/desktop, env, jadwal scheduler, CLI, testing, build Tauri + langkah bundle PHP).
+- Tests: `tests/Feature/Backup/BackupPageTest.php` (guest redirect, list, empty-state, run via `Artisan::spy()` — **`Artisan::fake()` tidak ada di kernel ini**, dan `->with()` pada `LegacyMockInterface` bikin PHPStan error → cukup `shouldHaveReceived('call')`), download valid, traversal (`..%2F..%2F.env` → 404), file tak dikenal); `tests/Feature/Audit/AuditLogPageTest.php` (guest redirect, list, filter `tabel`, search user, empty-state).
+
+## Catatan
+- `Storage::fake('local')` mengarahkan `Storage::disk('local')` (root `storage/app`) ke dir temp → daftar zip + download bisa diuji tanpa file nyata.
+- Route `download/{file}` tidak bisa menerima `/` dalam parameter → traversal dibatasi `basename` check.
+- Backup restore = unduh file `.zip` (tanpa restore dari UI, sesuai keputusan user).
+- `src-tauri/php/` kosong → installer tidak membundle PHP; untuk rilis final salin folder PHP (pdo_sqlite, sqlite3, mbstring, zip) ke `src-tauri/php/` sebelum build (resource `php/` di `tauri.conf.json`).
+- Build desktop terverifikasi: `SmartRKAS_0.1.0_x64-setup.exe` (nsis) + `SmartRKAS_0.1.0_x64_en-US.msi` (msi) di `src-tauri/target/release/bundle/`.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (221 tests, 580 assertions)`.

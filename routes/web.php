@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportRkasController;
@@ -34,6 +36,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('pengaturan-sekolah', [PengaturanSekolahController::class, 'edit'])->name('pengaturan-sekolah.edit');
     Route::put('pengaturan-sekolah', [PengaturanSekolahController::class, 'update'])->name('pengaturan-sekolah.update');
+
+    Route::get('pengaturan/backup', [BackupController::class, 'index'])->name('pengaturan.backup.index');
+    Route::post('pengaturan/backup/now', [BackupController::class, 'run'])->name('pengaturan.backup.now');
+    Route::get('pengaturan/backup/download/{file}', [BackupController::class, 'download'])->name('pengaturan.backup.download');
+    Route::get('pengaturan/riwayat-aktivitas', [AuditLogController::class, 'index'])->name('pengaturan.audit.index');
 
     Route::get('rkas-items/select2', [RkasItemController::class, 'select2'])->name('rkas-items.select2');
 

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-struct PhpServer(Mutex<Option<Child>>);
+struct PhpServer(Mutex<Option<Vec<Child>>>);
 
 fn find_free_port() -> u16 {
     TcpListener::bind(("127.0.0.1", 0))
@@ -128,7 +128,17 @@ pub fn run() {
             }
 
             let child = cmd.spawn().expect("cannot start the SmartRKAS web server");
-            app.manage(PhpServer(Mutex::new(Some(child))));
+            let scheduler = run_php(
+                &handle,
+                &["artisan".to_string(), "schedule:work".to_string()],
+                false,
+            );
+
+            let mut children = vec![child];
+            if let Some(scheduler) = scheduler {
+                children.push(scheduler);
+            }
+            app.manage(PhpServer(Mutex::new(Some(children))));
 
             if !wait_ready(port) {
                 eprintln!("SmartRKAS web server did not start in time");
@@ -155,9 +165,11 @@ pub fn run() {
                 let app = window.app_handle();
                 if let Some(state) = app.try_state::<PhpServer>() {
                     let mut guard = state.0.lock().unwrap();
-                    if let Some(mut child) = guard.take() {
-                        let _ = child.kill();
-                        let _ = child.wait();
+                    if let Some(mut children) = guard.take() {
+                        for child in children.iter_mut() {
+                            let _ = child.kill();
+                            let _ = child.wait();
+                        }
                     }
                 }
                 app.exit(0);
