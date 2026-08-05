@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportRkasController;
 use App\Http\Controllers\JenisBelanjaController;
+use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MasterKodeRekeningController;
 use App\Http\Controllers\MasterProgramController;
 use App\Http\Controllers\PengaturanSekolahController;
@@ -23,6 +25,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    Route::get('laporan', [LaporanController::class, 'index'])->name('laporan.index');
+
+    Route::get('exports/{exportJob}/download', [ExportController::class, 'download'])->name('exports.download');
+    Route::get('exports/{exportJob}/status', [ExportController::class, 'status'])->name('exports.status');
 
     Route::get('pengaturan-sekolah', [PengaturanSekolahController::class, 'edit'])->name('pengaturan-sekolah.edit');
     Route::put('pengaturan-sekolah', [PengaturanSekolahController::class, 'update'])->name('pengaturan-sekolah.update');
@@ -49,6 +56,19 @@ Route::middleware(['auth'])->group(function () {
     Route::post('transaksi-bku/hapus-semua', [TransaksiBkuController::class, 'destroyAll'])->name('transaksi-bku.hapus-semua');
     Route::get('transaksi-bku/{transaksiBku}/cetak-kwitansi', [TransaksiBkuController::class, 'cetakKwitansi'])->name('transaksi-bku.cetak-kwitansi');
     Route::post('transaksi-bku/cetak-kwitansi-batch', [TransaksiBkuController::class, 'cetakKwitansiBatch'])->name('transaksi-bku.cetak-kwitansi-batch');
+
+    Route::get('laporan/bku', [LaporanController::class, 'bku'])->name('laporan.bku');
+    Route::get('laporan/bku/export-excel', [LaporanController::class, 'bkuExportExcel'])->name('laporan.bku.export-excel');
+    Route::get('laporan/rekap-rekening', [LaporanController::class, 'rekapRekening'])->name('laporan.rekap-rekening');
+    Route::get('laporan/rekap-rekening/export-excel', [LaporanController::class, 'rekapRekeningExportExcel'])->name('laporan.rekap-rekening.export-excel');
+    Route::get('laporan/rekap-kuartal', [LaporanController::class, 'rekapKuartal'])->name('laporan.rekap-kuartal');
+    Route::get('laporan/rekap-kuartal/export-excel', [LaporanController::class, 'rekapKuartalExportExcel'])->name('laporan.rekap-kuartal.export-excel');
+    Route::get('laporan/rekap-siplah', [LaporanController::class, 'rekapSiplah'])->name('laporan.rekap-siplah');
+    Route::get('laporan/rekap-siplah/export-excel', [LaporanController::class, 'rekapSiplahExportExcel'])->name('laporan.rekap-siplah.export-excel');
+    Route::get('laporan/bku/preview', [LaporanController::class, 'bkuWeb'])->name('laporan.bku.preview');
+    Route::get('laporan/rekap-rekening/preview', [LaporanController::class, 'rekapRekeningWeb'])->name('laporan.rekap-rekening.preview');
+    Route::get('laporan/rekap-kuartal/preview', [LaporanController::class, 'rekapKuartalWeb'])->name('laporan.rekap-kuartal.preview');
+    Route::get('laporan/rekap-siplah/preview', [LaporanController::class, 'rekapSiplahWeb'])->name('laporan.rekap-siplah.preview');
 
     Route::resource('tahun-anggaran', TahunAnggaranController::class)->except(['show']);
     Route::post('/tahun-anggaran/{tahunAnggaran}/set-active', [TahunAnggaranController::class, 'setActive'])->name('tahun-anggaran.set-active');

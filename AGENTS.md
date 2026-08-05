@@ -58,3 +58,27 @@ Port/adapt test suite RKAS import dari repo referensi sira-rkas ke proyek target
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (114 tests, 328 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M4 Fitur Laporan (BKU, Rekap Realisasi, Tribulan, SIPLAH) + Export Async
+
+## Goal
+Port modul Laporan dari referensi sira-rkas: 4 laporan (BKU, rekap rekening, rekap kuartal, rekap SIPLAH) dengan view PDF + web-preview + export Excel async, disesuaikan ke target (PK UUID, tanpa `sekolah_id`/admin-kecamatan/`ProfilSekolah`, identitas sekolah via `PengaturanSekolah::get()`).
+
+## Summary
+- 37 test baru (15 `LaporanTest`, 9 `ExportTest`, 5 `GenerateExportJobTest`, 8 test factory dll) → total **172 tests (468 assertions)**, PHPStan level 6: 0 error.
+- PHPStan menemukan properti dinamis yang dipakai di controller/export (`sisa_bulan`, `nama`, `m0..m2`, `jenis_belanja`, `total`, `siplah`, `non_siplah`, `belum_diisi`, `persen_*`) → diselesaikan dengan `@property` di model (bukan `@phpstan-ignore`).
+
+## Changes
+- **Export async**: migration `create_export_jobs_table`, model `ExportJob` (+ `exportJobs()` HasMany di User), factory, job `GenerateExportJob` (sync queue), controller `ExportController` (route `exports/{exportJob}/download|status`, cek kepemilikan user).
+- **Export class**: `RekapRekeningExport` (manual `leftJoinSub`, alias `tb`), `RekapKuartalExport` (FromArray + column widths), `RekapSiplahExport` (tanpa `withoutGlobalScope('sekolah')`).
+- `LaporanController` — `index`, `bku`, `rekapRekening`, `rekapKuartal`, `rekapSiplah` (+PDF), 4× Web, 4× ExportExcel; helpers private (resolve periode/tahun anggaran, data BKU/rekap/SIPLAH/kuartal). Branch cetak=pdf **tidak** melempar `$bulan` → view PDF pakai `@unless(request('cetak')=='pdf')` untuk tombol print.
+- **Views `resources/views/laporan/`** (10 file) — card grid index, sidebar ikon per laporan (green/blue/amber/violet), `data-table` tfoot dark, tombol cetak di luar tabel.
+- Routes: `laporan.index`, `laporan.bku` + preview/export-excel, `laporan.rekap-*`, `exports.*` di grup auth.
+- `app/Models/RkasItem.php` + `TransaksiBku.php` — tambah `@property` untuk atribut dinamis.
+- `resources/views/laporan/rekap-rekening-kuartal.blade.php` TIDAK dibuat (referensi punya admin-kecamatan; target tidak).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (172 tests, 468 assertions)`.

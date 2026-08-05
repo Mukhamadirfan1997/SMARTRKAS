@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -56,5 +57,11 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'last_login_at' => 'datetime',
         ];
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\ExportJob, $this> */
+    public function exportJobs(): HasMany
+    {
+        return $this->hasMany(ExportJob::class);
     }
 }

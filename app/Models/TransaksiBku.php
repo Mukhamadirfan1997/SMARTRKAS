@@ -29,6 +29,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property float|null $saldo_berjalan
  * @property int $created_by
  * @property string|null $deleted_at
+ * @property string $jenis_belanja
+ * @property float $total
+ * @property float $siplah
+ * @property float $non_siplah
+ * @property float $belum_diisi
+ * @property float $persen_siplah
+ * @property float $persen_non_siplah
  * @use HasFactory<\Database\Factories\TransaksiBkuFactory>
  */
 class TransaksiBku extends Model

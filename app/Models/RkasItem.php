@@ -29,8 +29,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property float $rencana_bulan
  * @property float $realisasi_bulan
  * @property float $sisa
+ * @property float $sisa_bulan
  * @property float $total
  * @property float $persentase
+ * @property string $nama
+ * @property float $m0
+ * @property float $m1
+ * @property float $m2
  * @property \Illuminate\Support\Carbon|null $deleted_at
  * @use HasFactory<\Database\Factories\RkasItemFactory>
  */
