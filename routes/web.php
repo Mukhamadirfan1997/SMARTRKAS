@@ -11,6 +11,7 @@ use App\Http\Controllers\RkasController;
 use App\Http\Controllers\RkasItemController;
 use App\Http\Controllers\SumberDanaController;
 use App\Http\Controllers\TahunAnggaranController;
+use App\Http\Controllers\TransaksiBkuController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -38,6 +39,16 @@ Route::middleware(['auth'])->group(function () {
     Route::post('import-rkas', [ImportRkasController::class, 'store'])->name('import-rkas.store');
     Route::get('import-rkas/download-template', [ImportRkasController::class, 'downloadTemplate'])->name('import-rkas.download-template');
     Route::get('import-rkas/status', [ImportRkasController::class, 'status'])->name('import-rkas.status');
+
+    Route::get('transaksi-bku', [TransaksiBkuController::class, 'index'])->name('transaksi-bku.index');
+    Route::get('transaksi-bku/create', [TransaksiBkuController::class, 'create'])->name('transaksi-bku.create');
+    Route::post('transaksi-bku', [TransaksiBkuController::class, 'store'])->name('transaksi-bku.store');
+    Route::get('transaksi-bku/{transaksiBku}/edit', [TransaksiBkuController::class, 'edit'])->name('transaksi-bku.edit');
+    Route::put('transaksi-bku/{transaksiBku}', [TransaksiBkuController::class, 'update'])->name('transaksi-bku.update');
+    Route::delete('transaksi-bku/{transaksiBku}', [TransaksiBkuController::class, 'destroy'])->name('transaksi-bku.destroy');
+    Route::post('transaksi-bku/hapus-semua', [TransaksiBkuController::class, 'destroyAll'])->name('transaksi-bku.hapus-semua');
+    Route::get('transaksi-bku/{transaksiBku}/cetak-kwitansi', [TransaksiBkuController::class, 'cetakKwitansi'])->name('transaksi-bku.cetak-kwitansi');
+    Route::post('transaksi-bku/cetak-kwitansi-batch', [TransaksiBkuController::class, 'cetakKwitansiBatch'])->name('transaksi-bku.cetak-kwitansi-batch');
 
     Route::resource('tahun-anggaran', TahunAnggaranController::class)->except(['show']);
     Route::post('/tahun-anggaran/{tahunAnggaran}/set-active', [TahunAnggaranController::class, 'setActive'])->name('tahun-anggaran.set-active');

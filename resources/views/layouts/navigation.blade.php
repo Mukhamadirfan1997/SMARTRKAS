@@ -27,6 +27,11 @@
             <span class="nav-text">Import RKAS</span>
         </a>
 
+        <a href="{{ route('transaksi-bku.index') }}" class="sidebar-link {{ request()->routeIs('transaksi-bku.*') ? 'active' : '' }}">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            <span class="nav-text">Buku Kas Umum</span>
+        </a>
+
         <div class="sidebar-section-label">Pengaturan</div>
 
         <a href="{{ route('pengaturan-sekolah.edit') }}" class="sidebar-link {{ request()->routeIs('pengaturan-sekolah.*') ? 'active' : '' }}">
