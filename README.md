@@ -23,6 +23,35 @@ Tidak menggunakan multi-sekolah (`sekolah_id`); satu instalasi = satu sekolah, s
 
 ---
 
+## Panduan Penggunaan
+
+### 1. Memulai
+- **Mode Desktop**: jalankan `SmartRKAS` dari menu Start (atau file installer `.exe`). Database dibuat otomatis saat pertama kali dijalankan — langsung bisa login.
+- **Mode Web**: jalankan `php artisan serve` lalu buka `http://127.0.0.1:8000`.
+
+Login dengan akun admin (lihat `database/seeders/DatabaseSeeder.php` saat mode web; di desktop gunakan menu **Lupa password?** atau perintah `php artisan user:reset-password` dari konsol). Setelah login, isi identitas sekolah di menu **Pengaturan → Profil Sekolah**.
+
+### 2. Alur Kerja Harian
+1. **Pengaturan → Profil Sekolah** — lengkapi NPSN, nama, alamat, dll. (dipakai di kop laporan).
+2. **Tahun Anggaran** — aktifkan tahun berjalan; data lama tersimpan untuk riwayat.
+3. **Master data** — isi **Sumber Dana**, **Jenis Belanja**, **Master Program**, **Master Kode Rekening** (bisa impor dari Excel).
+4. **Item RKAS** — isi rencana kegiatan per item per bulan, atau **impor dari file Excel** melalui halaman `/import-rkas` (format template bisa diunduh di halaman tersebut).
+5. **BKU (Transaksi BKU)** — catat kas masuk/keluar setiap transaksi; dashboard dan laporan otomatis menghitung realisasi.
+6. **Laporan** — cetak **BKU**, **Rekap Rekening**, **Rekap Kuartal (Tribulan)**, dan **Rekap SIPLAH** dalam bentuk preview web, PDF, atau export Excel.
+
+### 3. Pemantauan & Keamanan Data
+- **Dashboard** — pantau rencana vs realisasi per item; badge status (Normal / Hampir Habis / Over Budget / Belum Realisasi).
+- **Pengaturan → Backup & Pemulihan** — klik **Backup Sekarang** untuk membuat cadangan manual, atau andalkan backup otomatis harian (01:30). Unduh file `.zip` sebagai arsip.
+- **Pengaturan → Riwayat Aktivitas** — audit log semua perubahan (siapa, kapan, apa).
+- Ganti password: menu **Profil** di pojok kanan atas.
+
+### 4. Catatan Penting
+- Satu instalasi = satu sekolah (tanpa konsep multi-sekolah).
+- Restore backup = mengunduh file `.zip` (restore otomatis dari UI tidak tersedia).
+- Notifikasi Telegram opsional; atur `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID` di `.env`.
+
+---
+
 ## Persyaratan
 
 - PHP **8.2+** dengan ekstensi: `pdo_sqlite`, `sqlite3`, `mbstring`, `openssl`, `xml`, `zip`, `gd` (untuk ikon/PDF).
