@@ -42,6 +42,7 @@
             Backup otomatis dijalankan setiap hari pukul <strong>01:30</strong> dan dibersihkan pukul <strong>01:00</strong>
             (saat aplikasi desktop sedang berjalan / server scheduler aktif). Pemulihan dilakukan manual: unduh file backup lalu
             pulihkan database dari file tersebut.
+            <span class="block mt-1">Jika ada <strong>pembaruan aplikasi</strong> (lihat menu Tentang Aplikasi), pastikan backup terakhir masih baru sebelum menginstal.</span>
         </div>
     </div>
 

@@ -15,6 +15,20 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    'version' => env('APP_VERSION', '0.2.0'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | SmartRKAS Desktop Data Directory
+    |--------------------------------------------------------------------------
+    |
+    | Lokasi data aplikasi saat mode desktop Tauri. Di-set oleh Rust pada
+    | proses PHP; fallback null untuk mode web (storage_path dipakai).
+    |
+    */
+
+    'data_dir' => env('SMARTRKAS_DATA_DIR'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

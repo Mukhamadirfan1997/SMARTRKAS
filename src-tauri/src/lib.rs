@@ -79,6 +79,7 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
         .env("SMARTRKAS_DATA_DIR", &data_dir)
         .env("DB_DATABASE", &db_path)
         .env("APP_ENV", "production")
+        .env("APP_VERSION", env!("CARGO_PKG_VERSION"))
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     prepend_php_to_path(&mut cmd, app);
@@ -135,6 +136,7 @@ pub fn run() {
                 .env("SMARTRKAS_DATA_DIR", &data_dir)
                 .env("DB_DATABASE", &db_path)
                 .env("APP_ENV", "production")
+                .env("APP_VERSION", env!("CARGO_PKG_VERSION"))
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());
             prepend_php_to_path(&mut cmd, &handle);

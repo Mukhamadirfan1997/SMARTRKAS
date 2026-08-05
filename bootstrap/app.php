@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\DataDirEnv;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -28,6 +29,8 @@ if ($dataDir !== false && $dataDir !== '') {
             @mkdir($dir, 0777, true);
         }
     }
+
+    DataDirEnv::load($dataDir);
 }
 
 return $app;

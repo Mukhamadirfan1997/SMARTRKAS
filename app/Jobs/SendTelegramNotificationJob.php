@@ -25,17 +25,27 @@ class SendTelegramNotificationJob implements ShouldQueue
     public array $context;
     /** @var array<string, mixed> */
     public array $extra;
+    public ?string $botToken = null;
+    public ?string $chatId = null;
 
     /**
      * @param array<string, mixed> $context
      * @param array<string, mixed> $extra
      */
-    public function __construct(string $level, string $message, array $context = [], array $extra = [])
-    {
+    public function __construct(
+        string $level,
+        string $message,
+        array $context = [],
+        array $extra = [],
+        ?string $botToken = null,
+        ?string $chatId = null,
+    ) {
         $this->level = $level;
         $this->message = $message;
         $this->context = $context;
         $this->extra = $extra;
+        $this->botToken = $botToken;
+        $this->chatId = $chatId;
     }
 
     public function handle(): void
@@ -47,8 +57,8 @@ class SendTelegramNotificationJob implements ShouldQueue
         }
 
         try {
-            $botToken = config('logging.telegram_bot_token');
-            $chatId = config('logging.telegram_chat_id');
+            $botToken = $this->botToken ?? config('logging.telegram_bot_token');
+            $chatId = $this->chatId ?? config('logging.telegram_chat_id');
 
             if (empty($botToken) || empty($chatId)) {
                 return;

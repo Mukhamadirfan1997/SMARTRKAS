@@ -4,11 +4,26 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\RestoreController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
+    Route::get('mulai', [OnboardingController::class, 'index'])
+        ->name('onboarding');
+
+    Route::post('mulai/recovery-code', [OnboardingController::class, 'generateRecoveryCode'])
+        ->name('onboarding.recovery-code');
+
+    Route::get('restore', [RestoreController::class, 'create'])
+        ->name('restore.create');
+
+    Route::post('restore', [RestoreController::class, 'store'])
+        ->name('restore.store');
+
     Route::get('register', [RegisteredUserController::class, 'create'])
         ->name('register');
 
@@ -24,6 +39,9 @@ Route::middleware('guest')->group(function () {
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
         ->name('password.email');
+
+    Route::post('forgot-password/recovery', [PasswordRecoveryController::class, 'store'])
+        ->name('password.recovery');
 
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
         ->name('password.reset');

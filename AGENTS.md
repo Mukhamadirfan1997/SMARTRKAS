@@ -332,3 +332,39 @@ Push proyek ke GitHub `Mukhamadirfan1997/SMARTRKAS` dan rilis installer (desktop
 
 ## Test Status
 - Tidak ada perubahan logika app → suite tetap `OK (221 tests, 580 assertions)`, PHPStan clean.
+
+---
+
+# Sesi 05 Agu 2026 — M13 Kode Pemulihan via Telegram + Pengaturan Bot (Form vs Env)
+
+## Goal
+Kirim **kode pemulihan** ke Telegram setiap kali dibuat/diulang (kode tetap tampil sekali di UI), lengkap dengan halaman pengaturan berisi form token bot + ID Telegram, tombol uji, dan tutorial terperinci untuk user non-teknis. Keputusan user: token disimpan di **database (form)** sebagai cara utama, env sebagai cadangan; untuk desktop file `.env` di folder data agar tidak menyentuh bundle read-only.
+
+## Summary
+- 34 test (5 file) → total **268 tests (699 assertions)**, PHPStan level 6: 0 error.
+- Bug test ditemukan & di-fix: `Dotenv::createMutable()` default hanya menulis ke `$_ENV`/`$_SERVER` (bukan `putenv`) — assertion `getenv()` keliru; Laravel `env()` tetap membaca keduanya sehingga perilaku app benar.
+- **DataDirEnv**: desktop bisa override env via file `<DataDir>/.env` (bukan `.env` bundle yang read-only).
+
+## Changes
+- `database/migrations/2026_08_05_000019_add_telegram_columns_to_users_table.php` — `users.telegram_chat_id`, `users.telegram_bot_token` (nullable, `after recovery_code_generated_at`).
+- `app/Models/User.php` — `$fillable` + `$hidden` (+`telegram_bot_token`, tidak bocor via `toArray()`/JSON), `@property` baru, helper: `hasTelegramChannel()` (chat id + token tersedia), `telegramChatId()`, `telegramBotToken()` (DB → fallback `config('logging.telegram_bot_token')`), `hasTelegramDelivery()`.
+- `app/Jobs/SendRecoveryCodeTelegramJob.php` — `(User $user, string $code)`, `ShouldQueue`, `tries=3`, `backoff`, skip bila token/chat id kosong; pesan `🔐 Kode Pemulihan SmartRKAS`.
+- `app/Jobs/SendTelegramNotificationJob.php` — tambah param opsional `?string $botToken = null` / `?string $chatId = null` (dipakai tombol uji), fallback env.
+- `app/Support/DataDirEnv.php` — `DataDirEnv::load(string $dataDir)` baca `<DataDir>/.env` via `Dotenv::createMutable(...)->safeLoad()`; dipanggil di `bootstrap/app.php` bila `SMARTRKAS_DATA_DIR` terisi (SEBELUM config di-resolve agar `config('logging.*')` pertama kali memuat nilai override).
+- `app/Http/Controllers/TelegramPengaturanController.php` — `index()` (status bot + sumber `db`/`env`), `update()` (simpan, string kosong → null), `test()` (dispatch `SendTelegramNotificationJob` dgn token/chat id user; pesan error jelas); helper `botSource()`/`emptyToNull()`.
+- `routes/web.php` — `GET pengaturan/telegram` (index), `PUT pengaturan/telegram` (update), `POST pengaturan/telegram/test` (test).
+- `resources/views/pengaturan/telegram.blade.php` — badge status (Bot Aktif via DB / via .env / Tidak Aktif + petunjuk), form token+ID, tombol Simpan & Kirim Pesan Uji, tutorial 5 langkah (`@userinfobot` → `@BotFather` → isi form / env → simpan+uji → selesai) + kartu troubleshooting (Unauthorized, chat not found, status Tidak Aktif, path `.env` folder data desktop).
+- `resources/views/layouts/navigation.blade.php` — link sidebar **Notifikasi Telegram** (setelah Kode Pemulihan).
+- Dispatch: `RecoveryCodeController::regenerate` & `OnboardingController::generateRecoveryCode` → `SendRecoveryCodeTelegramJob` bila `hasTelegramDelivery()`; flash tambahan "Kode juga dikirim ke Telegram"; `recovery-code.blade.php` + link ke halaman Telegram.
+- Tests: `TelegramRecoveryTest` (5), `TelegramPengaturanTest` (10), `DataDirEnvTest` (3), update `OnboardingTest` (+2), `RecoveryCodeTest` (+2).
+- `README.md` — bagian fitur, alur harian, catatan penting, tabel env, dan sub-bab **Notifikasi Telegram (opsional)** (cara dapat ID via `@userinfobot`, buat bot via `@BotFather`, isi form, catatan `.env` di folder data desktop).
+
+## Catatan Teknis
+- Prioritas token: kolom DB `telegram_bot_token` → fallback `config('logging.telegram_bot_token')` (env). Status halaman menampilkan sumbernya (`dari database` / `dari file .env`).
+- Token bot di-`$hidden` User → tidak tampil di JSON/`toArray()`; di UI hanya status + sumber.
+- `Dotenv::createMutable()->safeLoad()` (tanpa PutenvAdapter) menulis `$_ENV`/`$_SERVER`; `env()`/`config()` Laravel membaca keduanya. Jangan assert `getenv()` pada test DataDirEnv.
+- Web: env lewat `.env` proyek. Desktop: `.env` bundle read-only → buat `.env` di `SMARTRKAS_DATA_DIR` (data-dir aplikasi).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (268 tests, 699 assertions)`.

@@ -1,4 +1,4 @@
-    <aside class="sidebar" id="sira-sidebar" aria-label="Navigasi utama">
+    <aside class="sidebar" id="smartrkas-sidebar" aria-label="Navigasi utama">
 
     <div class="sidebar-logo">
         <div class="sidebar-logo-icon overflow-hidden">
@@ -54,6 +54,21 @@
         <a href="{{ route('pengaturan.audit.index') }}" class="sidebar-link {{ request()->routeIs('pengaturan.audit.*') ? 'active' : '' }}">
             <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
             <span class="nav-text">Riwayat Aktivitas</span>
+        </a>
+
+        <a href="{{ route('pengaturan.recovery-code.index') }}" class="sidebar-link {{ request()->routeIs('pengaturan.recovery-code.*') ? 'active' : '' }}">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+            <span class="nav-text">Kode Pemulihan</span>
+        </a>
+
+        <a href="{{ route('pengaturan.telegram.index') }}" class="sidebar-link {{ request()->routeIs('pengaturan.telegram.*') ? 'active' : '' }}">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+            <span class="nav-text">Notifikasi Telegram</span>
+        </a>
+
+        <a href="{{ route('tentang.index') }}" class="sidebar-link {{ request()->routeIs('tentang.*') ? 'active' : '' }}">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="nav-text">Tentang Aplikasi</span>
         </a>
 
         <div class="sidebar-section-label">Master Data</div>

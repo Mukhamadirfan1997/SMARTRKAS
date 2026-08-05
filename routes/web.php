@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\AboutController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExportController;
@@ -11,10 +12,12 @@ use App\Http\Controllers\MasterKodeRekeningController;
 use App\Http\Controllers\MasterProgramController;
 use App\Http\Controllers\PengaturanSekolahController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RecoveryCodeController;
 use App\Http\Controllers\RkasController;
 use App\Http\Controllers\RkasItemController;
 use App\Http\Controllers\SumberDanaController;
 use App\Http\Controllers\TahunAnggaranController;
+use App\Http\Controllers\TelegramPengaturanController;
 use App\Http\Controllers\TransaksiBkuController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,6 +44,16 @@ Route::middleware(['auth'])->group(function () {
     Route::post('pengaturan/backup/now', [BackupController::class, 'run'])->name('pengaturan.backup.now');
     Route::get('pengaturan/backup/download/{file}', [BackupController::class, 'download'])->name('pengaturan.backup.download');
     Route::get('pengaturan/riwayat-aktivitas', [AuditLogController::class, 'index'])->name('pengaturan.audit.index');
+
+    Route::get('pengaturan/kode-pemulihan', [RecoveryCodeController::class, 'index'])->name('pengaturan.recovery-code.index');
+    Route::post('pengaturan/kode-pemulihan/regenerate', [RecoveryCodeController::class, 'regenerate'])->name('pengaturan.recovery-code.regenerate');
+
+    Route::get('pengaturan/telegram', [TelegramPengaturanController::class, 'index'])->name('pengaturan.telegram.index');
+    Route::put('pengaturan/telegram', [TelegramPengaturanController::class, 'update'])->name('pengaturan.telegram.update');
+    Route::post('pengaturan/telegram/test', [TelegramPengaturanController::class, 'test'])->name('pengaturan.telegram.test');
+
+    Route::get('tentang', [AboutController::class, 'index'])->name('tentang.index');
+    Route::get('tentang/cek-pembaruan', [AboutController::class, 'check'])->name('tentang.check');
 
     Route::get('rkas-items/select2', [RkasItemController::class, 'select2'])->name('rkas-items.select2');
 

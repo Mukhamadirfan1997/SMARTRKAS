@@ -59,7 +59,7 @@
         <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <p class="text-xs text-amber-700 font-medium leading-relaxed">Catatan: Aplikasi ini bersifat sebagai alat bantu monitoring. Input dan pelaporan resmi tetap dilakukan melalui ARKAS.</p>
         </div>
-        <p class="text-xs text-slate-400">&copy; {{ date('Y') }} SmartRKAS v1.0</p>
+        <p class="text-xs text-slate-400">&copy; {{ date('Y') }} SmartRKAS v{{ config('app.version', '0.1.0') }}</p>
     </div>
 
     <script>

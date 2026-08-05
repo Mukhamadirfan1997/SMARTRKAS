@@ -19,7 +19,7 @@ Tidak menggunakan multi-sekolah (`sekolah_id`); satu instalasi = satu sekolah, s
 - **Backup & Pemulihan**: backup otomatis terjadwal (lihat [Jadwal Scheduler](#jadwal-scheduler)), halaman Backup untuk menjalankan manual + unduh file `.zip`.
 - **Riwayat Aktivitas**: audit log operasional (tambah/ubah/hapus/import/override) dengan filter.
 - **Keamanan**: login + register, lupa/reset password, audit log, escapade flash, batas ukuran upload, index DB untuk performa.
-- **Notifikasi Telegram** (opsional): error log + event backup dikirim ke chat.
+- **Notifikasi Telegram** (opsional): error log + event backup dikirim ke chat, plus **kode pemulihan** dikirim otomatis ke chat saat dibuat/diulang (lihat [Notifikasi Telegram](#5-notifikasi-telegram-opsional)).
 
 ---
 
@@ -43,12 +43,25 @@ Login dengan akun admin (lihat `database/seeders/DatabaseSeeder.php` saat mode w
 - **Dashboard** — pantau rencana vs realisasi per item; badge status (Normal / Hampir Habis / Over Budget / Belum Realisasi).
 - **Pengaturan → Backup & Pemulihan** — klik **Backup Sekarang** untuk membuat cadangan manual, atau andalkan backup otomatis harian (01:30). Unduh file `.zip` sebagai arsip.
 - **Pengaturan → Riwayat Aktivitas** — audit log semua perubahan (siapa, kapan, apa).
+- **Pengaturan → Notifikasi Telegram** (opsional) — isi token bot + ID Telegram agar kode pemulihan, error log, dan event backup terkirim ke chat (lihat [panduan](#5-notifikasi-telegram-opsional)).
 - Ganti password: menu **Profil** di pojok kanan atas.
 
-### 4. Catatan Penting
+### 4. Notifikasi Telegram (opsional)
+
+Mengaktifkan Telegram memungkinkan aplikasi mengirim **kode pemulihan**, **log error**, dan **event backup** ke chat. Pengaturan dilakukan lewat menu **Pengaturan → Notifikasi Telegram** (token disimpan di database) **atau** lewat variabel lingkungan `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` (nilai env dipakai sebagai cadangan bila kolom di database kosong).
+
+Langkah singkat:
+1. **Dapatkan ID Telegram**: buka chat ke `@userinfobot` lalu kirim `/start` — bot membalas angka ID Anda (mis. `123456789`).
+2. **Buat bot**: chat ke `@BotFather`, kirim `/newbot`, ikuti instruksi untuk nama & username bot. BotFather memberi **token** berbentuk `123456789:AA...`.
+3. **Isi di aplikasi**: buka **Pengaturan → Notifikasi Telegram**, isi *ID Telegram* + *Token Bot*, klik **Simpan**, lalu **Kirim Pesan Uji**.
+4. Jika tombol uji sukses, kode pemulihan akan otomatis terkirim ke chat Anda setiap kali dibuat/diulang (kode tetap tampil sekali di layar).
+
+> **Mode desktop**: `.env` bawaan ter-bundle di folder instalasi yang mungkin read-only. Untuk memakai env tanpa menyentuh file itu, buat file **`.env`** di folder data aplikasi (`SMARTRKAS_DATA_DIR`) berisi mis. `TELEGRAM_BOT_TOKEN=...` — dibaca otomatis saat aplikasi mulai. Cara paling mudah tetap lewat form di atas.
+
+### 5. Catatan Penting
 - Satu instalasi = satu sekolah (tanpa konsep multi-sekolah).
 - Restore backup = mengunduh file `.zip` (restore otomatis dari UI tidak tersedia).
-- Notifikasi Telegram opsional; atur `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID` di `.env`.
+- Notifikasi Telegram opsional — cara termudah lewat menu **Pengaturan → Notifikasi Telegram**; alternatif env dijelaskan di [atas](#4-notifikasi-telegram-opsional).
 
 ---
 
@@ -88,7 +101,7 @@ Buka `http://127.0.0.1:8000`. Kredensial default admin lihat di `database/seeder
 | `APP_NAME` | Nama aplikasi; dipakai sebagai nama direktori backup (`laravel-backup` default). |
 | `DB_CONNECTION=sqlite` | Database utama. Di mode desktop otomatis diarahkan ke data-dir aplikasi. |
 | `SMARTRKAS_DATA_DIR` | (Deskripsi) lokasi data runtime untuk instalasi portable; bila tidak diset, memakai lokasi default. |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Notifikasi Telegram (opsional). Dikosongkan untuk menonaktifkan. |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Notifikasi Telegram (opsional). Dikosongkan untuk menonaktifkan. Dipakai sebagai cadangan bila kolom di form **Pengaturan → Notifikasi Telegram** kosong. |
 | `LOG_TELEGRAM_LEVEL` | Level minimum log yang dikirim ke Telegram (default `error`). |
 | `BACKUP_DISKS` / `BACKUP_DATABASE_CONNECTION` | Konfigurasi backup Spatie laravel-backup (lihat `config/backup.php`). |
 

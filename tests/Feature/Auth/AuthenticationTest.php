@@ -12,9 +12,18 @@ class AuthenticationTest extends TestCase
 
     public function test_login_screen_can_be_rendered(): void
     {
+        $user = User::factory()->create(['last_login_at' => now()]);
+
         $response = $this->get('/login');
 
         $response->assertStatus(200);
+    }
+
+    public function test_login_redirects_to_onboarding_when_first_run(): void
+    {
+        User::factory()->create();
+
+        $this->get('/login')->assertRedirect(route('onboarding'));
     }
 
     public function test_users_can_authenticate_using_the_login_screen(): void
