@@ -30,7 +30,7 @@ class MasterProgramController extends Controller
     public function import(Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv',
+            'file' => 'required|mimes:xlsx,xls,csv|max:5120',
         ]);
 
         try {
