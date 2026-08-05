@@ -150,3 +150,85 @@ Port migration index kinerja DB dari referensi sira-rkas, disesuaikan ke skema t
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (189 tests, 513 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M8 Command Reset Password
+
+## Goal
+Port command reset password dari referensi sira-rkas untuk operasional (user lupa password tanpa mail server).
+
+## Summary
+- 4 test baru → total **193 tests (529 assertions)**, PHPStan level 6: 0 error.
+
+## Changes
+- `app/Console/Commands/ResetUserPassword.php` — signature `user:reset-password {user : ID (int) atau email user} {password? : Password baru (kosong = generate acak)}`. Argumen dicari via email dulu, lalu `id` — user id adalah **integer** (`$table->id()` di `0001_01_01_000000_create_users_table.php`), BUKAN UUID; gunakan `ctype_digit`, jangan `Str::isUuid`. Tanpa argumen `password` → `Str::password(12)` ditampilkan via `$this->warn`.
+- `tests/Feature/Console/ResetUserPasswordCommandTest.php` — 4 test (reset via email, via id, generate acak, user tidak ditemukan).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (193 tests, 529 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M9 Security Review
+
+## Goal
+Audit keamanan dasar: XSS tersimpan, validasi upload, CSRF, mass assignment, authz export.
+
+## Summary
+- 3 test baru (`SecurityTest`) → total **196 tests (536 assertions)**, PHPStan level 6: 0 error.
+
+## Changes
+- **XSS flash**: `{!! session('success') !!}` → `{{ session('success') }}` di `resources/views/rkas/index.blade.php`, `resources/views/transaksi-bku/create.blade.php`, `resources/views/transaksi-bku/edit.blade.php` (flash `success` dari `ImportRkasController` berisi nama file user).
+- **Batas ukuran upload**: tambah `|max:5120` ke validasi import `MasterProgramController` dan `MasterKodeRekeningController` (sebelumnya hanya `mimes:xlsx,xls,csv`). `ImportRkasController` sudah punya batas 5MB.
+- `tests/Feature/Security/SecurityTest.php` — escaping flash (`assertSee('<script>...')` escaped / `assertDontSee(..., false)` raw; hati-hati `assertSee` meng-escape argumen sendiri) + tolak file >5MB untuk kedua master import.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (196 tests, 536 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M10 Notifikasi Telegram
+
+## Goal
+Port notifikasi Telegram dari referensi: job async + listener event backup Spatie + log channel custom, agar error/backup terpantau via chat Telegram.
+
+## Summary
+- 6 test baru (`TelegramNotificationTest`) → total **202 tests (542 assertions)**, PHPStan level 6: 0 error.
+
+## Changes
+- `app/Jobs/SendTelegramNotificationJob.php` — `ShouldQueue`, `tries=3`, `backoff=[2,10]`, cache lock `telegram-notification` 5 dtk (rate limit), POST `https://api.telegram.org/bot{token}/sendMessage` (HTML), baca `config('logging.telegram_bot_token')`/`telegram_chat_id`; kosong → skip.
+- `app/Listeners/NotifyBackupTelegram.php` — `handle(object $event)` + `match(true)` untuk 6 event Spatie Backup (success/failed/cleanup/healthy/unhealthy) → dispatch job INFO/ERROR/WARNING.
+- `app/Logging/TelegramLogHandler.php` — `Monolog\Handler\AbstractProcessingHandler`, hanya level ≥ Error (`Level::Error->includes`), sanitasi key sensitif (password/token/db_password → `[REDACTED]`), extra berisi `url` + `user_email` (via `$user instanceof User`, bukan akses properti dinamis).
+- `app/Providers/AppServiceProvider.php` — `Event::listen` 6 event backup ke `NotifyBackupTelegram`.
+- `config/logging.php` — channel `telegram` (level `LOG_TELEGRAM_LEVEL` default error) + key `telegram_bot_token`/`telegram_chat_id` (env `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`).
+- **Catatan test**: jangan fire event backup via `event()` langsung (spatie `EventHandler` bawaan ikut jalan dan butuh notifiable); panggil `(new NotifyBackupTelegram)->handle($event)` + `Queue::fake()` (pola sama dgn referensi `NotifyBackupTelegramTest`).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (202 tests, 542 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M11 Auth Breeze Lengkap (Register + Lupa/Reset Password)
+
+## Goal
+Port register + forgot-password + reset-password dari referensi ke target. Verifikasi email TIDAK ada di target (skema hanya `email_verified_at` nullable). Catatan: fitur reset via email butuh mail server — untuk deployment desktop (Tauri + `SMARTRKAS_DATA_DIR`) lebih praktis pakai `user:reset-password` (M8).
+
+## Summary
+- 7 test baru (3 `RegistrationTest`, 4 `PasswordResetTest`) → total **209 tests (548 assertions)**, PHPStan level 6: 0 error.
+
+## Changes
+- `routes/auth.php` — tambah grup `guest`: `register` (GET/POST), `forgot-password` (GET `password.request` / POST `password.email`), `reset-password/{token}` (GET `password.reset` / POST `password.store`).
+- `app/Http/Controllers/Auth/RegisteredUserController.php` — validasi name/email unique/password confirmed (`Rules\Password::defaults()`), `Auth::login`, redirect dashboard. User baru `is_active` default `true`.
+- `app/Http/Controllers/Auth/PasswordResetLinkController.php` — `Password::sendResetLink`; `store` pakai `$status == Password::RESET_LINK_SENT`.
+- `app/Http/Controllers/Auth/NewPasswordController.php` — `Password::reset` + `forceFill` (password hash baru + `remember_token`), `event(new PasswordReset)`, redirect login dengan `status`.
+- Views `resources/views/auth/register.blade.php`, `forgot-password.blade.php`, `reset-password.blade.php` — pola sama dgn login (`form-label`/`form-input`/`btn-primary`/`alert-success`); reset-password baca `$request->route('token')`.
+- `resources/views/auth/login.blade.php` — tambah link "Lupa password?" (`@if (Route::has('password.request'))`).
+- `tests/Feature/Auth/RegistrationTest.php` + `PasswordResetTest.php` — pakai `Notification::fake()` + `ResetPassword` notification + `Notification::assertSentTo`.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (209 tests, 548 assertions)`.
