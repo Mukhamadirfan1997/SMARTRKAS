@@ -27,6 +27,22 @@ fn php_binary(app: &tauri::AppHandle) -> PathBuf {
     PathBuf::from("php")
 }
 
+fn php_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let php = php_binary(app);
+    if php.components().count() > 1 {
+        php.parent().map(PathBuf::from)
+    } else {
+        None
+    }
+}
+
+fn prepend_php_to_path(cmd: &mut Command, app: &tauri::AppHandle) {
+    if let Some(dir) = php_dir(app) {
+        let current = std::env::var("PATH").unwrap_or_default();
+        cmd.env("PATH", format!("{};{}", dir.display(), current));
+    }
+}
+
 fn app_root(app: &tauri::AppHandle) -> PathBuf {
     if let Ok(dir) = app.path().resource_dir() {
         if dir.join("artisan").is_file() {
@@ -65,6 +81,7 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
         .env("APP_ENV", "production")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
+    prepend_php_to_path(&mut cmd, app);
 
     #[cfg(windows)]
     {
@@ -113,12 +130,14 @@ pub fn run() {
                 .arg("serve")
                 .arg("--host=127.0.0.1")
                 .arg(format!("--port={port}"))
+                .arg("--no-reload")
                 .current_dir(&root)
                 .env("SMARTRKAS_DATA_DIR", &data_dir)
                 .env("DB_DATABASE", &db_path)
                 .env("APP_ENV", "production")
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());
+            prepend_php_to_path(&mut cmd, &handle);
 
             #[cfg(windows)]
             {

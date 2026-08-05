@@ -283,3 +283,28 @@ Selesaikan 3 item pasca M11: (1) backup terjadwal di mode desktop Tauri, (2) hal
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (221 tests, 580 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M12b Bundle PHP ke Desktop + Fix Serve Child
+
+## Goal
+Bundle PHP 8.2 (XAMPP) ke `src-tauri/php/` agar installer desktop mandiri (tanpa PHP di PATH). Ditemukan 2 bug tersembunyi pada mode desktop selama verifikasi.
+
+## Summary
+- `src-tauri/php/` kini berisi PHP bundle ~73MB (gitignore `src-tauri/.gitignore` → TIDAK ikut git). Build ulang sukses: NSIS 57.6MB, MSI 86.3MB.
+- **Bug 1 (env child server)**: `Illuminate\Support\php_binary()` memakai `PhpExecutableFinder->find(false)` yang mencari `$dirs = [PHP_BINDIR, 'C:\xampp\php\']` dulu baru PATH → PATH-prepend tidak cukup; tapi PHP_BINDIR php bundle = dir bundle, jadi child otomatis memakai php bundle. Yang PENTING: mode `artisan serve` default (reload) memfilter env child ke passthroughVariables saja → **`SMARTRKAS_DATA_DIR`/`DB_DATABASE` dari Rust TIDAK sampai ke server web** → di instalasi Program Files (read-only) DB salah/error. Perbaikan: tambah `--no-reload` (env full dilewatkan; terverifikasi: set `DB_DATABASE` palsu → halaman 500, artinya terpropagasi).
+- **Bug 2 (bind gagal)**: `artisan serve` default (reload) dengan php bundle gagal bind `Failed to listen (reason: ?)`; `--no-reload` menyelesaikan (repro terisolasi Symfony Process berhasil; masalah hanya saat mode reload). Dengan `--no-reload` serve berjalan normal.
+
+## Changes
+- `src-tauri/src/lib.rs` — `php_dir()` + `prepend_php_to_path()` (PATH di-prepend dir php bundle) dipakai di `run_php()` & spawn serve; spawn `serve` tambah argumen **`--no-reload`**.
+- `src-tauri/php/` — PHP 8.2.12 ZTS (dari `C:\xampp\php`) versi kurasi ~73MB: php.exe, php8ts.dll, DLL dependency (libsqlite3, libssl/libcrypto, libsodium, ICU, nghttp2, glib/gmodule, libsasl, libssh2), license.txt, `ext/` (curl, fileinfo, gd, intl, mbstring, openssl, pdo_sqlite, sqlite3, zip, opcache), dan `php.ini` khusus (extension_dir relatif `ext`, `zend_extension = php_opcache.dll` resolve relatif ke extension_dir, upload_max_filesize 6M / post_max_size 12M / memory_limit 512M, timezone Asia/Jakarta, display_errors Off). TIDAK menyertakan pear/pci/php-cgi/phpdbg/XAMPP ini.
+- `README.md` — sudah memuat langkah bundle PHP; instruksi tetap valid.
+
+## Catatan
+- Verifikasi bundle php: `.\src-tauri\php\php.exe artisan about` boot OK; `-S` direct OK; serve `--no-reload` + request `/login` OK. Jangan hapus `php.ini` bundle (tanpa ini framework gagal boot: `Class "ZipArchive" not found` di `config/backup.php:133`).
+- `.env` ter-bundle di resource dir (read-only saat installed) → DB desktop WAJIB lewat env `DB_DATABASE`/`SMARTRKAS_DATA_DIR` yang di-set Rust; kini benar-benar sampai ke child server berkat `--no-reload`.
+- Rebuild installer: `npm run build` lalu `npm run tauri -- build`. PHP bundle tidak perlu di-commit (gitignore).
+
+## Test Status
+- Tidak ada perubahan kode PHP/aplikasi → full suite tetap `OK (221 tests, 580 assertions)`, PHPStan clean. Hanya `src-tauri/src/lib.rs` + build artifact.
