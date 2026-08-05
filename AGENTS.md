@@ -308,3 +308,27 @@ Bundle PHP 8.2 (XAMPP) ke `src-tauri/php/` agar installer desktop mandiri (tanpa
 
 ## Test Status
 - Tidak ada perubahan kode PHP/aplikasi → full suite tetap `OK (221 tests, 580 assertions)`, PHPStan clean. Hanya `src-tauri/src/lib.rs` + build artifact.
+
+---
+
+# Sesi 05 Agu 2026 — Push & Release GitHub + Perbaikan Dok
+
+## Goal
+Push proyek ke GitHub `Mukhamadirfan1997/SMARTRKAS` dan rilis installer (desktop) v0.1.0 dengan dokumentasi petunjuk & kegunaan.
+
+## Summary
+- Repo di-push ke `https://github.com/Mukhamadirfan1997/SMARTRKAS` (branch `master`), release **v0.1.0** dibuat dengan 2 asset installer.
+- 312 file tracked (tanpa `.env`/binary/sqlite — hanya `.env.example`); `src-tauri/php/` tetap gitignore.
+
+## Changes
+- `README.md` — tambah bagian **Panduan Penggunaan** (memulai web/desktop, alur kerja harian: Profil Sekolah → master data → item RKAS/import → BKU → laporan, pemantauan & backup, catatan 1-sekolah-1-user & restore via unduh zip).
+- `README.md` — perbaiki tabel jadwal: `kwitansi:clean 2` = hapus kwitansi **> 2 TAHUN** (kode memakai `now()->subYears()`), sebelumnya tertulis "2 bulan".
+
+## Git / Release
+- Remote: `origin = https://github.com/Mukhamadirfan1997/SMARTRKAS.git` (via `gh`, akun `Mukhamadirfan1997`, scope `repo`).
+- Commit rilis: `503fe6b` (docs usage), tag `v0.1.0` + push tag.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.1.0 — asset `SmartRKAS_0.1.0_x64-setup.exe` (NSIS, 57.6MB) + `SmartRKAS_0.1.0_x64_en-US.msi` (MSI, 86.3MB); notes rilis memuat fitur, cara instal, dan catatan WebView2.
+- Commit perbaikan dok: `9a16cbb` (`kwitansi:clean` 2 tahun) → sudah di-push.
+
+## Test Status
+- Tidak ada perubahan logika app → suite tetap `OK (221 tests, 580 assertions)`, PHPStan clean.
