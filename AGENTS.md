@@ -368,3 +368,25 @@ Kirim **kode pemulihan** ke Telegram setiap kali dibuat/diulang (kode tetap tamp
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (268 tests, 699 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — Release v0.2.0 (Build + Push + GitHub)
+
+## Goal
+Build installer desktop (NSIS + MSI) untuk fitur yang belum pernah dirilis sejak v0.1.0 (M13 Telegram + onboarding/restore/kode pemulihan/tentang) dan rilis ke GitHub.
+
+## Summary
+- Versi dinaikkan 0.1.0 → **0.2.0** (`src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `config/app.php`, `.env.example`).
+- Build Tauri sukses: `SmartRKAS_0.2.0_x64-setup.exe` (NSIS, 57.7MB) + `SmartRKAS_0.2.0_x64_en-US.msi` (MSI, 86.5MB).
+- Commit `80c0903` (47 file, +2407/−29) — mencakup M13 + fitur yang sebelumnya belum di-commit (onboarding, restore, kode pemulihan, about, DataDirEnv).
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.2.0
+
+## Catatan
+- `src-tauri/php/` (bundle PHP ~73MB) gitignore — tidak ikut commit, tapi ikut di-bundle installer.
+- `public/build/` tidak di-track (0 file); aset web di-build ulang sebelum `npm run tauri -- build`.
+- Cargo.toml versi harus sinkron dengan tauri.conf.json agar metadata exe benar (ternyata compile ulang hanya ~3 menit dgn dependency cache).
+- Verifikasi secret sebelum commit: scan diff untuk pola token bot → bersih; test file pakai fixture `token123` saja.
+
+## Test Status
+- Tidak ada perubahan logika app pada sesi ini → suite tetap `OK (268 tests, 699 assertions)`, PHPStan clean.
