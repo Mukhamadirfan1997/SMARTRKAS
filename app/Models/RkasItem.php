@@ -36,6 +36,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property float $m0
  * @property float $m1
  * @property float $m2
+ * @property float $dynamic_rencana
+ * @property float $dynamic_realisasi
+ * @property float $dynamic_sisa
+ * @property float $dynamic_rencana_volume
+ * @property float $dynamic_realisasi_volume
+ * @property float $dynamic_sisa_volume
  * @property \Illuminate\Support\Carbon|null $deleted_at
  * @use HasFactory<\Database\Factories\RkasItemFactory>
  */

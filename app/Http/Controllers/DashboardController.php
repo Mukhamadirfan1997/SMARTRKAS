@@ -12,6 +12,7 @@ use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,7 @@ class DashboardController extends Controller
         $importStatus = collect();
         $filteredIds = collect();
         $recentTransaksi = collect();
+        $rkasItems = collect();
 
         if ($tahunAnggaranAktif) {
             $baseQuery = RkasItem::query()->where('tahun_anggaran_id', $tahunAnggaranAktif->id);
@@ -145,12 +147,48 @@ class DashboardController extends Controller
                     ];
                 });
             }
+
+            $rkasItems = (clone $baseQuery)
+                ->with([
+                    'program',
+                    'kodeRekening.jenisBelanja',
+                    'transaksiBkus' => function (Relation $q) use ($bulan): void {
+                        $q->where('jenis', 'pengeluaran');
+                        if ($bulan) {
+                            $q->where('bulan', $bulan);
+                        }
+                    },
+                    'bulanRencana' => function (Relation $q) use ($bulan): void {
+                        if ($bulan) {
+                            $q->where('bulan', $bulan);
+                        }
+                    },
+                ])
+                ->orderBy('no_urut')
+                ->paginate(50);
+
+            foreach ($rkasItems as $item) {
+                $_sum = $item->transaksiBkus->sum('jumlah');
+                $item->dynamic_realisasi = is_numeric($_sum) ? (float) $_sum : 0.0;
+
+                if ($bulan) {
+                    $rencanaItem = $item->bulanRencana->first();
+                    $item->dynamic_rencana = $rencanaItem ? (float) $rencanaItem->rencana : 0.0;
+                } else {
+                    $item->dynamic_rencana = (float) $item->jumlah;
+                }
+
+                $item->dynamic_sisa = $item->dynamic_rencana - $item->dynamic_realisasi;
+                $item->persentase = $item->dynamic_rencana > 0 ? ($item->dynamic_realisasi / $item->dynamic_rencana) * 100 : 0;
+
+                $item->dynamic_rencana_volume = $item->tarif > 0 ? round($item->dynamic_rencana / $item->tarif, 2) : 0;
+                $item->dynamic_realisasi_volume = $item->tarif > 0 ? round($item->dynamic_realisasi / $item->tarif, 2) : 0;
+                $item->dynamic_sisa_volume = $item->dynamic_rencana_volume - $item->dynamic_realisasi_volume;
+            }
         }
 
         $totalSisa = $totalRencana - $totalRealisasi;
         $persentaseCapaian = $totalRencana > 0 ? round(($totalRealisasi / $totalRencana) * 100, 1) : 0;
-
-        $rkasItems = collect();
 
         return view('dashboard', compact(
             'totalRencana',

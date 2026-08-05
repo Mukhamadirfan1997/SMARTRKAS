@@ -82,3 +82,23 @@ Port modul Laporan dari referensi sira-rkas: 4 laporan (BKU, rekap rekening, rek
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (172 tests, 468 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M5 Dashboard Lengkap (Tabel Item RKAS Dinamis)
+
+## Goal
+Lengkapi dashboard dengan tabel item RKAS dinamis (rencana/realisasi/sisa + volume + status badge + pagination 50) yang sebelumnya `$rkasItems = collect()`, diadaptasi dari referensi sira-rkas (tanpa `withoutGlobalScope('sekolah')`).
+
+## Summary
+- 6 test baru → total **178 tests (490 assertions)**, PHPStan level 6: 0 error.
+
+## Changes
+- `app/Http/Controllers/DashboardController.php` — tambah query item dinamis: `(clone $baseQuery)->with(['program','kodeRekening.jenisBelanja','transaksiBkus'(filter jenis pengeluaran+bulan),'bulanRencana'(filter bulan)])->orderBy('no_urut')->paginate(50)`. Per-item: `dynamic_rencana` (rencana bulan terpilih atau `jumlah`), `dynamic_realisasi` (sum transaksi pengeluaran), `dynamic_sisa`, `persentase`, `dynamic_*_volume` (= nominal ÷ tarif). **Bug potensial**: init fallback `$rkasItems = collect()` harus diletakkan SEBELUM blok `if ($tahunAnggaranAktif)` — jika sesudahnya akan menimpa hasil pagination.
+- `app/Models/RkasItem.php` — tambah `@property float $dynamic_rencana|$dynamic_realisasi|$dynamic_sisa|$dynamic_rencana_volume|$dynamic_realisasi_volume|$dynamic_sisa_volume`.
+- `resources/views/dashboard.blade.php` — card "Detail Rencana &amp; Realisasi per Item" setelah card filter: kolom Uraian(+no urut), Program, Kode Rekening(+badge jenis belanja), Rencana(+volume), Realisasi(+volume), Sisa, Status badge (Over Budget/Hampir Habis/Belum Realisasi/Normal), `$rkasItems->links()`, empty-state.
+- `tests/Feature/Dashboard/DashboardTest.php` — 6 test: guest redirect, kartu statistik, isi tabel item, filter bulan (rencana per-item), badge Over Budget, pagination 55 item. **Catatan**: 55 item via factory default membuat 55 JenisBelanja unik → Faker `unique()` overflow; test pakai 1 Program + 1 KodeRekening bersama.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (178 tests, 490 assertions)`.

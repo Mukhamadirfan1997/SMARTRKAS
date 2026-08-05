@@ -125,6 +125,84 @@
         </form>
     </div>
 
+    <div class="card mb-6">
+        <div class="card-header">
+            <span class="card-title">Detail Rencana &amp; Realisasi per Item</span>
+        </div>
+        <div class="overflow-x-auto">
+            @if($rkasItems->count() > 0)
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Uraian</th>
+                        <th>Program</th>
+                        <th>Kode Rekening</th>
+                        <th class="text-right whitespace-nowrap" style="min-width:130px">Rencana</th>
+                        <th class="text-right whitespace-nowrap" style="min-width:130px">Realisasi</th>
+                        <th class="text-right whitespace-nowrap" style="min-width:130px">Sisa</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($rkasItems as $item)
+                    <tr>
+                        <td>
+                            <div class="font-medium text-slate-800 text-sm">{{ $item->uraian }}</div>
+                            <div class="text-xs text-slate-400">No. {{ $loop->iteration }}</div>
+                        </td>
+                        <td>
+                            @if($item->program)
+                                <div class="font-medium text-slate-700 text-xs">{{ $item->program->kode }}</div>
+                                <div class="text-xs text-slate-400">{{ $item->program->nama }}</div>
+                            @else
+                                <span class="text-slate-400 text-xs">&mdash;</span>
+                            @endif
+                        </td>
+                        <td>
+                            <div class="font-mono text-xs text-slate-600">{{ $item->kodeRekening->kode ?? '-' }}</div>
+                            <span class="badge badge-blue mt-1">{{ $item->kodeRekening->jenisBelanja->nama ?? '-' }}</span>
+                        </td>
+                        <td class="text-right whitespace-nowrap">
+                            <div class="font-semibold text-slate-700 text-sm">Rp {{ number_format($item->dynamic_rencana, 0, ',', '.') }}</div>
+                            <div class="text-xs text-slate-400">{{ $item->dynamic_rencana_volume }} {{ $item->satuan }}</div>
+                        </td>
+                        <td class="text-right whitespace-nowrap">
+                            <div class="font-semibold text-blue-600 text-sm">Rp {{ number_format($item->dynamic_realisasi, 0, ',', '.') }}</div>
+                            <div class="text-xs text-blue-300">{{ $item->dynamic_realisasi_volume }} {{ $item->satuan }}</div>
+                        </td>
+                        <td class="text-right whitespace-nowrap">
+                            <div class="font-semibold text-sm {{ $item->dynamic_sisa >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                                Rp {{ number_format($item->dynamic_sisa, 0, ',', '.') }}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            @if($item->persentase > 100)
+                                <span class="badge badge-red">Over Budget ({{ number_format($item->persentase, 0) }}%)</span>
+                            @elseif($item->persentase >= 90)
+                                <span class="badge badge-orange">Hampir Habis ({{ number_format($item->persentase, 0) }}%)</span>
+                            @elseif($item->persentase == 0)
+                                <span class="badge badge-yellow">Belum Realisasi</span>
+                            @else
+                                <span class="badge badge-green">Normal ({{ number_format($item->persentase, 0) }}%)</span>
+                            @endif
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @if(method_exists($rkasItems, 'links'))
+                <div class="px-4 py-3 border-t border-slate-100">
+                    {{ $rkasItems->links() }}
+                </div>
+            @endif
+            @else
+            <div class="text-center py-12 text-slate-400">
+                <p class="text-sm">Belum ada data RKAS.</p>
+            </div>
+            @endif
+        </div>
+    </div>
+
     @if($transaksiBulanIni == 0)
         <div class="alert-warning mb-6">
             <svg aria-hidden="true" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
