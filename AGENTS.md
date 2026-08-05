@@ -125,3 +125,28 @@ Port command `audit:clean` + jadwal backup/cleanup dari referensi sira-rkas ke `
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (184 tests, 507 assertions)`.
+
+---
+
+# Sesi 05 Agu 2026 — M7 Index Kinerja DB
+
+## Goal
+Port migration index kinerja DB dari referensi sira-rkas, disesuaikan ke skema target (tanpa `sekolah_id`), untuk mempercepat query dashboard/laporan/cleanup yang sering dijalankan.
+
+## Summary
+- 5 test baru (`DatabaseIndexTest`) → total **189 tests (513 assertions)**, PHPStan level 6: 0 error. `migrate:fresh` (testing) OK.
+
+## Changes
+- `database/migrations/2026_08_05_000016_add_performance_indexes.php` — `transaksi_bku`:
+  - `transaksi_bku_item_jenis_bulan_idx` (`rkas_item_id`, `jenis`, `bulan`) — query per-item realisasi dashboard/laporan.
+  - `transaksi_bku_jenis_bulan_idx` (`jenis`, `bulan`) — agregat BKU/rekap.
+  - `rkas_item` TIDAK ditambah (index `[tahun_anggaran_id, no_urut]` sudah ada di create migration).
+- `database/migrations/2026_08_05_000017_add_missing_indexes.php`:
+  - `kwitansi_transaksi_bku_idx` (`transaksi_bku_id`).
+  - `import_log_tahun_bulan_idx` (`tahun_anggaran_id`, `bulan`) — status import dashboard.
+  - `audit_log_created_at_idx` (`created_at`) — mempercepat `audit:clean` (`where created_at < cutoff`).
+- `tests/Feature/Database/DatabaseIndexTest.php` — cek keberadaan index via `Schema::hasIndex` (incl. unique `rkas_item_bulan`).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (189 tests, 513 assertions)`.
