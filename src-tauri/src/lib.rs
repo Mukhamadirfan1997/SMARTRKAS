@@ -7,7 +7,78 @@ use std::time::{Duration, Instant};
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-struct PhpServer(Mutex<Option<Vec<Child>>>);
+#[cfg(windows)]
+use std::os::windows::io::RawHandle;
+
+struct PhpServer {
+    children: Mutex<Option<Vec<Child>>>,
+    // Handle job dijaga hidup seumur app. Saat app keluar (termasuk bila
+    // di-kill paksa), OS menutup handle ini sehingga seluruh anak proses PHP
+    // ikut dimatikan (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) — mencegah proses
+    // yatim yang mengunci file instalasi.
+    #[cfg(windows)]
+    _job: Mutex<Option<JobHandle>>,
+}
+
+/// Pembungkus RawHandle agar bisa disimpan dalam state Tauri (Send + Sync).
+/// Field sengaja tidak dibaca: nilai hanya dipertahankan agar handle job tetap
+/// hidup; saat proses app berakhir (termasuk di-kill paksa), OS menutup handle
+/// dan anak proses PHP ikut dimatikan.
+#[cfg(windows)]
+#[allow(dead_code)]
+struct JobHandle(RawHandle);
+
+#[cfg(windows)]
+unsafe impl Send for JobHandle {}
+
+#[cfg(windows)]
+unsafe impl Sync for JobHandle {}
+
+#[cfg(windows)]
+mod job {
+    use std::os::windows::io::AsRawHandle;
+    use std::process::Child;
+
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    pub(crate) fn create_kill_on_close_job() -> Option<HANDLE> {
+        unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() {
+                return None;
+            }
+
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+            let ok = SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as *const std::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            );
+
+            if ok == 0 {
+                let _ = CloseHandle(job);
+                return None;
+            }
+
+            Some(job)
+        }
+    }
+
+    pub(crate) fn assign(child: &Child, job: HANDLE) {
+        unsafe {
+            // Gagal di-skip aman (mis. proses sudah berada di job lain).
+            let _ = AssignProcessToJobObject(job, child.as_raw_handle());
+        }
+    }
+}
 
 fn find_free_port() -> u16 {
     TcpListener::bind(("127.0.0.1", 0))
@@ -166,7 +237,29 @@ pub fn run() {
             if let Some(scheduler) = scheduler {
                 children.push(scheduler);
             }
-            app.manage(PhpServer(Mutex::new(Some(children))));
+
+            #[cfg(windows)]
+            let job_handle = job::create_kill_on_close_job();
+
+            #[cfg(windows)]
+            if let Some(job_handle) = job_handle {
+                for child in children.iter() {
+                    job::assign(child, job_handle);
+                }
+            }
+
+            #[cfg(windows)]
+            let server_state = PhpServer {
+                children: Mutex::new(Some(children)),
+                _job: Mutex::new(job_handle.map(JobHandle)),
+            };
+
+            #[cfg(not(windows))]
+            let server_state = PhpServer {
+                children: Mutex::new(Some(children)),
+            };
+
+            app.manage(server_state);
 
             if !wait_ready(port) {
                 eprintln!("SmartRKAS web server did not start in time");
@@ -192,7 +285,7 @@ pub fn run() {
             if let WindowEvent::CloseRequested { .. } = event {
                 let app = window.app_handle();
                 if let Some(state) = app.try_state::<PhpServer>() {
-                    let mut guard = state.0.lock().unwrap();
+                    let mut guard = state.children.lock().unwrap();
                     if let Some(mut children) = guard.take() {
                         for child in children.iter_mut() {
                             let _ = child.kill();
