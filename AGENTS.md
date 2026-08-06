@@ -589,3 +589,18 @@ Perbaiki "simpan pengaturan bot lalu Kirim Pesan Uji tidak menerima pesan apa pu
 
 ## Test Status
 - PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`.
+
+---
+
+# Sesi 06 Agu 2026 — Release v0.3.1 (Auto-Migrate Desktop + Fix Telegram Sinkron)
+
+## Goal
+Lanjutkan sesi "Fix Auto-Migrate Desktop" yang PAUSED (NSIS v0.3.1 ter-produce, MSI belum) SEKALIGUS bawa fix "Telegram tak terkirim" ke rilis.
+
+## Summary
+- Build ulang penuh `npm run tauri -- build` (compile cached, ~4 menit) → **NSIS + MSI v0.3.1 ter-produce** (NSIS 57.7MB, MSI 86.8MB).
+- Commit `567e5b6` (15 file) → push `master`. Release https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.3.1 (2 asset, state uploaded).
+- Catatan rilis: auto-migrate DB lama, job Telegram/export jadi sinkron, feedback pesan uji nyata.
+
+## Test Status
+- PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`. `cargo` compile OK.
