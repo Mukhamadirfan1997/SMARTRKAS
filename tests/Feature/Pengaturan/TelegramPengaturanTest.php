@@ -2,10 +2,9 @@
 
 namespace Tests\Feature\Pengaturan;
 
-use App\Jobs\SendTelegramNotificationJob;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class TelegramPengaturanTest extends TestCase
@@ -106,9 +105,9 @@ class TelegramPengaturanTest extends TestCase
         $this->assertArrayNotHasKey('telegram_bot_token', $user->toArray());
     }
 
-    public function test_test_button_dispatches_job_when_configured(): void
+    public function test_test_button_sends_message_when_configured(): void
     {
-        Queue::fake();
+        Http::fake();
 
         $user = User::factory()->create([
             'telegram_chat_id' => '123456789',
@@ -120,16 +119,36 @@ class TelegramPengaturanTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('status');
 
-        Queue::assertPushed(SendTelegramNotificationJob::class, function ($job) {
-            return $job->chatId === '123456789'
-                && $job->botToken === 'token123'
-                && str_contains($job->message, 'Pesan uji');
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://api.telegram.org/bottoken123/sendMessage'
+                && $request['chat_id'] === '123456789'
+                && str_contains($request['text'], 'Pesan uji');
         });
+    }
+
+    public function test_test_button_shows_error_when_telegram_rejects(): void
+    {
+        Http::fake([
+            'api.telegram.org/*' => Http::response('{"ok":false,"error_code":401,"description":"Unauthorized"}', 401),
+        ]);
+
+        $user = User::factory()->create([
+            'telegram_chat_id' => '123456789',
+            'telegram_bot_token' => 'token123',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->post('/pengaturan/telegram/test')
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertStringContainsString('Unauthorized', (string) session('error'));
+        $this->assertStringContainsString('Start', (string) session('error'));
     }
 
     public function test_test_button_errors_when_token_missing(): void
     {
-        Queue::fake();
+        Http::fake();
 
         $user = User::factory()->create(['telegram_chat_id' => '123456789']);
 
@@ -138,12 +157,12 @@ class TelegramPengaturanTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('error');
 
-        Queue::assertNotPushed(SendTelegramNotificationJob::class);
+        Http::assertNothingSent();
     }
 
     public function test_test_button_errors_when_chat_id_missing(): void
     {
-        Queue::fake();
+        Http::fake();
 
         $user = User::factory()->create(['telegram_bot_token' => 'token123']);
 
@@ -152,7 +171,7 @@ class TelegramPengaturanTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('error');
 
-        Queue::assertNotPushed(SendTelegramNotificationJob::class);
+        Http::assertNothingSent();
     }
 
     public function test_page_shows_desktop_data_dir_when_available(): void

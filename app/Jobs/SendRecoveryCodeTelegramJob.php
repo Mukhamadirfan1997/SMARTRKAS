@@ -4,20 +4,18 @@ namespace App\Jobs;
 
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Http;
 
-class SendRecoveryCodeTelegramJob implements ShouldQueue
+/**
+ * Kirim kode pemulihan via Telegram. Sengaja TIDAK mengimplementasikan
+ * ShouldQueue sehingga berjalan sinkron (desktop offline tanpa worker).
+ */
+class SendRecoveryCodeTelegramJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    public int $tries = 3;
-
-    /** @var array<int, int> */
-    public array $backoff = [2, 10];
 
     public User $user;
     public string $code;

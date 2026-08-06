@@ -2,10 +2,9 @@
 
 namespace Tests\Feature\Auth;
 
-use App\Jobs\SendRecoveryCodeTelegramJob;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class OnboardingTest extends TestCase
@@ -89,7 +88,11 @@ class OnboardingTest extends TestCase
 
     public function test_recovery_code_generation_dispatches_telegram_job_when_configured(): void
     {
-        Queue::fake();
+        config([
+            'logging.telegram_bot_token' => null,
+            'logging.telegram_chat_id' => null,
+        ]);
+        Http::fake();
 
         User::factory()->create([
             'telegram_chat_id' => '123456789',
@@ -98,17 +101,25 @@ class OnboardingTest extends TestCase
 
         $this->post('/mulai/recovery-code')->assertRedirect();
 
-        Queue::assertPushed(SendRecoveryCodeTelegramJob::class);
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://api.telegram.org/bottoken123/sendMessage'
+                && $request['chat_id'] === '123456789'
+                && str_contains($request['text'], 'Kode Pemulihan');
+        });
     }
 
     public function test_recovery_code_generation_does_not_dispatch_when_not_configured(): void
     {
-        Queue::fake();
+        config([
+            'logging.telegram_bot_token' => null,
+            'logging.telegram_chat_id' => null,
+        ]);
+        Http::fake();
 
         User::factory()->create();
 
         $this->post('/mulai/recovery-code')->assertRedirect();
 
-        Queue::assertNotPushed(SendRecoveryCodeTelegramJob::class);
+        Http::assertNothingSent();
     }
 }

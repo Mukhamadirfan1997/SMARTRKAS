@@ -3,21 +3,19 @@
 namespace App\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Http\Client\Response;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
-class SendTelegramNotificationJob implements ShouldQueue
+/**
+ * Kirim notifikasi Telegram. Sengaja TIDAK mengimplementasikan ShouldQueue
+ * sehingga berjalan sinkron lewat ::dispatch() (desktop offline tanpa worker).
+ */
+class SendTelegramNotificationJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    public int $tries = 3;
-
-    /** @var array<int, int> */
-    public array $backoff = [2, 10];
 
     public string $level;
     public string $message;
@@ -50,28 +48,30 @@ class SendTelegramNotificationJob implements ShouldQueue
 
     public function handle(): void
     {
-        $lock = Cache::lock('telegram-notification', 5);
+        $botToken = $this->botToken ?? config('logging.telegram_bot_token');
+        $chatId = $this->chatId ?? config('logging.telegram_chat_id');
 
-        if (!$lock->get()) {
+        if (empty($botToken) || empty($chatId)) {
             return;
         }
 
-        try {
-            $botToken = $this->botToken ?? config('logging.telegram_bot_token');
-            $chatId = $this->chatId ?? config('logging.telegram_chat_id');
+        $this->send();
+    }
 
-            if (empty($botToken) || empty($chatId)) {
-                return;
-            }
+    /**
+     * Kirim pesan secara sinkron dan kembalikan respons dari API Telegram.
+     * Dipakai tombol "Kirim Pesan Uji" agar hasilnya bisa dilaporkan ke user.
+     */
+    public function send(): Response
+    {
+        $botToken = $this->botToken ?? config('logging.telegram_bot_token');
+        $chatId = $this->chatId ?? config('logging.telegram_chat_id');
 
-            Http::timeout(5)->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
-                'chat_id' => $chatId,
-                'text' => $this->formatMessage(),
-                'parse_mode' => 'HTML',
-            ]);
-        } finally {
-            $lock->release();
-        }
+        return Http::timeout(5)->post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+            'chat_id' => $chatId,
+            'text' => $this->formatMessage(),
+            'parse_mode' => 'HTML',
+        ]);
     }
 
     protected function formatMessage(): string

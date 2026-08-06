@@ -530,3 +530,62 @@ Build installer desktop (NSIS + MSI) untuk semua pekerjaan sejak v0.2.0 (fix sal
 
 ## Test Status
 - Tidak ada perubahan logika app pada sesi rilis → suite tetap `OK (284 tests, 764 assertions)`, PHPStan clean.
+
+---
+
+# Sesi 06 Agu 2026 — Fix Auto-Migrate Desktop: Kolom Telegram Hilang di DB Lama (v0.3.1) — BELUM RELEASE
+
+## Goal
+Perbaiki error `SQLSTATE[HY000]: General error: 1 no such column: telegram_chat_id` di mode desktop: DB SQLite lama (dibuat sebelum fitur Telegram ada) tidak pernah di-migrate saat app di-upgrade → kolom `telegram_chat_id`/`telegram_bot_token` tidak ada.
+
+## Summary
+- **Akar masalah**: `src-tauri/src/lib.rs` hanya menjalankan `artisan app:install` saat **first-run** (`first_run = !db_path.is_file()`). Upgrade app → `migrate` tidak pernah jalan → migrasi baru (000018 recovery_code, 000019 telegram, 000020 override_note) Pending di DB lama.
+- Verifikasi via `php artisan migrate:status` (dgn `DB_DATABASE` menunjuk DB desktop): 3 migrasi Pending (000018/000019/000020), sisanya batch 1.
+- **DB desktop sudah di-migrate manual** (user tutup app dulu): `$env:DB_DATABASE="C:\Users\yudhi\AppData\Roaming\id.smartrkas.desktop\smartrkas.sqlite"; php artisan migrate --force` → 3 migrasi DONE. Verifikasi `PRAGMA table_info` via script temp: kolom `telegram_chat_id`, `telegram_bot_token`, `recovery_code_hash`, `recovery_code_generated_at`, `override_note` ADA; `users.id=1` telegram_* = NULL (save yang gagal tidak menyimpan apa pun).
+- **Fix permanen** `lib.rs`: setelah blok `if first_run { app:install }`, tambah `run_php(..., ["artisan","migrate","--force"], true)` → dijalankan SETIAP startup (di first-run no-op). Upgrade app masa depan otomatis migrate DB lama.
+- **Catatan keamanan**: token bot asli user sempat muncul di pesan error (ter-paste user ke chat) → rekomendasikan regenerate di @BotFather.
+- **Catatan form**: nilai sempat tertukar (token masuk field chat_id & sebaliknya) tapi form+controller SUDAH benar (`telegram.blade.php:59,72` + `TelegramPengaturanController`) → murni salah ketik user; save gagal jadi tidak tersimpan.
+
+## Changes
+- `src-tauri/src/lib.rs` — auto-migrate tiap startup (perubahan Rust, butuh rebuild installer).
+- Versi bump `0.3.0 → 0.3.1`: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (entry `smartrkas`).
+
+## Build Status (PAUSED — user minta lanjut nanti)
+- PHPUnit `OK (284 tests, 764 assertions)`, PHPStan `[OK] No errors`, `cargo check` OK.
+- `npm run build` OK; `npm run tauri -- build` **terpotong timeout 30 menit**:
+  - ✅ `SmartRKAS_0.3.1_x64-setup.exe` (NSIS, 60.5MB) TERPRODUCE di `src-tauri/target/release/bundle/nsis/`.
+  - ❌ MSI v0.3.1 TIDAK ter-produce (build di-kill saat tahap MSI bundling).
+- Perubahan kode BELUM di-commit (aman di disk, working tree).
+
+## Next (lanjutan sesi berikutnya)
+1. `npm run tauri -- build --bundles msi` (compile sudah cached → cepat) untuk produce MSI v0.3.1.
+2. `git add -A` + commit (lib.rs, versi, docs) + `git push origin master`.
+3. `gh release create v0.3.1` — asset NSIS + MSI; catatan: fix auto-migrate DB lama saat upgrade + urutan kolom Telegram.
+4. Tutup/susun sesi ini menjadi "Release v0.3.1" bila sudah rilis.
+
+## Test Status
+- PHPUnit `OK (284 tests, 764 assertions)`, PHPStan level 6: `[OK] No errors`.
+
+---
+
+# Sesi 06 Agu 2026 — Fix Telegram Tak Terkirim: Job Sinkron + Feedback Pesan Uji (v0.3.1)
+
+## Goal
+Perbaiki "simpan pengaturan bot lalu Kirim Pesan Uji tidak menerima pesan apa pun di Telegram". Akar masalah: job notifikasi Telegram di-queue (`ShouldQueue` + `QUEUE_CONNECTION=database`) tapi TIDAK ada queue worker — desktop hanya spawn `artisan serve --no-reload` + `schedule:work`, web hanya `php artisan serve` → job diam selamanya di tabel `jobs`.
+
+## Summary
+- **Akar masalah sama untuk 3 job**: `SendTelegramNotificationJob`, `SendRecoveryCodeTelegramJob`, `GenerateExportJob` semua `ShouldQueue` → tanpa worker, pesan uji, kode pemulihan, dan export Excel tidak pernah diproses.
+- **Fix**: ubah ketiga job menjadi SINKRON (hapus `ShouldQueue`), mengikuti precedent `ProcessRkasImport` ("Sengaja TIDAK mengimplementasikan ShouldQueue sehingga berjalan sinkron lewat ::dispatch() (desktop offline tanpa worker)"). Tidak ada lagi job yang antri → tidak butuh worker di web maupun desktop.
+- **Feedback nyata**: `TelegramPengaturanController::test()` kini memanggil `SendTelegramNotificationJob::send()` langsung dan melaporkan hasil: sukses → flash status; gagal → flash error berisi `description` dari API Telegram (mis. `Unauthorized`, `chat not found`) + pengingat tekan Start pada bot; exception → flash error.
+- Audit log `telegram_pengaturan.test` kini memuat `success` + `error` (tanpa token).
+
+## Changes
+- `app/Jobs/SendTelegramNotificationJob.php` — hapus `ShouldQueue` + cache lock `telegram-notification` (kini sinkron, tak perlu rate-limit lintas-proses); tambah `send(): \Illuminate\Http\Client\Response` (POST Telegram, timeout 5 dtk); `handle()` guard config lalu panggil `send()`.
+- `app/Jobs/SendRecoveryCodeTelegramJob.php` — hapus `ShouldQueue` + `tries`/`backoff`.
+- `app/Jobs/GenerateExportJob.php` — hapus `ShouldQueue` (export berjalan inline saat request; `Excel::fake()` di test tetap bekerja, status job langsung `completed`).
+- `app/Http/Controllers/TelegramPengaturanController.php` — `test()`: try/catch `send()`, `$response->successful()` → status; selain itu flash error `description` (fallback `HTTP n`).
+- Tests — ganti asersi queue (`Queue::fake()`+`assertPushed`) dengan asersi HTTP (`Http::fake()`+`assertSent`): `TelegramNotificationTest` (4), `TelegramPengaturanTest` (4), `OnboardingTest` (2), `RecoveryCodeTest` (2). Tambah 1 test baru: `test_test_button_shows_error_when_telegram_rejects` (fake 401 Unauthorized → flash error). `TelegramRecoveryTest` (pakai `dispatchSync`) tanpa perubahan.
+- **Catatan test**: `Http::response([...])` dengan body array → `json('description')` null (body di-`(string)`-cast jadi "Array"); untuk fake respons error pakai string JSON: `Http::response('{"ok":false,...,"description":"Unauthorized"}', 401)`.
+
+## Test Status
+- PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`.

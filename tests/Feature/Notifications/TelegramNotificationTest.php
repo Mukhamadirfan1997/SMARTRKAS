@@ -6,7 +6,6 @@ use App\Jobs\SendTelegramNotificationJob;
 use App\Listeners\NotifyBackupTelegram;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Queue;
 use Spatie\Backup\BackupDestination\BackupDestination;
 use Spatie\Backup\Events\BackupHasFailed;
 use Spatie\Backup\Events\BackupWasSuccessful;
@@ -47,7 +46,11 @@ class TelegramNotificationTest extends TestCase
 
     public function test_listener_dispatches_job_on_backup_success(): void
     {
-        Queue::fake();
+        config([
+            'logging.telegram_bot_token' => 'token123',
+            'logging.telegram_chat_id' => 'chat123',
+        ]);
+        Http::fake();
 
         $destination = $this->createMock(BackupDestination::class);
         $destination->method('diskName')->willReturn('local');
@@ -55,43 +58,56 @@ class TelegramNotificationTest extends TestCase
 
         (new NotifyBackupTelegram)->handle(new BackupWasSuccessful($destination));
 
-        Queue::assertPushed(SendTelegramNotificationJob::class, function ($job) {
-            return $job->level === 'INFO'
-                && str_contains($job->message, 'Backup berhasil')
-                && str_contains($job->message, 'local');
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://api.telegram.org/bottoken123/sendMessage'
+                && $request['chat_id'] === 'chat123'
+                && str_contains($request['text'], 'Backup berhasil')
+                && str_contains($request['text'], 'local');
         });
     }
 
     public function test_listener_dispatches_job_on_backup_failure(): void
     {
-        Queue::fake();
+        config([
+            'logging.telegram_bot_token' => 'token123',
+            'logging.telegram_chat_id' => 'chat123',
+        ]);
+        Http::fake();
 
         (new NotifyBackupTelegram)->handle(new BackupHasFailed(new \RuntimeException('Disk penuh')));
 
-        Queue::assertPushed(SendTelegramNotificationJob::class, function ($job) {
-            return $job->level === 'ERROR'
-                && str_contains($job->message, 'Disk penuh');
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://api.telegram.org/bottoken123/sendMessage'
+                && str_contains($request['text'], 'Disk penuh');
         });
     }
 
     public function test_telegram_log_channel_dispatches_job_for_error_logs(): void
     {
-        Queue::fake();
+        config([
+            'logging.telegram_bot_token' => 'token123',
+            'logging.telegram_chat_id' => 'chat123',
+        ]);
+        Http::fake();
 
         Log::channel('telegram')->error('Terjadi kegagalan aplikasi');
 
-        Queue::assertPushed(SendTelegramNotificationJob::class, function ($job) {
-            return $job->level === 'ERROR'
-                && $job->message === 'Terjadi kegagalan aplikasi';
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://api.telegram.org/bottoken123/sendMessage'
+                && str_contains($request['text'], 'Terjadi kegagalan aplikasi');
         });
     }
 
     public function test_telegram_log_channel_ignores_info_logs(): void
     {
-        Queue::fake();
+        config([
+            'logging.telegram_bot_token' => 'token123',
+            'logging.telegram_chat_id' => 'chat123',
+        ]);
+        Http::fake();
 
         Log::channel('telegram')->info('Bukan error');
 
-        Queue::assertNotPushed(SendTelegramNotificationJob::class);
+        Http::assertNothingSent();
     }
 }

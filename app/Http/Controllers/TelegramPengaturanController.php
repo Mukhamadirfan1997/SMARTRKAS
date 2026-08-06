@@ -61,11 +61,7 @@ class TelegramPengaturanController extends Controller
             return back()->with('error', 'ID Telegram belum diisi. Isi ID Telegram lalu Simpan.');
         }
 
-        AuditLog::record('telegram_pengaturan', 'test', [
-            'chat_id' => $user->telegramChatId(),
-        ], null, $user->id);
-
-        SendTelegramNotificationJob::dispatch(
+        $job = new SendTelegramNotificationJob(
             'INFO',
             'Pesan uji dari SmartRKAS — notifikasi Telegram berfungsi.',
             [],
@@ -74,7 +70,38 @@ class TelegramPengaturanController extends Controller
             $user->telegramChatId(),
         );
 
-        return back()->with('status', 'Pesan uji sedang dikirim ke Telegram Anda. Buka chat bot untuk memastikan pesannya sampai.');
+        try {
+            $response = $job->send();
+        } catch (\Throwable $e) {
+            AuditLog::record('telegram_pengaturan', 'test', [
+                'chat_id' => $user->telegramChatId(),
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], null, $user->id);
+
+            return back()->with('error', 'Pesan uji GAGAL dikirim: '.$e->getMessage().'. Periksa koneksi internet dan pengaturan bot.');
+        }
+
+        if ($response->successful()) {
+            AuditLog::record('telegram_pengaturan', 'test', [
+                'chat_id' => $user->telegramChatId(),
+                'success' => true,
+            ], null, $user->id);
+
+            return back()->with('status', 'Pesan uji berhasil dikirim ke Telegram Anda. Buka chat bot untuk memastikan pesannya sampai.');
+        }
+
+        $description = is_string($response->json('description'))
+            ? $response->json('description')
+            : 'HTTP '.$response->status();
+
+        AuditLog::record('telegram_pengaturan', 'test', [
+            'chat_id' => $user->telegramChatId(),
+            'success' => false,
+            'error' => $description,
+        ], null, $user->id);
+
+        return back()->with('error', 'Pesan uji GAGAL dikirim: '.$description.'. Pastikan token benar (dari @BotFather), ID benar (dari @userinfobot), dan Anda sudah menekan Start pada bot.');
     }
 
     private function botSource(User $user): ?string

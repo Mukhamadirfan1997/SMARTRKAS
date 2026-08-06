@@ -123,6 +123,12 @@ pub fn run() {
                 );
             }
 
+            run_php(
+                &handle,
+                &["artisan".to_string(), "migrate".to_string(), "--force".to_string()],
+                true,
+            );
+
             let port = find_free_port();
             let php = php_binary(&handle);
             let root = app_root(&handle);

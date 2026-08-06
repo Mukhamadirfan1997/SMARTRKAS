@@ -4,14 +4,17 @@ namespace App\Jobs;
 
 use App\Models\ExportJob;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
-class GenerateExportJob implements ShouldQueue
+/**
+ * Generate file export. Sengaja TIDAK mengimplementasikan ShouldQueue
+ * sehingga berjalan sinkron lewat ::dispatch() (desktop offline tanpa worker).
+ */
+class GenerateExportJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
