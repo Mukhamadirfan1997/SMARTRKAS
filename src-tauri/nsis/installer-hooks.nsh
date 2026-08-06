@@ -9,8 +9,8 @@
 ; Matching by path keeps php.exe of other tools (XAMPP, VS Code, etc.) intact.
 
 !macro SMART_StopRunningProcesses
-  System::Call 'kernel32::SetEnvironmentVariable(t, t)i("SMARTRKAS_INSTDIR", "$INSTDIR").r0'
-  nsExec::ExecToLog '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference=''SilentlyContinue''; $$inst=$$env:SMARTRKAS_INSTDIR; if ($$inst) { $$targets=@((Join-Path $$inst ''SmartRKAS.exe''),(Join-Path $$inst ''php\php.exe'')); Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and ($$targets -contains $$_.ExecutablePath) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force } }$\"'
+  DetailPrint "Stopping running SmartRKAS/PHP processes..."
+  nsExec::ExecToLog '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $\"$$ErrorActionPreference=$\'SilentlyContinue$\'; $$inst=$\'$INSTDIR$\'; if ($$inst) { $$targets=@((Join-Path $$inst $\'SmartRKAS.exe$\'),(Join-Path $$inst $\'php\php.exe$\')); Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and ($$targets -contains $$_.ExecutablePath) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force } }$\"'
   Pop $0
   Sleep 500
 !macroend
