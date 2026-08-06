@@ -630,5 +630,14 @@ Perbaiki `Error opening file for writing: php_curl.dll` saat upgrade SmartRKAS (
 - MSI tidak pakai hook (kustomisasi tidak mudah) — Job Object menutup lubang untuk kasus MSI/upgrade path lain.
 - Release notes: tulis via `--notes-file` (temp .md), jangan `--notes` multiline (PowerShell globbing).
 
+## Hotfix (re-release v0.3.2, commit `6a0ef67`)
+- **Bug**: v0.3.2 awal punya escaping salah di NSIS hook → proses php.exe yatim TIDAK dihentikan → error "Error opening file for writing" MUNCUL LAGI saat user pasang v0.3.2.
+- **Akar masalah**: di string NSIS single-quoted, `''` BUKAN escape utk literal `'` — NSIS meneruskan `''` apa adanya, dan PowerShell menganggap `''SilentlyContinue''` = `''` (string kosong) + `SilentlyContinue` → syntax error → PowerShell gagal. Escape yang benar: `$\'` (atau `'` tunggal). Kesimpulan diverifikasi dgn `FileWrite` dump: `$\'$INSTDIR$\'` dan `'$INSTDIR'` menghasilkan string SAMA (`"$inst='C:\...\SmartRKAS'"`).
+- **Fix**: `src-tauri/nsis/installer-hooks.nsh` — ganti SEMUA `''` → `$\'` di script PowerShell, buang `System::Call` (cara lama set env `SMARTRKAS_INSTDIR`), `$INSTDIR` di-embed langsung: `$$inst=$\'$INSTDIR$\'`.
+- **Verifikasi**: 1) `Get-CimInstance` matching langsung (PowerShell murni) ketemu 2 orphan (PID 24624, 46308). 2) Test isolasi nsExec: `$$`+`$\'` OK (esc5), `''` GAGAL (esc3/esc4), `$INSTDIR` resolve OK (esc7). 3) Hook final di-compile makensis (hooktest.nsi, InstallDir=$LOCALAPPDATA\SmartRKAS) → spawn php.exe palsu → jalankan /S → proses MATI. 4) Rebuild `npm run tauri -- build` (1.12s, tanpa recompile) → `gh release upload v0.3.2 --clobber` (NSIS + MSI) + `gh release edit` (notes berisi catatan hotfix). Commit `6a0ef67` → push.
+- **Diagnosis upgrade**: folder instal `C:\Users\yudhi\AppData\Local\SmartRKAS` — `smartrkas.exe` 0.3.2 tapi `uninstall.exe` 0.2.0 + TIDAK ada registry uninstall + file php tetap 2023 → bukti installer ABORT di tengah (exe tertimpa dulu, lalu gagal di file php yg terkunci). mtime file instal mencerminkan mtime source (NSIS pertahankan mtime file).
+- **Debugging NSIS**: toolchain — tulis .nsi test di `%TEMP%\opencode`, compile `C:\Users\yudhi\AppData\Local\tauri\NSIS\makensis.exe -V2`, jalanin `/S`. Generated installer script Tauri ada di `src-tauri\target\release\nsis\x64\installer.nsi` (makro `!insertmacro` hanya tampil sebagai directive; body di-expand makensis saat compile).
+- Proses yatim v0.3.1 (PID 24624, 46308) sudah di-kill saat diagnosis; job object + hook fix mencegah tercipta lagi.
+
 ## Test Status
 - Tidak ada perubahan logika PHP → PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`. `cargo check` OK; `npm run build` OK; `tauri build` (NSIS + MSI) OK.
