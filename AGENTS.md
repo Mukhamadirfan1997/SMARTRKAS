@@ -509,3 +509,24 @@ Periksa semua fitur filter halaman agar tampilan tetap benar saat terfilter (nil
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (284 tests, 764 assertions)`.
+
+---
+
+# Sesi 06 Agu 2026 — Release v0.3.0 (Build + Push + GitHub)
+
+## Goal
+Build installer desktop (NSIS + MSI) untuk semua pekerjaan sejak v0.2.0 (fix saldo BKU, override + kunci kwitansi, audit log, halaman Akun & Login, fix paginasi filter, halaman Tentang) dan rilis ke GitHub.
+
+## Summary
+- Versi 0.3.0 (sudah di-bump sesi sebelumnya: `config/app.php`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `.env.example`).
+- Build Tauri sukses: `SmartRKAS_0.3.0_x64-setup.exe` (NSIS, 57.7MB) + `SmartRKAS_0.3.0_x64_en-US.msi` (MSI, 86.8MB).
+- Commit `8655faa` (42 file, +1592/−231) memuat SEMUA pekerjaan 06 Agu yang belum ter-commit sejak v0.2.0 → push `master`.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.3.0 (2 asset, state `uploaded`, digest sha256 tersedia).
+
+## Catatan
+- Audit filter (M-sesi "Pertahankan Query String Saat Paginasi") turut masuk rilis ini: `->withQueryString()` di TransaksiBku, Rkas, MasterProgram, MasterKodeRekening, Dashboard, Laporan (loadRekapItems & loadKuartalItems). AuditLog sudah benar sejak sebelumnya.
+- PowerShell: jangan tulis `--notes` multiline berisi `\"` dalam satu string (globbing error `no matches found`); pakai `--notes-file` dari file temp.
+- `public/build/` di-regenerate via `npm run build` sebelum `tauri build` — tidak di-track.
+
+## Test Status
+- Tidak ada perubahan logika app pada sesi rilis → suite tetap `OK (284 tests, 764 assertions)`, PHPStan clean.
