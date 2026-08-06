@@ -72,17 +72,12 @@ class DeduplicateRkas extends Command
 
             $this->mergeInto($survivor, $duplicates);
 
-            AuditLog::create([
-                'user_id'    => null,
-                'tabel'      => 'rkas_item',
-                'aksi'       => 'dedup_merge',
-                'data_baru'  => [
-                    'survivor_id'         => $survivor->id,
-                    'uraian'              => $survivor->uraian,
-                    'jumlah_item_digabung' => $duplicates->count(),
-                    'item_ids'            => $duplicates->pluck('id')->all(),
-                ],
-            ]);
+            AuditLog::record('rkas_item', 'dedup_merge', [
+                'survivor_id'          => $survivor->id,
+                'uraian'               => $survivor->uraian,
+                'jumlah_item_digabung' => $duplicates->count(),
+                'item_ids'             => $duplicates->pluck('id')->all(),
+            ], null, null);
 
             $merged += $duplicates->count();
         }

@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $toko_penerima
  * @property string|null $metode_pengadaan
  * @property string|null $uraian
+ * @property string|null $override_note
  * @property int $tahap
  * @property bool $status_lunas
  * @property float|null $saldo_berjalan
@@ -61,6 +62,7 @@ class TransaksiBku extends Model
         'toko_penerima',
         'metode_pengadaan',
         'uraian',
+        'override_note',
         'tahap',
         'status_lunas',
         'saldo_berjalan',
@@ -74,6 +76,8 @@ class TransaksiBku extends Model
             'status_lunas' => 'boolean',
         ];
     }
+
+    private ?bool $masihOverBudgetCache = null;
 
     /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\RkasItem, $this> */
     public function rkasItem(): BelongsTo
@@ -103,5 +107,42 @@ class TransaksiBku extends Model
     public function sumberDana(): BelongsTo
     {
         return $this->belongsTo(SumberDana::class);
+    }
+
+    /**
+     * Transaksi dibuat lewat override dan item RKAS terkait masih over budget
+     * (realisasi kumulatif sampai bulan transaksi > rencana kumulatif).
+     */
+    public function masihOverBudget(): bool
+    {
+        if ($this->masihOverBudgetCache !== null) {
+            return $this->masihOverBudgetCache;
+        }
+
+        if (empty($this->override_note)) {
+            return $this->masihOverBudgetCache = false;
+        }
+
+        if (strtolower((string) $this->jenis) !== 'pengeluaran') {
+            return $this->masihOverBudgetCache = false;
+        }
+
+        $item = $this->rkasItem;
+        if ($item === null) {
+            return $this->masihOverBudgetCache = false;
+        }
+
+        $bulan = max(1, (int) $this->bulan);
+
+        $rencana = (float) $item->bulanRencana
+            ->where('bulan', '<=', $bulan)
+            ->sum('rencana');
+
+        $realisasi = (float) $item->transaksiBkus
+            ->where('jenis', 'pengeluaran')
+            ->where('bulan', '<=', $bulan)
+            ->sum('jumlah');
+
+        return $this->masihOverBudgetCache = $realisasi > $rencana;
     }
 }

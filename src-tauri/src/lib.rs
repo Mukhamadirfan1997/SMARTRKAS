@@ -103,6 +103,7 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let data_dir = app

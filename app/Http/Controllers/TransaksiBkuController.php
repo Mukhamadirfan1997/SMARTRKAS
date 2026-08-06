@@ -62,18 +62,26 @@ class TransaksiBkuController extends Controller
             });
         }
 
-        $transaksis = $query->paginate(50);
+        $transaksis = $query->paginate(50)->withQueryString();
 
-        $saldoRecord = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
-            ->when($bulan !== '', function (Builder $q) use ($bulan): void {
-                $q->where('bulan', '<', is_numeric($bulan) ? (int) $bulan : 0);
-            })
-            ->when($sumberDanaId, function (Builder $q) use ($sumberDanaId): void {
-                $q->where('sumber_dana_id', $sumberDanaId);
-            })
-            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END), 0) as saldo")
-            ->first();
-        $saldoAwal = $saldoRecord ? (float) $saldoRecord->getAttribute('saldo') : 0.0;
+        $saldoAwal = 0.0;
+        $first = $transaksis->first();
+        if ($first !== null) {
+            $firstTanggal = Carbon::parse($first->tanggal)->toDateString();
+            $saldoAwal = (float) TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+                ->when($sumberDanaId, function (Builder $q) use ($sumberDanaId): void {
+                    $q->where('sumber_dana_id', $sumberDanaId);
+                })
+                ->where(function (Builder $q) use ($first, $firstTanggal): void {
+                    $q->where('tanggal', '<', $firstTanggal)
+                      ->orWhere(function (Builder $q2) use ($first, $firstTanggal): void {
+                          $q2->where('tanggal', '=', $firstTanggal)
+                             ->where('id', '<', $first->id);
+                      });
+                })
+                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END), 0) as saldo")
+                ->value('saldo');
+        }
 
         $saldo = $saldoAwal;
         foreach ($transaksis as $transaksi) {
@@ -105,9 +113,16 @@ class TransaksiBkuController extends Controller
             ->whereDoesntHave('kwitansi')
             ->count();
 
+        $countOverride = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+            ->when($bulanQuery, fn (Builder $q) => $q->where('bulan', $bulanQuery))
+            ->when($sumberDanaId, fn (Builder $q) => $q->where('sumber_dana_id', $sumberDanaId))
+            ->whereNotNull('override_note')
+            ->where('override_note', '!=', '')
+            ->count();
+
         return view('transaksi-bku.index', compact(
             'transaksis', 'bulan', 'totalPenerimaan', 'totalPengeluaran', 'saldoAkhir',
-            'belumMetodePengadaan', 'belumCetakKwitansi', 'tahunAnggaranAktif', 'tahunList',
+            'belumMetodePengadaan', 'belumCetakKwitansi', 'countOverride', 'tahunAnggaranAktif', 'tahunList',
             'sumberDanas', 'sumberDanaId'
         ));
     }
@@ -133,14 +148,14 @@ class TransaksiBkuController extends Controller
             'tanggal' => 'required|date',
             'no_bukti' => 'required|unique:transaksi_bku,no_bukti',
             'jenis' => 'required|in:penerimaan,pengeluaran',
-            'jumlah' => 'required|numeric',
+            'jumlah' => 'required|numeric|gt:0',
             'toko_penerima' => 'nullable|string|max:255',
             'metode_pengadaan' => 'nullable|string|in:siplah,non_siplah',
             'volume' => 'nullable|numeric|min:0',
             'satuan' => 'nullable|string|max:50',
             'uraian' => 'nullable|string',
             'override_anggaran' => 'nullable|in:1,on,true',
-            'override_note' => 'nullable|string|max:500',
+            'override_note' => 'required_if:override_anggaran,1|string|min:10|max:500',
         ]);
 
         $tanggal = (string) $validated['tanggal'];
@@ -148,7 +163,7 @@ class TransaksiBkuController extends Controller
         $jumlah = (float) $validated['jumlah'];
         $rkasItemId = $validated['rkas_item_id'] ?? null;
         $noBukti = (string) $validated['no_bukti'];
-        $overrideNote = $validated['override_note'] ?? null;
+        $overrideNote = isset($validated['override_note']) ? trim($validated['override_note']) : '';
 
         $user = auth()->user();
         if ($user === null) {
@@ -168,6 +183,8 @@ class TransaksiBkuController extends Controller
             }
         }
 
+        $isOverriding = false;
+
         if ($jenis === 'pengeluaran' && !empty($rkasItemId)) {
             $rkasItem = RkasItem::with('bulanRencana')->findOrFail($rkasItemId);
 
@@ -179,7 +196,7 @@ class TransaksiBkuController extends Controller
 
             $sisaBulanBerjalan = $rencanaKumulatif - $realisasiKumulatif;
 
-            $isOverriding = $request->boolean('override_anggaran') && !empty($overrideNote);
+            $isOverriding = $request->boolean('override_anggaran') && $overrideNote !== '';
 
             if ($jumlah > $sisaBulanBerjalan && !$isOverriding) {
                 return back()->with('error', 'Gagal: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
@@ -187,27 +204,34 @@ class TransaksiBkuController extends Controller
             }
 
             if ($isOverriding) {
-                AuditLog::create([
-                    'user_id' => $user->id,
-                    'tabel' => 'transaksi_bku',
-                    'aksi' => 'override_anggaran',
-                    'data_baru' => [
-                        'no_bukti' => $noBukti,
-                        'jumlah' => $jumlah,
-                        'sisa_anggaran' => $sisaBulanBerjalan,
-                        'catatan' => $overrideNote,
-                    ],
-                ]);
+                AuditLog::record('transaksi_bku', 'override_anggaran', [
+                    'no_bukti' => $noBukti,
+                    'jumlah' => $jumlah,
+                    'sisa_anggaran' => $sisaBulanBerjalan,
+                    'catatan' => $overrideNote,
+                ], null, $user->id);
             }
         }
 
-        unset($validated['override_anggaran'], $validated['override_note']);
+        $validated['override_note'] = $isOverriding ? $overrideNote : null;
+        unset($validated['override_anggaran']);
 
         $transaksi = TransaksiBku::create($validated);
+
+        AuditLog::record('transaksi_bku', 'create', [
+            'no_bukti' => $transaksi->no_bukti,
+            'jenis' => $transaksi->jenis,
+            'jumlah' => (float) $transaksi->jumlah,
+            'override' => !empty($transaksi->override_note),
+        ], null, $user->id);
 
         Outbox::record('TransaksiBku', $transaksi->id, 'create', $validated);
 
         Cache::increment('dash_ver_' . $user->id);
+
+        if (!empty($transaksi->override_note)) {
+            return redirect()->route('transaksi-bku.index')->with('success', 'Transaksi berhasil ditambahkan dengan OVERRIDE anggaran. PENTING: Segera ajukan pergeseran / Perubahan Anggaran (PA) pada item RKAS terkait dan laporkan ke pengelola anggaran. Kwitansi transaksi ini terkunci sampai penyesuaian dilakukan.');
+        }
 
         return redirect()->route('transaksi-bku.index')->with('success', 'Transaksi berhasil ditambahkan.');
     }
@@ -239,7 +263,7 @@ class TransaksiBkuController extends Controller
             'tanggal' => 'required|date',
             'no_bukti' => 'required|unique:transaksi_bku,no_bukti,' . $transaksiBku->id,
             'jenis' => 'required|in:penerimaan,pengeluaran',
-            'jumlah' => 'required|numeric',
+            'jumlah' => 'required|numeric|gt:0',
             'toko_penerima' => 'nullable|string|max:255',
             'metode_pengadaan' => 'nullable|string|in:siplah,non_siplah',
             'volume' => 'nullable|numeric|min:0',
@@ -282,7 +306,19 @@ class TransaksiBkuController extends Controller
             }
         }
 
+        $dataLama = [
+            'no_bukti' => $transaksiBku->no_bukti,
+            'jenis' => $transaksiBku->jenis,
+            'jumlah' => (float) $transaksiBku->jumlah,
+        ];
+
         $transaksiBku->update($validated);
+
+        AuditLog::record('transaksi_bku', 'update', [
+            'no_bukti' => $transaksiBku->no_bukti,
+            'jenis' => $transaksiBku->jenis,
+            'jumlah' => (float) $transaksiBku->jumlah,
+        ], $dataLama);
 
         Outbox::record('TransaksiBku', $transaksiBku->id, 'update', $validated);
 
@@ -306,16 +342,11 @@ class TransaksiBkuController extends Controller
 
         $transaksiBku->delete();
 
-        AuditLog::create([
-            'user_id' => $user->id,
-            'tabel' => 'transaksi_bku',
-            'aksi' => 'delete',
-            'data_baru' => [
-                'no_bukti' => $noBukti,
-                'jumlah' => $jumlah,
-                'catatan' => $deleteNote !== '' ? $deleteNote : null,
-            ],
-        ]);
+        AuditLog::record('transaksi_bku', 'delete', [
+            'no_bukti' => $noBukti,
+            'jumlah' => $jumlah,
+            'catatan' => $deleteNote !== '' ? $deleteNote : null,
+        ], null, $user->id);
 
         Outbox::record('TransaksiBku', $id, 'delete', [
             'no_bukti' => $noBukti,
@@ -387,24 +418,24 @@ class TransaksiBkuController extends Controller
             ]);
         }
 
-        AuditLog::create([
-            'user_id' => $user->id,
-            'tabel' => 'transaksi_bku',
-            'aksi' => 'delete_bulk',
-            'data_baru' => [
-                'jumlah_transaksi' => $count,
-                'no_bukti' => array_slice($noBuktis, 0, 50),
-                'catatan' => $note !== '' ? $note : null,
-            ],
-        ]);
+        AuditLog::record('transaksi_bku', 'delete_bulk', [
+            'jumlah_transaksi' => $count,
+            'no_bukti' => array_slice($noBuktis, 0, 50),
+            'catatan' => $note !== '' ? $note : null,
+        ], null, $user->id);
 
         Cache::increment('dash_ver_' . $user->id);
 
         return back()->with('success', $count . ' transaksi dihapus.');
     }
 
-    public function cetakKwitansi(TransaksiBku $transaksiBku): Response
+    public function cetakKwitansi(TransaksiBku $transaksiBku): Response|RedirectResponse
     {
+        if ($transaksiBku->masihOverBudget()) {
+            return redirect()->route('transaksi-bku.index')->with('error', 'Kwitansi transaksi ' . $transaksiBku->no_bukti .
+                ' tidak dapat dicetak: transaksi dibuat dengan OVERRIDE anggaran dan belum dilakukan penyesuaian. Segera lakukan pergeseran / Perubahan Anggaran (PA) pada item RKAS terkait.');
+        }
+
         $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening');
         $profil = PengaturanSekolah::get();
 
@@ -443,6 +474,14 @@ class TransaksiBkuController extends Controller
 
         if ($transaksis->isEmpty()) {
             return back()->with('error', 'Data transaksi tidak ditemukan.');
+        }
+
+        $transaksis->load(['rkasItem.bulanRencana', 'rkasItem.transaksiBkus']);
+        $blocked = $transaksis->filter(fn (TransaksiBku $t): bool => $t->masihOverBudget());
+        if ($blocked->isNotEmpty()) {
+            $noBuktis = $blocked->map(fn (TransaksiBku $t): string => $t->no_bukti)->implode(', ');
+
+            return back()->with('error', 'Dibatalkan: kwitansi ' . $blocked->count() . ' transaksi tidak dapat dicetak karena masih OVERRIDE anggaran dan belum ada penyesuaian (pergeseran / Perubahan Anggaran). No. bukti: ' . $noBuktis . '.');
         }
 
         $profil = PengaturanSekolah::get();

@@ -78,7 +78,8 @@ class RkasController extends Controller
                     },
                 ])
                 ->orderBy('no_urut')
-                ->paginate(50);
+                ->paginate(50)
+                ->withQueryString();
         }
 
         return view('rkas.index', compact(
@@ -111,7 +112,17 @@ class RkasController extends Controller
             'jumlah' => 'required|numeric',
         ]);
 
+        $dataLama = $rkasItem->only([
+            'no_urut', 'uraian', 'program_id', 'kode_rekening_id', 'sumber_dana_id',
+            'volume', 'satuan', 'tarif', 'jumlah',
+        ]);
+
         $rkasItem->update($validated);
+
+        AuditLog::record('rkas_item', 'update', $rkasItem->only([
+            'no_urut', 'uraian', 'program_id', 'kode_rekening_id', 'sumber_dana_id',
+            'volume', 'satuan', 'tarif', 'jumlah',
+        ]), $dataLama);
 
         return redirect()->route('rkas.index')->with('success', 'Item RKAS berhasil diupdate.');
     }
@@ -129,15 +140,10 @@ class RkasController extends Controller
 
         $rkasItem->forceDelete();
 
-        AuditLog::create([
-            'user_id' => $user->id,
-            'tabel' => 'rkas_item',
-            'aksi' => 'delete',
-            'data_baru' => [
-                'no_urut' => $noUrut,
-                'uraian' => $uraian,
-            ],
-        ]);
+        AuditLog::record('rkas_item', 'delete', [
+            'no_urut' => $noUrut,
+            'uraian' => $uraian,
+        ], null, $user->id);
 
         RkasItem::renumber($tahunId);
         RkasItem::syncJumlah($tahunId);
@@ -198,15 +204,10 @@ class RkasController extends Controller
             $item->forceDelete();
         }
 
-        AuditLog::create([
-            'user_id' => $user->id,
-            'tabel' => 'rkas_item',
-            'aksi' => 'delete_bulk',
-            'data_baru' => [
-                'jumlah_item' => $count,
-                'uraian' => array_slice($uraians, 0, 50),
-            ],
-        ]);
+        AuditLog::record('rkas_item', 'delete_bulk', [
+            'jumlah_item' => $count,
+            'uraian' => array_slice($uraians, 0, 50),
+        ], null, $user->id);
 
         foreach (array_unique($tahunIds) as $tahunId) {
             RkasItem::renumber($tahunId);

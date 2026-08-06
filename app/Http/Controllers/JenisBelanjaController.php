@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\JenisBelanja;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -26,7 +27,9 @@ class JenisBelanjaController extends Controller
             'nama' => 'required|unique:jenis_belanja,nama',
         ]);
 
-        JenisBelanja::create($validated);
+        $jenisBelanja = JenisBelanja::create($validated);
+
+        AuditLog::record('jenis_belanja', 'create', ['nama' => $jenisBelanja->nama]);
 
         Cache::forget('jenis_belanjas');
 
@@ -44,7 +47,11 @@ class JenisBelanjaController extends Controller
             'nama' => 'required|unique:jenis_belanja,nama,' . $jenisBelanja->id,
         ]);
 
+        $dataLama = $jenisBelanja->only(['nama']);
+
         $jenisBelanja->update($validated);
+
+        AuditLog::record('jenis_belanja', 'update', $jenisBelanja->only(['nama']), $dataLama);
 
         Cache::forget('jenis_belanjas');
 
@@ -53,7 +60,12 @@ class JenisBelanjaController extends Controller
 
     public function destroy(JenisBelanja $jenisBelanja): \Illuminate\Http\RedirectResponse
     {
+        $data = $jenisBelanja->only(['nama']);
+
         $jenisBelanja->delete();
+
+        AuditLog::record('jenis_belanja', 'delete', $data);
+
         Cache::forget('jenis_belanjas');
 
         return back()->with('success', 'Jenis Belanja berhasil dihapus.');

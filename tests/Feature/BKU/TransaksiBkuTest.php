@@ -11,7 +11,9 @@ use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class TransaksiBkuTest extends TestCase
@@ -100,6 +102,81 @@ class TransaksiBkuTest extends TestCase
         $response->assertDontSee('BBU001/NPSN/01/2026');
     }
 
+    public function test_index_saldo_berjalan_tidak_dobel_saat_semua_bulan(): void
+    {
+        $this->makeTransaksi([
+            'tanggal' => '2026-01-10',
+            'bulan' => 1,
+            'no_bukti' => 'BBU001/20519260/01/2026',
+            'jenis' => 'penerimaan',
+            'jumlah' => 10768500,
+        ]);
+        $this->makeTransaksi([
+            'tanggal' => '2026-01-15',
+            'bulan' => 1,
+            'no_bukti' => 'BBU002/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 225000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku?bulan=');
+
+        $response->assertOk();
+        $response->assertSee('10.543.500');
+        $response->assertDontSee('21.312.000');
+    }
+
+    public function test_index_saldo_berjalan_lanjut_di_halaman_kedua_saat_semua_bulan(): void
+    {
+        $dates = [];
+        foreach (range(1, 31) as $day) {
+            $dates[] = '2026-01-' . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+        }
+        foreach (range(1, 24) as $day) {
+            $dates[] = '2026-02-' . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+        }
+
+        foreach ($dates as $i => $date) {
+            $this->makeTransaksi([
+                'tanggal' => $date,
+                'bulan' => (int) Carbon::parse($date)->month,
+                'no_bukti' => 'BBU' . str_pad((string) ($i + 1), 3, '0', STR_PAD_LEFT) . '/20519260/2026',
+                'jenis' => 'penerimaan',
+                'jumlah' => 100,
+            ]);
+        }
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku?bulan=&page=2');
+
+        $response->assertOk();
+        $response->assertSee('5.100');
+        $response->assertDontSee('5.600');
+    }
+
+    public function test_index_saldo_awal_dibawa_dari_bulan_sebelumnya(): void
+    {
+        $this->makeTransaksi([
+            'tanggal' => '2026-01-15',
+            'bulan' => 1,
+            'no_bukti' => 'BBU001/20519260/01/2026',
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+        ]);
+        $this->makeTransaksi([
+            'tanggal' => '2026-02-10',
+            'bulan' => 2,
+            'no_bukti' => 'BBU002/20519260/02/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku?bulan=2');
+
+        $response->assertOk();
+        $response->assertSee('400.000');
+        $response->assertDontSee('900.000');
+    }
+
     public function test_create_page_renders(): void
     {
         $response = $this->actingAs($this->user)->get('/transaksi-bku/create');
@@ -132,6 +209,12 @@ class TransaksiBkuTest extends TestCase
         $this->assertDatabaseHas('outbox', [
             'model' => 'TransaksiBku',
             'model_id' => TransaksiBku::where('no_bukti', 'BBU001/20519260/01/2026')->value('id'),
+            'aksi' => 'create',
+        ]);
+
+        $this->assertDatabaseHas('audit_log', [
+            'user_id' => $this->user->id,
+            'tabel' => 'transaksi_bku',
             'aksi' => 'create',
         ]);
     }
@@ -205,12 +288,215 @@ class TransaksiBkuTest extends TestCase
         ]);
 
         $response->assertRedirect(route('transaksi-bku.index'));
-        $this->assertDatabaseHas('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+        $this->assertTrue(str_contains((string) session('success'), 'Perubahan Anggaran'));
+        $this->assertDatabaseHas('transaksi_bku', [
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'override_note' => 'Ada SILPA bulan sebelumnya',
+        ]);
         $this->assertDatabaseHas('audit_log', [
             'user_id' => $this->user->id,
             'tabel' => 'transaksi_bku',
             'aksi' => 'override_anggaran',
         ]);
+    }
+
+    public function test_store_override_rejected_without_note(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'override_anggaran' => '1',
+        ]);
+
+        $response->assertSessionHasErrors('override_note');
+        $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+    }
+
+    public function test_store_override_rejected_with_whitespace_note(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'override_anggaran' => '1',
+            'override_note' => '   ',
+        ]);
+
+        $response->assertSessionHasErrors('override_note');
+        $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+    }
+
+    public function test_store_override_rejected_with_short_note(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'override_anggaran' => '1',
+            'override_note' => 'singkat',
+        ]);
+
+        $response->assertSessionHasErrors('override_note');
+        $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+    }
+
+    public function test_store_jumlah_must_be_positive(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        foreach ([0, -1000] as $jumlah) {
+            $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+                'rkas_item_id' => $item->id,
+                'tanggal' => '2026-01-15',
+                'no_bukti' => 'BPU001/20519260/01/2026',
+                'jenis' => 'pengeluaran',
+                'jumlah' => $jumlah,
+            ]);
+
+            $response->assertSessionHasErrors('jumlah');
+            $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+        }
+    }
+
+    public function test_update_jumlah_must_be_positive(): void
+    {
+        $transaksi = $this->makeTransaksi([
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'bulan' => 1,
+            'tanggal' => '2026-01-15',
+        ]);
+
+        $response = $this->actingAs($this->user)->put('/transaksi-bku/' . $transaksi->id, [
+            'rkas_item_id' => null,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 0,
+        ]);
+
+        $response->assertSessionHasErrors('jumlah');
+        $this->assertDatabaseHas('transaksi_bku', ['id' => $transaksi->id, 'jumlah' => 100000]);
+    }
+
+    public function test_kwitansi_blocked_until_override_resolved(): void
+    {
+        Storage::fake('public');
+
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'override_anggaran' => '1',
+            'override_note' => 'Harga barang naik drastis',
+        ]);
+
+        $transaksi = TransaksiBku::where('no_bukti', 'BPU001/20519260/01/2026')->firstOrFail();
+        $transaksi->load('rkasItem.bulanRencana', 'rkasItem.transaksiBkus');
+        $this->assertTrue($transaksi->masihOverBudget());
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/' . $transaksi->id . '/cetak-kwitansi');
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $response->assertSessionHas('error');
+        $this->assertDatabaseCount('kwitansi', 0);
+
+        RkasItemBulan::where('rkas_item_id', $item->id)
+            ->where('bulan', 1)
+            ->update(['rencana' => 110000]);
+
+        $transaksi = TransaksiBku::with('rkasItem.bulanRencana', 'rkasItem.transaksiBkus')->findOrFail($transaksi->id);
+        $this->assertFalse($transaksi->masihOverBudget());
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/' . $transaksi->id . '/cetak-kwitansi');
+        $response->assertOk();
+        $this->assertDatabaseCount('kwitansi', 1);
+    }
+
+    public function test_kwitansi_batch_blocked_when_override_unresolved(): void
+    {
+        Storage::fake('public');
+
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'override_anggaran' => '1',
+            'override_note' => 'Harga barang naik drastis',
+        ]);
+        $override = TransaksiBku::where('no_bukti', 'BPU001/20519260/01/2026')->firstOrFail();
+        $normal = $this->makeTransaksi([
+            'no_bukti' => 'BPU002/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 50000,
+            'bulan' => 1,
+            'tanggal' => '2026-01-20',
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku/cetak-kwitansi-batch', [
+            'ids' => [$override->id, $normal->id],
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseCount('kwitansi', 0);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku/cetak-kwitansi-batch', [
+            'ids' => [$normal->id],
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseCount('kwitansi', 1);
     }
 
     public function test_edit_page_renders(): void
@@ -253,6 +539,12 @@ class TransaksiBkuTest extends TestCase
         $this->assertDatabaseHas('outbox', [
             'model' => 'TransaksiBku',
             'model_id' => $transaksi->id,
+            'aksi' => 'update',
+        ]);
+
+        $this->assertDatabaseHas('audit_log', [
+            'user_id' => $this->user->id,
+            'tabel' => 'transaksi_bku',
             'aksi' => 'update',
         ]);
     }

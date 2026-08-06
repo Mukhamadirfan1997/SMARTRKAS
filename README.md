@@ -13,7 +13,7 @@ Tidak menggunakan multi-sekolah (`sekolah_id`); satu instalasi = satu sekolah, s
 
 - **Master data**: Tahun Anggaran, Sumber Dana, Jenis Belanja, Master Program, Master Kode Rekening (termasuk impor Excel).
 - **Item RKAS**: perencanaan per bulan (`RkasItemBulan`), import RKAS dari Excel (batch, asinkron-sinkron), dedup, renumber, sync jumlah.
-- **BKU (Transaksi BKU)**: kas masuk/keluar, mutasi antarbank, override anggaran.
+- **BKU (Transaksi BKU)**: kas masuk/keluar, mutasi antarbank, override anggaran (wajib catatan; kwitansi terkunci sampai ada penyesuaian).
 - **Laporan**: BKU, Rekap Rekening, Rekap Kuartal (Tribulan), Rekap SIPLAH — preview web, cetak PDF, dan export Excel asinkron (`ExportJob`).
 - **Dashboard**: ringkasan statistik + tabel item RKAS dinamis (rencana/realisasi/sisa, filter bulan, paginasi).
 - **Backup & Pemulihan**: backup otomatis terjadwal (lihat [Jadwal Scheduler](#jadwal-scheduler)), halaman Backup untuk menjalankan manual + unduh file `.zip`.
@@ -44,7 +44,7 @@ Login dengan akun admin (lihat `database/seeders/DatabaseSeeder.php` saat mode w
 - **Pengaturan → Backup & Pemulihan** — klik **Backup Sekarang** untuk membuat cadangan manual, atau andalkan backup otomatis harian (01:30). Unduh file `.zip` sebagai arsip.
 - **Pengaturan → Riwayat Aktivitas** — audit log semua perubahan (siapa, kapan, apa).
 - **Pengaturan → Notifikasi Telegram** (opsional) — isi token bot + ID Telegram agar kode pemulihan, error log, dan event backup terkirim ke chat (lihat [panduan](#5-notifikasi-telegram-opsional)).
-- Ganti password: menu **Profil** di pojok kanan atas.
+- Ganti email/password login: menu **Pengaturan → Akun & Login** (halaman Profil Akun).
 
 ### 4. Notifikasi Telegram (opsional)
 
@@ -62,6 +62,7 @@ Langkah singkat:
 - Satu instalasi = satu sekolah (tanpa konsep multi-sekolah).
 - Restore backup = mengunduh file `.zip` (restore otomatis dari UI tidak tersedia).
 - Notifikasi Telegram opsional — cara termudah lewat menu **Pengaturan → Notifikasi Telegram**; alternatif env dijelaskan di [atas](#4-notifikasi-telegram-opsional).
+- **Override anggaran**: dipakai hanya untuk kondisi darurat (mis. harga barang naik). Wajib mengisi catatan (min. 10 karakter). Kwitansi transaksi override **terkunci** sampai rencana item RKAS disesuaikan (pergeseran / Perubahan Anggaran) sehingga realisasi tidak lagi melebihi rencana. Lakukan penyesuaian pada **Item RKAS** (perencanaan bulan) agar kwitansi bisa dicetak kembali.
 
 ---
 

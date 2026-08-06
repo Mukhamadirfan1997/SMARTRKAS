@@ -27,6 +27,15 @@ class AboutController extends Controller
     {
         $this->updateService->forget();
 
-        return back();
+        $release = $this->updateService->latestRelease();
+        if ($release === null) {
+            return back()->with('error', 'Gagal memeriksa pembaruan. Pastikan perangkat terhubung ke internet, lalu coba lagi.');
+        }
+
+        $status = $this->updateService->isUpdateAvailable($release)
+            ? "Pembaruan {$release['tag_name']} tersedia. Backup data dulu sebelum menginstal versi baru."
+            : 'Sudah versi terbaru.';
+
+        return back()->with('status', $status);
     }
 }

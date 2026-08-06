@@ -128,10 +128,10 @@
                             <input type="checkbox" name="override_anggaran" id="override_anggaran" value="1" class="mt-1 rounded border-amber-300 text-amber-600 focus:ring-amber-500" {{ old('override_anggaran') ? 'checked' : '' }}>
                             <div class="flex-1">
                                 <label for="override_anggaran" class="text-sm font-semibold text-amber-800 cursor-pointer">Override Sisa Anggaran</label>
-                                <p class="text-xs text-amber-600 mt-0.5">Centang jika ingin melanjutkan meskipun melebihi sisa anggaran. Wajib isi catatan di bawah.</p>
+                                <p class="text-xs text-amber-600 mt-0.5">Centang jika ingin melanjutkan meskipun melebihi sisa anggaran. Wajib isi catatan minimal 10 karakter. Kwitansi transaksi ini akan terkunci sampai dilakukan pergeseran / Perubahan Anggaran (PA).</p>
                                 <div id="row_override_note" class="mt-3 {{ old('override_anggaran') ? '' : 'hidden' }}">
                                     <label for="override_note" class="block text-xs font-medium text-amber-700 mb-1">Catatan Override</label>
-                                    <textarea name="override_note" id="override_note" rows="2" class="form-input text-sm" placeholder="Sebutkan alasan override (contoh: ada SILPA bulan lalu, urgent)">{{ old('override_note') }}</textarea>
+                                    <textarea name="override_note" id="override_note" rows="2" class="form-input text-sm" placeholder="Sebutkan alasan override secara jelas (min. 10 karakter), contoh: harga barang naik karena penyesuaian harga" maxlength="500">{{ old('override_note') }}</textarea>
                                     @error('override_note')
                                         <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                                     @enderror

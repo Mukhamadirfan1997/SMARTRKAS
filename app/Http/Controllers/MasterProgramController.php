@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Imports\MasterProgramImport;
+use App\Models\AuditLog;
 use App\Models\MasterProgram;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,7 +23,7 @@ class MasterProgramController extends Controller
             });
         }
 
-        $masterPrograms = $query->orderBy('kode')->paginate(50);
+        $masterPrograms = $query->orderBy('kode')->paginate(50)->withQueryString();
 
         return view('master-program.index', compact('masterPrograms'));
     }
@@ -60,6 +61,11 @@ class MasterProgramController extends Controller
                 ->with('import_errors', array_slice($errors, 0, 10));
         }
 
+        AuditLog::record('master_program', 'import', [
+            'baris_berhasil' => $import->importedCount,
+            'baris_dilewati' => $import->skippedCount,
+        ]);
+
         return back()->with('success', $msg);
     }
 
@@ -81,7 +87,13 @@ class MasterProgramController extends Controller
             'level' => 'required|integer',
         ]);
 
-        MasterProgram::create($validated);
+        $masterProgram = MasterProgram::create($validated);
+
+        AuditLog::record('master_program', 'create', [
+            'kode' => $masterProgram->kode,
+            'nama' => $masterProgram->nama,
+            'level' => $masterProgram->level,
+        ]);
 
         Cache::forget('master_programs');
 
@@ -106,7 +118,11 @@ class MasterProgramController extends Controller
             'level' => 'required|integer',
         ]);
 
+        $dataLama = $masterProgram->only(['kode', 'nama', 'level']);
+
         $masterProgram->update($validated);
+
+        AuditLog::record('master_program', 'update', $masterProgram->only(['kode', 'nama', 'level']), $dataLama);
 
         Cache::forget('master_programs');
 
@@ -115,7 +131,12 @@ class MasterProgramController extends Controller
 
     public function destroy(MasterProgram $masterProgram): \Illuminate\Http\RedirectResponse
     {
+        $data = $masterProgram->only(['kode', 'nama', 'level']);
+
         $masterProgram->delete();
+
+        AuditLog::record('master_program', 'delete', $data);
+
         Cache::forget('master_programs');
 
         return back()->with('success', 'Master Program berhasil dihapus.');
@@ -138,6 +159,9 @@ class MasterProgramController extends Controller
         }
 
         $query->delete();
+
+        AuditLog::record('master_program', 'delete_bulk', ['jumlah_item' => $count]);
+
         Cache::forget('master_programs');
 
         return back()->with('success', "{$count} Master Program berhasil dihapus.");

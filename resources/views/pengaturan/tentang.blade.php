@@ -10,13 +10,27 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div class="card">
-            <div class="text-sm text-slate-500 font-medium">Versi Aplikasi</div>
-            <div class="text-2xl font-bold text-slate-800 mt-1">v{{ $version }}</div>
+    @if(session('error'))
+        <div class="alert-error mb-6">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            {{ session('error') }}
         </div>
-        <div class="card">
-            <div class="text-sm text-slate-500 font-medium">Status Pembaruan</div>
+    @endif
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="stat-card indigo">
+            <div class="stat-icon bg-indigo-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+            </div>
+            <div class="stat-label">Versi Aplikasi</div>
+            <div class="stat-value text-indigo-700">v{{ $version }}</div>
+        </div>
+
+        <div class="stat-card {{ $release === null ? 'blue' : ($updateAvailable ? 'orange' : 'green') }}">
+            <div class="stat-icon bg-sky-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5m11 11v-5h-5M4.58 16A8 8 0 1116 19.42M4.58 8A8 8 0 1116 4.58"/></svg>
+            </div>
+            <div class="stat-label">Status Pembaruan</div>
             <div class="mt-2">
                 @if($release === null)
                     <span class="badge badge-gray">Tidak dapat memeriksa</span>
@@ -27,9 +41,13 @@
                 @endif
             </div>
         </div>
-        <div class="card">
-            <div class="text-sm text-slate-500 font-medium">Pembaruan Terbaru</div>
-            <div class="text-lg font-bold text-slate-800 mt-1">
+
+        <div class="stat-card blue">
+            <div class="stat-icon bg-blue-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            </div>
+            <div class="stat-label">Pembaruan Terbaru</div>
+            <div class="stat-value text-blue-700">
                 {{ $release !== null && $release['tag_name'] !== '' ? $release['tag_name'] : '—' }}
             </div>
         </div>

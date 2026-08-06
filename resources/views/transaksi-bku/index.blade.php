@@ -30,6 +30,13 @@
         </div>
     @endif
 
+    @if($countOverride > 0)
+        <div class="alert-error mb-6">
+            <svg aria-hidden="true" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span>PENTING: Ada <strong>{{ $countOverride }}</strong> transaksi dengan <strong>OVERRIDE anggaran</strong> yang belum ditindaklanjuti. Segera lakukan pergeseran / Perubahan Anggaran (PA) pada item RKAS terkait. Kwitansi transaksi tersebut terkunci sampai penyesuaian dilakukan.</span>
+        </div>
+    @endif
+
     <form method="GET" action="{{ route('transaksi-bku.index') }}">
     <div class="card">
         <div class="card-header">
@@ -67,6 +74,10 @@
                         @endforeach
                     </select>
                 </div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="hapusSemua()">
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Hapus Semua
+                </button>
                 <a href="{{ route('transaksi-bku.create') }}" class="btn-primary">
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Tambah Transaksi
@@ -101,12 +112,6 @@
                 <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                 Cetak Terpilih
             </button>
-            @if($transaksis->count() > 0)
-                <button type="button" class="btn btn-danger btn-sm ml-auto" onclick="hapusSemua()">
-                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    Hapus Semua
-                </button>
-            @endif
         </div>
 
             <table class="data-table">
@@ -169,6 +174,15 @@
                                 @if($transaksi->rkasItem)
                                     <div class="text-xs text-blue-500 mt-0.5 truncate" title="{{ $transaksi->rkasItem->uraian }}">{{ $transaksi->rkasItem->uraian }}</div>
                                 @endif
+                                @if(!empty($transaksi->override_note))
+                                    <span class="badge badge-red mt-1" title="Catatan override: {{ $transaksi->override_note }}">
+                                        @if($transaksi->masihOverBudget())
+                                            Override (Kwitansi terkunci)
+                                        @else
+                                            Override
+                                        @endif
+                                    </span>
+                                @endif
                             </td>
                             <td class="text-slate-600 whitespace-nowrap">{{ $transaksi->toko_penerima ?? '-' }}</td>
                             <td class="text-right text-emerald-700 font-medium whitespace-nowrap">
@@ -206,10 +220,17 @@
                             </td>
                             <td class="text-center">
                                 <div class="flex items-center justify-center gap-1">
+                                    @if($transaksi->masihOverBudget())
+                                        <span class="btn btn-success btn-sm opacity-50 cursor-not-allowed" title="Kwitansi terkunci: lakukan pergeseran / Perubahan Anggaran (PA) dulu">
+                                            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                            Kwitansi
+                                        </span>
+                                    @else
                                     <a href="{{ route('transaksi-bku.cetak-kwitansi', $transaksi) }}" target="_blank" class="btn btn-success btn-sm" title="Cetak Kwitansi">
                                         <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                                         Kwitansi
                                     </a>
+                                    @endif
                                     <a href="{{ route('transaksi-bku.edit', $transaksi) }}" class="btn btn-secondary btn-sm" title="Edit">
                                         <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                         Edit

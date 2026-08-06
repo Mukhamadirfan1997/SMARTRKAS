@@ -390,3 +390,122 @@ Build installer desktop (NSIS + MSI) untuk fitur yang belum pernah dirilis sejak
 
 ## Test Status
 - Tidak ada perubahan logika app pada sesi ini → suite tetap `OK (268 tests, 699 assertions)`, PHPStan clean.
+
+---
+
+# Sesi 06 Agu 2026 — Fix Saldo BKU Dobel + Perluas Log Aktivitas + Perbaikan Halaman Tentang
+
+## Goal
+1) Perbaiki bug saldo berjalan dobel di BKU saat filter "Semua Bulan". 2) Perluas log aktivitas ke semua data inti (BKU, RKAS, master, profil, telegram, backup). 3) Rapikan kartu statistik atas halaman Tentang, perbaiki link eksternal author (mati di desktop Tauri), dan beri feedback tombol "Periksa Pembaruan".
+
+## Summary
+- Bug produksi: saldo awal saat `bulan=''` dihitung dari SEMUA transaksi lalu baris halaman dijumlahkan lagi → dobel (21.312.000 = 10.543.500 + 10.768.500). Fix: saldo awal = jumlah transaksi sebelum baris pertama halaman (kriteria `tanggal`, lalu `id`). **Bug yang sama juga ada di repo referensi sira-rkas**.
+- Tombol "Hapus Semua" BKU dipindah dari toolbar cetak ke card header (konsisten `rkas/index` & `master-program/index`).
+- 5 test baru + 2 assertions → total **276 tests (726 assertions)**, PHPStan level 6: 0 error. `cargo check` (src-tauri) OK; `npm run build` OK.
+
+## Changes
+- `app/Http/Controllers/TransaksiBkuController.php` — `index()`: saldoAwal = `where tanggal < firstTanggal OR (tanggal = firstTanggal AND id < first->id)` pakai `Carbon::parse($first->tanggal)->toDateString()` (PHPStan: `tanggal` typed string, runtime Carbon).
+- `resources/views/transaksi-bku/index.blade.php` — tombol Hapus Semua di card header sebelum "Tambah Transaksi".
+- **`AuditLog::record(string $tabel, string $aksi, ?array $dataBaru = null, ?array $dataLama = null, int|string|null $userId = null): self`** — user_id default `auth()->id()`; `data_lama`/`data_baru` opsional. PHPStan: jangan pakai `: static` (return `App\Models\AuditLog`), pakai `: self`.
+- Log aktivitas baru (tabel/aksi): `transaksi_bku` create+update; `rkas_item` update; `master_program`, `master_kode_rekening`, `sumber_dana`, `tahun_anggaran`, `jenis_belanja` create/update/delete(/delete_bulk/import); `tahun_anggaran` set_active; `pengaturan_sekolah` update/create; `telegram_pengaturan` update (tanpa nilai token, hanya `telegram_bot_token_set: bool`) + test; `backup` run (status success/failed). Refactor `AuditLog::create` lama (override_anggaran, delete, delete_bulk, import_rkas, dedup_merge) → `record()`.
+- `resources/views/pengaturan/audit-log.blade.php` — badge map + `set_active`, `run`, `test`, `dedup_merge`.
+- `resources/views/pengaturan/tentang.blade.php` — 3 kartu atas pakai `.stat-card` (indigo=versi, blue/green/orange=status, blue=rilis terbaru) + flash `session('error')`.
+- `app/Http/Controllers/AboutController.php` — `check()` kini cek ulang via `latestRelease()` + flash `status` ("Sudah versi terbaru." / "Pembaruan X tersedia…") atau `error` (offline).
+- `app/Services/AppUpdateService.php` — timeout `Http::timeout(10)` → `5`.
+- **Link eksternal desktop**: `resources/js/app.js` — bila `window.__TAURI_INTERNALS__` ada, klik pada `a[target="_blank"]` dgn origin ≠ origin app di-`preventDefault` + `openUrl()` (plugin opener). Link internal (mis. cetak kwitansi, origin sama) TIDAK disentuh.
+- Tauri: `src-tauri/Cargo.toml` + `tauri-plugin-opener = "2"`; `src-tauri/src/lib.rs` `.plugin(tauri_plugin_opener::init())`; `src-tauri/capabilities/default.json` + `opener:default`; `package.json` + `@tauri-apps/plugin-opener`.
+- Tests: `tests/Feature/Audit/AuditLogCoverageTest.php` (5) — master create + update before/after, backup run, telegram update (token TIDAK di-log), pengaturan sekolah; assertions audit create/update di `TransaksiBkuTest`.
+
+## Catatan
+- `cargo check` sukses + download `tauri-plugin-opener` → `Cargo.lock` berubah (+505 baris). Rebuild installer TIDAK dilakukan (atas permintaan user).
+- `public/build/` di-regenerate via `npm run build` (aset web) — tidak di-track.
+- Detail audit untuk aksi `update` hanya menampilkan `data_baru` (nilai baru) di kolom Detail.
+- Log `telegram_pengaturan` sengaja tidak menyimpan token bot (hanya bool `telegram_bot_token_set`).
+- Bug saldo dobel juga ada di repo referensi sira-rkas (belum di-fix di sana).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (276 tests, 726 assertions)`.
+
+---
+
+# Sesi 06 Agu 2026 — Perketat Override Anggaran + Kunci Cetak Kwitansi
+
+## Goal
+Pertahankan fitur Override Sisa Anggaran (kebutuhan sah saat harga barang naik) tapi perketat penyalahgunaan dan beri peringatan keras formal: (1) blokir nominal 0/negatif, (2) catatan override wajib min. 10 karakter, (3) simpan `override_note` di transaksi sebagai jejak, (4) **kwitansi transaksi override terkunci sampai item RKAS disesuaikan** (pergeseran / Perubahan Anggaran) sehingga realisasi tidak lagi melebihi rencana.
+
+## Summary
+- 8 test baru + 2 assertions → total **283 tests (757 assertions)**, PHPStan level 6: 0 error.
+- Fitur override kini "aman dipakai tapi tidak bisa disalahgunakan": jumlah > sisa anggaran hanya bisa lewat override dgn catatan valid, dan kwitansi tidak bisa dicetak selama kondisi masih over budget.
+
+## Changes
+- `database/migrations/2026_08_06_000020_add_override_note_to_transaksi_bku_table.php` — `transaksi_bku.override_note` text nullable `after('uraian')`.
+- `app/Models/TransaksiBku.php` — `$fillable` + `@property` `override_note`; method `masihOverBudget(): bool` + memoize `private ?bool $masihOverBudgetCache` (hindari query berulang saat badge+tombol dipanggil 2× di view). Logika: `override_note` terisi && jenis `pengeluaran` && realisasi kumulatif bulan ≤ t.bulan > rencana kumulatif → `true`. Pakai relasi `rkasItem.bulanRencana`/`transaksiBkus` (di-query lazily per baris; override jarang → tak ada eager load di controller).
+- `app/Http/Controllers/TransaksiBkuController.php`:
+  - `store()`/`update()`: `'jumlah' => 'required|numeric|gt:0'`; `store()`: `'override_note' => 'required_if:override_anggaran,1|string|min:10|max:500'` + `trim()`; `$validated['override_note']` di-set (`null` bila bukan override), `unset` hanya `override_anggaran`; flash sukses override memuat **peringatan keras** ("Segera ajukan pergeseran / Perubahan Anggaran (PA)… Kwitansi … terkunci"). Audit `transaksi_bku.create` kini juga menyertakan `override: bool`.
+  - `index()`: `$countOverride` (filter-aware, `whereNotNull('override_note')->where('override_note','!=','')`) utk alert.
+  - `cetakKwitansi(): Response|RedirectResponse` — blokir bila `masihOverBudget()` → redirect index + error. `cetakKwitansiBatch()` — `$transaksis->load(['rkasItem.bulanRencana','rkasItem.transaksiBkus'])`, blokir bila ada yg `masihOverBudget()` (daftar no_bukti).
+- `resources/views/transaksi-bku/create.blade.php` — helper text: catatan min. 10 karakter + kwitansi terkunci sampai PA; `maxlength="500"` pada textarea.
+- `resources/views/transaksi-bku/index.blade.php` — alert `alert-error` "PENTING … N transaksi OVERRIDE … kwitansi terkunci" (di atas alert belumCetakKwitansi); badge `badge-red` "Override (Kwitansi terkunci)"/"Override" + tooltip catatan di sel Uraian; tombol Kwitansi diganti `<span class="btn btn-success btn-sm opacity-50 cursor-not-allowed">` + tooltip saat `masihOverBudget()`.
+- Tests (`tests/Feature/BKU/TransaksiBkuTest.php`): update override test (flash berisi "Perubahan Anggaran" + `override_note` tersimpan di DB); baru: override tanpa catatan / whitespace / <10 karakter ditolak; `jumlah` 0 & negatif ditolak (store & update); kwitansi blokir sampai rencana dinaikkan (rencana 50.000 → belanja 100.000 → redirect+error+`kwitansi` 0 → update rencana 110.000 → PDF OK + `kwitansi` 1); batch diblokir saat ada override unresolved.
+
+## Catatan
+- `rkas_item_bulan` punya unique `(rkas_item_id, bulan)` — di test "resolve" jangan tambah baris bulan sama; pakai `where(...)->update(['rencana' => …])`.
+- Transaksi override **sebelum** migration ini tidak punya `override_note` → tidak terblokir (data lama aman).
+- `update()` BKU sengaja TETAP ketat (tanpa jalur override saat edit); `override_note` lama tidak ter-overwrite.
+- PHPStan: `LengthAwarePaginator::load()`/`Collection::load()` tidak ada → pakai memoize model, bukan eager-load di paginator.
+- Celah "pengeluaran tanpa `rkas_item_id` tak dicek anggaran" tetap di luar cakupan (bukan jalur override).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (283 tests, 757 assertions)`.
+
+---
+
+# Sesi 06 Agu 2026 — Halaman Akun & Login (Ganti Email/Password)
+
+## Goal
+Sediakan halaman untuk ganti email & password login dari starter Breeze (sebelumnya halaman profil tidak ditautkan & tampilan default), lalu bump versi 0.2.0 → 0.3.0 untuk build + release.
+
+## Summary
+- 1 test baru → total **284 tests (764 assertions)**, PHPStan level 6: 0 error.
+- Halaman profil sudah ada dari Breeze (routes `profile.edit/update/destroy` di `routes/web.php`, PUT `password.update` di `routes/auth.php`) — TIDAK ada controller/route baru, cukup restyle + tautan sidebar.
+
+## Changes
+- `resources/views/profile/edit.blade.php` — diubah total ke desain app: card `Informasi Akun`, `Ganti Password`, `Hapus Akun`, alert sukses `profile-updated`/`password-updated`.
+- `resources/views/profile/partials/update-profile-information-form.blade.php` — Nama + Email ("dipakai untuk login") pakai `form-input`/`form-label`/`btn-primary`.
+- `resources/views/profile/partials/update-password-form.blade.php` — Password Saat Ini / Baru / Konfirmasi; error dari bag `updatePassword`.
+- **Penting**: `:value="old(...)"` (Alpine binding) TIDAK bekerja di form tanpa `x-data` → pakai `value="{{ old('name', $user->name) }}"` dan `value="{{ old('email', $user->email) }}"`.
+- `resources/views/layouts/navigation.blade.php` — link sidebar **"Akun & Login"** → `route('profile.edit')`, active `profile.*`, di bawah "Profil Sekolah".
+- `tests/Feature/ProfileTest.php` — `test_profile_page_shows_account_forms` (assert "Akun & Login", "Informasi Akun", "Ganti Password", field `name`/`email`/`current_password`/`password`).
+- `README.md` — Panduan Penggunaan: "Ganti email/password login: menu **Pengaturan → Akun & Login** (halaman Profil Akun)".
+- Versi 0.3.0: `config/app.php`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `.env.example`.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (284 tests, 764 assertions)`.
+
+---
+
+# Sesi 06 Agu 2026 — Audit Filter: Pertahankan Query String Saat Paginasi
+
+## Goal
+Periksa semua fitur filter halaman agar tampilan tetap benar saat terfilter (nilai select terisi ulang, hasil sesuai). Ditemukan bug umum: paginator ber-filter kehilangan query string saat pindah halaman → filter reset diam-diam.
+
+## Summary
+- Audit: semua select/input filter sudah persist via `request()`/`old()`; satu-satunya masalah = **pagination tanpa `->withQueryString()`** pada 7 titik paginator ber-filter (AuditLog sudah benar). Tanpa test baru (tidak mengubah perilaku), suite tetap `OK (284 tests, 764 assertions)`, PHPStan clean.
+
+## Changes
+- `app/Http/Controllers/TransaksiBkuController.php:65` — `paginate(50)->withQueryString()` (filter: tahun/bulan/sumber_dana/search).
+- `app/Http/Controllers/RkasController.php:81` — `paginate(50)->withQueryString()` (filter: program/search/tahun/bulan/sumber_dana).
+- `app/Http/Controllers/MasterProgramController.php:26` + `MasterKodeRekeningController.php:28` — `paginate(50)->withQueryString()` (search).
+- `app/Http/Controllers/DashboardController.php:168` — `paginate(50)->withQueryString()` (tahun/bulan/program/kode_rekening/sumber_dana/jenis_belanja).
+- `app/Http/Controllers/LaporanController.php:601` + `:661` — `paginate($perPage)->withQueryString()->through($mapFn)` (loadRekapItems & loadKuartalItems).
+- TIDAK diubah: `JenisBelanja`/`SumberDana` (tanpa filter), `RkasItemController` select2 JSON (select2 mengirim ulang semua param tiap AJAX).
+
+## Catatan
+- `->withQueryString()` harus di-chain ke paginator; pada rekap laporan boleh `paginate(...)->withQueryString()->through(...)` (keduanya mengembalikan `LengthAwarePaginator`).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (284 tests, 764 assertions)`.

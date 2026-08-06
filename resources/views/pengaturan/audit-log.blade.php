@@ -58,6 +58,10 @@
                                 'delete' => 'badge-red',
                                 'delete_bulk' => 'badge-red',
                                 'override_anggaran' => 'badge-yellow',
+                                'set_active' => 'badge-green',
+                                'run' => 'badge-blue',
+                                'test' => 'badge-blue',
+                                'dedup_merge' => 'badge-purple',
                             ];
                         @endphp
                         <tr>

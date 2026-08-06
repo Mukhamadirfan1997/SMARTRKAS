@@ -21,6 +21,23 @@ class ProfileTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_profile_page_shows_account_forms(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->get('/profile');
+
+        $response->assertOk();
+        $response->assertSee('Akun & Login');
+        $response->assertSee('Informasi Akun');
+        $response->assertSee('Ganti Password');
+        $response->assertSee('name="email"', false);
+        $response->assertSee('name="current_password"', false);
+        $response->assertSee('name="password"', false);
+    }
+
     public function test_profile_information_can_be_updated(): void
     {
         $user = User::factory()->create();

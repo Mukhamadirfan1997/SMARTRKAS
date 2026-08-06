@@ -16,7 +16,7 @@ final class AppUpdateService
     {
         $release = Cache::remember('smartrkas.latest-release', 3600, function (): ?array {
             try {
-                $response = Http::timeout(10)->get(
+                $response = Http::timeout(5)->get(
                     'https://api.github.com/repos/'.self::REPOSITORY.'/releases/latest'
                 );
 

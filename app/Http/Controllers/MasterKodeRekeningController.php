@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\MasterKodeRekeningTemplateExport;
 use App\Imports\MasterKodeRekeningImport;
+use App\Models\AuditLog;
 use App\Models\JenisBelanja;
 use App\Models\MasterKodeRekening;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class MasterKodeRekeningController extends Controller
             });
         }
 
-        $masterKodeRekenings = $query->orderBy('kode')->paginate(50);
+        $masterKodeRekenings = $query->orderBy('kode')->paginate(50)->withQueryString();
 
         return view('master-kode-rekening.index', compact('masterKodeRekenings'));
     }
@@ -53,6 +54,8 @@ class MasterKodeRekeningController extends Controller
 
         Cache::forget('master_kode_rekenings');
 
+        AuditLog::record('master_kode_rekening', 'import');
+
         return back()->with('success', 'Master Kode Rekening berhasil diimport!');
     }
 
@@ -71,7 +74,12 @@ class MasterKodeRekeningController extends Controller
             'jenis_belanja_id' => 'required|exists:jenis_belanja,id',
         ]);
 
-        MasterKodeRekening::create($validated);
+        $masterKodeRekening = MasterKodeRekening::create($validated);
+
+        AuditLog::record('master_kode_rekening', 'create', [
+            'kode' => $masterKodeRekening->kode,
+            'nama' => $masterKodeRekening->nama,
+        ]);
 
         Cache::forget('master_kode_rekenings');
 
@@ -93,7 +101,11 @@ class MasterKodeRekeningController extends Controller
             'jenis_belanja_id' => 'required|exists:jenis_belanja,id',
         ]);
 
+        $dataLama = $masterKodeRekening->only(['kode', 'nama', 'jenis_belanja_id']);
+
         $masterKodeRekening->update($validated);
+
+        AuditLog::record('master_kode_rekening', 'update', $masterKodeRekening->only(['kode', 'nama', 'jenis_belanja_id']), $dataLama);
 
         Cache::forget('master_kode_rekenings');
 
@@ -102,7 +114,12 @@ class MasterKodeRekeningController extends Controller
 
     public function destroy(MasterKodeRekening $masterKodeRekening): \Illuminate\Http\RedirectResponse
     {
+        $data = $masterKodeRekening->only(['kode', 'nama']);
+
         $masterKodeRekening->delete();
+
+        AuditLog::record('master_kode_rekening', 'delete', $data);
+
         Cache::forget('master_kode_rekenings');
 
         return back()->with('success', 'Master Kode Rekening berhasil dihapus.');
@@ -125,6 +142,9 @@ class MasterKodeRekeningController extends Controller
         }
 
         $query->delete();
+
+        AuditLog::record('master_kode_rekening', 'delete_bulk', ['jumlah_item' => $count]);
+
         Cache::forget('master_kode_rekenings');
 
         return back()->with('success', "{$count} Master Kode Rekening berhasil dihapus.");

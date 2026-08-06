@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\PengaturanSekolah;
 use Illuminate\Http\Request;
 
@@ -35,9 +36,13 @@ class PengaturanSekolahController extends Controller
 
         if ($pengaturanSekolah) {
             $pengaturanSekolah->update($validated);
+            $aksi = 'update';
         } else {
             PengaturanSekolah::create($validated);
+            $aksi = 'create';
         }
+
+        AuditLog::record('pengaturan_sekolah', $aksi, $validated);
 
         return back()->with('success', 'Pengaturan Sekolah berhasil disimpan.');
     }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -43,8 +44,15 @@ class BackupController extends Controller
         try {
             Artisan::call('backup:run');
         } catch (\Throwable $e) {
+            AuditLog::record('backup', 'run', [
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+            ]);
+
             return back()->with('error', 'Backup gagal: '.$e->getMessage());
         }
+
+        AuditLog::record('backup', 'run', ['status' => 'success']);
 
         return back()->with('success', 'Backup berhasil dibuat.');
     }

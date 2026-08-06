@@ -97,16 +97,11 @@ class ProcessRkasImport
                 RkasItem::renumber($log->tahun_anggaran_id);
                 RkasItem::syncJumlah($log->tahun_anggaran_id);
 
-                AuditLog::create([
-                    'user_id' => $log->uploaded_by,
-                    'tabel' => 'import_rkas',
-                    'aksi' => 'import',
-                    'data_baru' => [
-                        'bulan' => $log->bulan,
-                        'baris_berhasil' => $log->baris_berhasil,
-                        'total_baris' => $log->total_baris,
-                    ],
-                ]);
+                AuditLog::record('import_rkas', 'import', [
+                    'bulan' => $log->bulan,
+                    'baris_berhasil' => $log->baris_berhasil,
+                    'total_baris' => $log->total_baris,
+                ], null, $log->uploaded_by);
             }
 
             $this->cleanupFile($log);

@@ -165,7 +165,8 @@ class DashboardController extends Controller
                     },
                 ])
                 ->orderBy('no_urut')
-                ->paginate(50);
+                ->paginate(50)
+                ->withQueryString();
 
             foreach ($rkasItems as $item) {
                 $_sum = $item->transaksiBkus->sum('jumlah');

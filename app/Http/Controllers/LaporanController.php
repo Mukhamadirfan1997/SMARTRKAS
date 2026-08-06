@@ -598,7 +598,7 @@ class LaporanController extends Controller
         };
 
         if ($perPage) {
-            return $query->paginate($perPage)->through($mapFn);
+            return $query->paginate($perPage)->withQueryString()->through($mapFn);
         }
 
         return $query->get()->map($mapFn);
@@ -658,7 +658,7 @@ class LaporanController extends Controller
         };
 
         if ($perPage) {
-            return $query->paginate($perPage)->through($mapFn);
+            return $query->paginate($perPage)->withQueryString()->through($mapFn);
         }
 
         return $query->get()->map($mapFn);

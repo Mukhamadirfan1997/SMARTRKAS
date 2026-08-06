@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\SendTelegramNotificationJob;
+use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,10 +32,18 @@ class TelegramPengaturanController extends Controller
 
         /** @var User $user */
         $user = auth()->user();
+        $chatId = $this->emptyToNull($data['telegram_chat_id'] ?? null);
+        $token = $this->emptyToNull($data['telegram_bot_token'] ?? null);
+
         $user->forceFill([
-            'telegram_chat_id' => $this->emptyToNull($data['telegram_chat_id'] ?? null),
-            'telegram_bot_token' => $this->emptyToNull($data['telegram_bot_token'] ?? null),
+            'telegram_chat_id' => $chatId,
+            'telegram_bot_token' => $token,
         ])->saveQuietly();
+
+        AuditLog::record('telegram_pengaturan', 'update', [
+            'telegram_chat_id' => $chatId,
+            'telegram_bot_token_set' => $token !== null,
+        ], null, $user->id);
 
         return back()->with('status', 'Pengaturan Telegram berhasil disimpan.');
     }
@@ -51,6 +60,10 @@ class TelegramPengaturanController extends Controller
         if ($user->telegramChatId() === null) {
             return back()->with('error', 'ID Telegram belum diisi. Isi ID Telegram lalu Simpan.');
         }
+
+        AuditLog::record('telegram_pengaturan', 'test', [
+            'chat_id' => $user->telegramChatId(),
+        ], null, $user->id);
 
         SendTelegramNotificationJob::dispatch(
             'INFO',

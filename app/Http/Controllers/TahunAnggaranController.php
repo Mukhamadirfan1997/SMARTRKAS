@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\TahunAnggaran;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -27,7 +28,9 @@ class TahunAnggaranController extends Controller
             'tahun' => 'required|integer|between:2020,2099|unique:tahun_anggaran,tahun',
         ]);
 
-        TahunAnggaran::create($validated);
+        $tahunAnggaran = TahunAnggaran::create($validated);
+
+        AuditLog::record('tahun_anggaran', 'create', ['tahun' => $tahunAnggaran->tahun]);
 
         return redirect()->route('tahun-anggaran.index')->with('success', 'Tahun anggaran berhasil ditambahkan.');
     }
@@ -43,7 +46,11 @@ class TahunAnggaranController extends Controller
             'tahun' => 'required|integer|between:2020,2099|unique:tahun_anggaran,tahun,' . $tahunAnggaran->id,
         ]);
 
+        $dataLama = $tahunAnggaran->only(['tahun']);
+
         $tahunAnggaran->update($validated);
+
+        AuditLog::record('tahun_anggaran', 'update', $tahunAnggaran->only(['tahun']), $dataLama);
 
         return redirect()->route('tahun-anggaran.index')->with('success', 'Tahun anggaran berhasil diupdate.');
     }
@@ -59,6 +66,11 @@ class TahunAnggaranController extends Controller
 
         Cache::forget('tahun_anggaran_active');
 
+        AuditLog::record('tahun_anggaran', 'set_active', [
+            'tahun' => $tahunAnggaran->tahun,
+            'sebelumnya' => $sebelumnya?->tahun,
+        ]);
+
         $pesan = 'Tahun anggaran ' . $tahunAnggaran->tahun . ' berhasil diaktifkan.';
         if ($sebelumnya) {
             $pesan .= ' Tahun ' . $sebelumnya->tahun . ' telah dinonaktifkan.';
@@ -73,7 +85,12 @@ class TahunAnggaranController extends Controller
             return back()->with('error', 'Tahun anggaran aktif tidak boleh dihapus. Nonaktifkan terlebih dahulu dengan mengaktifkan tahun anggaran lain.');
         }
 
+        $data = $tahunAnggaran->only(['tahun']);
+
         $tahunAnggaran->delete();
+
+        AuditLog::record('tahun_anggaran', 'delete', $data);
+
         Cache::forget('tahun_anggaran_active');
 
         return redirect()->route('tahun-anggaran.index')->with('success', 'Tahun anggaran berhasil dihapus.');
