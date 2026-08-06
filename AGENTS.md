@@ -604,3 +604,31 @@ Lanjutkan sesi "Fix Auto-Migrate Desktop" yang PAUSED (NSIS v0.3.1 ter-produce, 
 
 ## Test Status
 - PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`. `cargo` compile OK.
+
+---
+
+# Sesi 06 Agu 2026 — Fix Installer "Error opening file for writing" (v0.3.2)
+
+## Goal
+Perbaiki `Error opening file for writing: php_curl.dll` saat upgrade SmartRKAS (installer NSIS gagal menimpa DLL karena proses `php.exe` yatim mengunci file), lalu bump 0.3.1 → **v0.3.2**, rebuild, dan rilis ulang.
+
+## Summary
+- **Akar masalah**: 2 proses `php.exe` yatim dari `...\AppData\Local\SmartRKAS\php\php.exe` (PID 24624, 46308) masih berjalan karena kill paksa app tidak mematikan anak proses (`lib.rs` hanya handle `CloseRequested`). Installer v0.3.1 sempat jalan lalu macet karena DLL terkunci.
+- Fix ganda: **NSIS hook** (matikan proses milik instalasi saat install/uninstall) + **Windows Job Object** (anak PHP mati otomatis saat app berakhir, termasuk di-kill paksa).
+- Build: NSIS 57.8MB + MSI 86.9MB. Commit `a639b9e` → push `master`. Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.3.2 (2 asset, state uploaded).
+
+## Changes
+- `src-tauri/nsis/installer-hooks.nsh` (BARU) — `NSIS_HOOK_PREINSTALL` + `NSIS_HOOK_PREUNINSTALL` → makro `SMART_StopRunningProcesses`: set env `SMARTRKAS_INSTDIR` via `System::Call` (kernel32 SetEnvironmentVariable), lalu `nsExec::ExecToLog` jalankan PowerShell (Get-CimInstance Win32_Process) yang `Stop-Process -Force` untuk `SmartRKAS.exe` + `php\php.exe` yang `ExecutablePath`-nya `-contains` `$targets` (Join-Path `$inst`). Pencocokan by-path menjaga php tool lain (XAMPP/VS Code) aman. `Sleep 500` setelahnya.
+- `src-tauri/tauri.conf.json` — `bundle.windows.nsis.installerHooks: "./nsis/installer-hooks.nsh"` + version 0.3.2.
+- `src-tauri/Cargo.toml` — dep baru `[target.'cfg(windows)'.dependencies] windows-sys = "0.59"` features `Win32_Foundation`, `Win32_Security` (utk `CreateJobObjectW`), `Win32_System_JobObjects`, `Win32_System_Threading` (utk `JOBOBJECT_EXTENDED_LIMIT_INFORMATION`).
+- `src-tauri/src/lib.rs` — `struct PhpServer { children, #[cfg(windows)] _job }` (ganti tuple struct); `#[cfg(windows)] struct JobHandle(RawHandle)` + `unsafe impl Send/Sync` (`RawHandle`/`HANDLE` = `*mut c_void` TIDAK Send/Sync → perlu wrapper agar bisa `app.manage`); mod `job` (`create_kill_on_close_job` = `CreateJobObjectW` + `SetInformationJobObject` `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; `assign` = `AssignProcessToJobObject` via `std::os::windows::io::AsRawHandle`, gagal di-skip aman). Setup: assign serve+scheduler ke job, simpan handle di state. `on_window_event` → `state.children` (bukan `state.0`).
+- Versi bump: `config/app.php`, `.env.example`, `src-tauri/Cargo.toml`, `Cargo.lock`, `tauri.conf.json`.
+
+## Catatan
+- NSIS hook: argumen PowerShell di-`System::Call` perlu escape `$\"`; gunakan env var (`SMARTRKAS_INSTDIR`) untuk meneruskan `$INSTDIR` (menghindari masalah quoting path). Di dalam script PowerShell semua `$` ditulis `$$` (escape NSIS). Pencocokan `-contains` case-insensitive.
+- Job object: handle DIBIARKAN hidup seumur app (tidak pernah di-close manual) — saat proses app mati (normal/kill paksa) OS menutup handle → job ditutup → anak PHP dimatikan. Ini inti fix: user yang force-kill via Task Manager pun tidak lagi meninggalkan proses yatim.
+- MSI tidak pakai hook (kustomisasi tidak mudah) — Job Object menutup lubang untuk kasus MSI/upgrade path lain.
+- Release notes: tulis via `--notes-file` (temp .md), jangan `--notes` multiline (PowerShell globbing).
+
+## Test Status
+- Tidak ada perubahan logika PHP → PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`. `cargo check` OK; `npm run build` OK; `tauri build` (NSIS + MSI) OK.
