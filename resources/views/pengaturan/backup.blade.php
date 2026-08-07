@@ -20,18 +20,33 @@
     @endif
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div class="card">
-            <div class="text-sm text-slate-500 font-medium">Jumlah Backup</div>
-            <div class="text-2xl font-bold text-slate-800 mt-1">{{ $backups->count() }}</div>
+        <div class="stat-card indigo">
+            <div class="stat-icon bg-indigo-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+            </div>
+            <div class="stat-label">Jumlah Backup</div>
+            <div class="stat-value text-indigo-700">{{ $backups->count() }}</div>
         </div>
-        <div class="card">
-            <div class="text-sm text-slate-500 font-medium">Total Ukuran</div>
-            <div class="text-2xl font-bold text-slate-800 mt-1">{{ number_format($totalSize / 1048576, 2) }} MB</div>
+
+        <div class="stat-card blue">
+            <div class="stat-icon bg-blue-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            </div>
+            <div class="stat-label">Total Ukuran</div>
+            <div class="stat-value text-blue-700">{{ number_format($totalSize / 1048576, 2) }} <span class="text-sm text-slate-400 font-normal">MB</span></div>
         </div>
-        <div class="card">
-            <div class="text-sm text-slate-500 font-medium">Backup Terakhir</div>
-            <div class="text-lg font-bold text-slate-800 mt-1">
-                {{ $latest ? \Carbon\Carbon::createFromTimestamp($latest['mtime'])->format('d/m/Y H:i') : 'Belum ada' }}
+
+        <div class="stat-card {{ $latest ? 'green' : 'gray' }}">
+            <div class="stat-icon bg-emerald-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="stat-label">Backup Terakhir</div>
+            <div class="mt-2">
+                @if($latest)
+                    <span class="badge badge-green">{{ \Carbon\Carbon::createFromTimestamp($latest['mtime'])->format('d M Y H:i') }}</span>
+                @else
+                    <span class="badge badge-gray">Belum ada</span>
+                @endif
             </div>
         </div>
     </div>
@@ -63,8 +78,11 @@
     </div>
 
     <div class="card">
-        <div class="card-header">
+        <div class="card-header flex flex-wrap items-center justify-between gap-2">
             <span class="card-title">Daftar Backup</span>
+            @if($backups->isNotEmpty())
+                <span class="badge badge-blue text-xs">{{ $backups->count() }} file</span>
+            @endif
         </div>
         <div class="overflow-x-auto">
             <table class="data-table">
@@ -79,9 +97,14 @@
                 <tbody>
                     @forelse($backups as $backup)
                         <tr>
-                            <td class="font-medium text-slate-800">{{ $backup['name'] }}</td>
+                            <td class="font-medium text-slate-800 flex items-center gap-2">
+                                <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+                                {{ $backup['name'] }}
+                            </td>
                             <td>{{ \Carbon\Carbon::createFromTimestamp($backup['mtime'])->format('d/m/Y H:i') }}</td>
-                            <td>{{ number_format($backup['size'] / 1048576, 2) }} MB</td>
+                            <td>
+                                <span class="badge badge-gray text-xs">{{ number_format($backup['size'] / 1048576, 2) }} MB</span>
+                            </td>
                             <td class="text-right">
                                 <a href="{{ route('pengaturan.backup.download', ['file' => $backup['name']]) }}" class="btn btn-secondary btn-sm">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>

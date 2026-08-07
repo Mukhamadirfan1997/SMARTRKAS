@@ -304,7 +304,7 @@ class LaporanController extends Controller
         \App\Jobs\GenerateExportJob::dispatch(
             $exportJob->id,
             \App\Exports\RekapRekeningExport::class,
-            ['bulan' => $bulan, 'tahunAnggaranId' => $tahunAnggaranAktif?->id, 'sumberDanaId' => $sumberDanaId],
+            ['bulan' => $bulan, 'tahunAnggaranId' => $tahunAnggaranAktif?->id, 'sumberDanaId' => $sumberDanaId, 'programId' => $request->input('program_id'), 'search' => $request->input('search')],
             $filename,
         );
 
@@ -336,7 +336,7 @@ class LaporanController extends Controller
         \App\Jobs\GenerateExportJob::dispatch(
             $exportJob->id,
             \App\Exports\RekapKuartalExport::class,
-            ['kuartal' => $kuartal, 'namaSekolah' => $namaSekolah, 'tahunAnggaranId' => $tahunAnggaranAktif?->id, 'sumberDanaId' => $sumberDanaId],
+            ['kuartal' => $kuartal, 'namaSekolah' => $namaSekolah, 'tahunAnggaranId' => $tahunAnggaranAktif?->id, 'sumberDanaId' => $sumberDanaId, 'programId' => $request->input('program_id'), 'search' => $request->input('search')],
             $filename,
         );
 
@@ -551,6 +551,7 @@ class LaporanController extends Controller
     private function loadRekapRekeningItems(?TahunAnggaran $tahunAnggaranAktif, int $bulan, ?int $perPage = null, $rencanaSub = null, $realisasiSub = null): \Illuminate\Support\Collection|\Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
         $sumberDanaId = request('sumber_dana_id');
+        $programId = request('program_id');
 
         if ($rencanaSub === null) {
             $rencanaSub = RkasItemBulan::selectRaw('rkas_item_bulan.rkas_item_id, SUM(rkas_item_bulan.rencana) as total')
@@ -558,6 +559,7 @@ class LaporanController extends Controller
                 ->where('rkas_item_bulan.bulan', $bulan)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
+                ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
                 ->groupBy('rkas_item_bulan.rkas_item_id');
         }
 
@@ -569,6 +571,7 @@ class LaporanController extends Controller
                 ->where('transaksi_bku.bulan', $bulan)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
+                ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
                 ->groupBy('transaksi_bku.rkas_item_id');
         }
 
@@ -618,6 +621,7 @@ class LaporanController extends Controller
         $casesSql = implode(', ', $cases);
 
         $sumberDanaId = request('sumber_dana_id');
+        $programId = request('program_id');
 
         if ($realisasiSub === null) {
             $realisasiSub = TransaksiBku::query()
@@ -627,11 +631,13 @@ class LaporanController extends Controller
                 ->whereIn('transaksi_bku.bulan', $bulanMonths)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
+                ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
                 ->groupBy('transaksi_bku.rkas_item_id');
         }
 
         $query = RkasItem::with('kodeRekening.jenisBelanja', 'program')
             ->select('rkas_item.*')
+            ->selectRaw('COALESCE(tb.m0, 0) as m0, COALESCE(tb.m1, 0) as m1, COALESCE(tb.m2, 0) as m2, COALESCE(tb.total_all, 0) as total_all')
             ->leftJoinSub($realisasiSub, 'tb', fn($j) => $j->on('rkas_item.id', '=', 'tb.rkas_item_id'))
             ->where('rkas_item.tahun_anggaran_id', $tahunAnggaranAktif->id);
 

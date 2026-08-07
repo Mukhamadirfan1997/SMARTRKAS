@@ -66,7 +66,7 @@
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                         Cetak PDF
                     </button>
-                    <a href="{{ route('laporan.rekap-kuartal.export-excel', ['bulan' => $bulan, 'tahun' => $tahunAnggaranAktif?->tahun ?? date('Y'), 'sumber_dana_id' => $sumberDanaId ?? '']) }}"
+                    <a href="{{ route('laporan.rekap-kuartal.export-excel', ['bulan' => $bulan, 'tahun' => $tahunAnggaranAktif?->tahun ?? date('Y'), 'sumber_dana_id' => $sumberDanaId ?? '', 'search' => request('search', ''), 'program_id' => $programId ?? '']) }}"
                        class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 shadow-sm transition-all">
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Excel
@@ -102,7 +102,7 @@
                     <tr>
                         <td class="font-medium text-slate-800">{{ $jenis }}</td>
                         @foreach($bulanMonths as $b)
-                            <td class="text-right whitespace-nowrap">{{ $data['per_bulan'][$b] > 0 ? 'Rp ' . number_format($data['per_bulan'][$b], 0, ',', '.') : '&mdash;' }}</td>
+                            <td class="text-right whitespace-nowrap">{!! $data['per_bulan'][$b] > 0 ? 'Rp ' . number_format($data['per_bulan'][$b], 0, ',', '.') : '&mdash;' !!}</td>
                         @endforeach
                         <td class="text-right font-semibold whitespace-nowrap">Rp {{ number_format($data['total'], 0, ',', '.') }}</td>
                     </tr>
@@ -148,7 +148,7 @@
                         <td>{{ $item->uraian }}</td>
                         @foreach($bulanMonths as $b)
                             @php $r = $item->realisasi_per_bulan[$b] ?? 0; @endphp
-                            <td class="text-right whitespace-nowrap">{{ $r > 0 ? 'Rp ' . number_format($r, 0, ',', '.') : '&mdash;' }}</td>
+                            <td class="text-right whitespace-nowrap">{!! $r > 0 ? 'Rp ' . number_format($r, 0, ',', '.') : '&mdash;' !!}</td>
                         @endforeach
                         <td class="text-right font-semibold whitespace-nowrap">Rp {{ number_format($item->total_realisasi, 0, ',', '.') }}</td>
                     </tr>
@@ -181,8 +181,13 @@
         var tahun = new URLSearchParams(window.location.search).get('tahun') || '{{ $tahunAnggaranAktif?->tahun ?? date('Y') }}';
         var search = document.querySelector('input[name="search"]')?.value || '';
         var sd = document.querySelector('select[name="sumber_dana_id"]')?.value || '';
-        var url = '{{ route('laporan.rekap-kuartal') }}?bulan=' + bulan + '&tahun=' + tahun + '&cetak=pdf&tanggal_cetak=' + tgl + '&search=' + encodeURIComponent(search) + '&sumber_dana_id=' + sd;
-        window.open(url, '_blank');
+        var program = document.querySelector('select[name="program_id"]')?.value || '';
+        var url = '{{ route('laporan.rekap-kuartal') }}?bulan=' + bulan + '&tahun=' + tahun + '&tanggal_cetak=' + tgl + '&search=' + encodeURIComponent(search) + '&sumber_dana_id=' + sd + '&program_id=' + program;
+        if (window.SmartRKAS && window.SmartRKAS.saveDownload) {
+            window.SmartRKAS.saveDownload(url + '&cetak=pdf');
+        } else {
+            window.open(url + '&cetak=pdf', '_blank');
+        }
     }
     </script>
 </x-app-layout>

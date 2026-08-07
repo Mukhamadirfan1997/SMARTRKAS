@@ -18,12 +18,16 @@ class RekapRekeningExport implements FromCollection, WithHeadings, WithTitle, Wi
     protected int $bulan;
     protected ?string $tahunAnggaranId;
     protected ?string $sumberDanaId;
+    protected ?string $programId;
+    protected ?string $search;
 
-    public function __construct(int $bulan, ?string $tahunAnggaranId = null, ?string $sumberDanaId = null)
+    public function __construct(int $bulan, ?string $tahunAnggaranId = null, ?string $sumberDanaId = null, ?string $programId = null, ?string $search = null)
     {
         $this->bulan = $bulan;
         $this->tahunAnggaranId = $tahunAnggaranId;
         $this->sumberDanaId = $sumberDanaId;
+        $this->programId = $programId;
+        $this->search = $search;
     }
 
     /** @return Collection<int, RkasItem> */
@@ -41,6 +45,7 @@ class RekapRekeningExport implements FromCollection, WithHeadings, WithTitle, Wi
             ->where('rkas_item_bulan.bulan', $this->bulan)
             ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
             ->when($this->sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $this->sumberDanaId))
+            ->when($this->programId, fn($q) => $q->where('ri_sub.program_id', $this->programId))
             ->groupBy('rkas_item_bulan.rkas_item_id');
 
         $realisasiSub = TransaksiBku::selectRaw('transaksi_bku.rkas_item_id, SUM(transaksi_bku.jumlah) as total')
@@ -49,6 +54,7 @@ class RekapRekeningExport implements FromCollection, WithHeadings, WithTitle, Wi
             ->where('transaksi_bku.bulan', $this->bulan)
             ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
             ->when($this->sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $this->sumberDanaId))
+            ->when($this->programId, fn($q) => $q->where('ri_sub.program_id', $this->programId))
             ->groupBy('transaksi_bku.rkas_item_id');
 
         $query = RkasItem::with(['kodeRekening.jenisBelanja', 'program'])
@@ -61,6 +67,10 @@ class RekapRekeningExport implements FromCollection, WithHeadings, WithTitle, Wi
 
         if ($this->sumberDanaId) {
             $query->where('rkas_item.sumber_dana_id', $this->sumberDanaId);
+        }
+
+        if ($this->search) {
+            $query->where('rkas_item.uraian', 'like', "%{$this->search}%");
         }
 
         return $query->get()

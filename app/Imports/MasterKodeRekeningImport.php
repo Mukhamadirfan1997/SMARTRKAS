@@ -20,6 +20,7 @@ class MasterKodeRekeningImport implements WithMultipleSheets
             0 => new class implements ToModel, WithHeadingRow {
                 /** @var array<string, string> */
                 private array $rules = [
+                    '5.1.02.01.01.0026' => 'Belanja Cetak',
                     '5.1.02.01' => 'Belanja Barang Persediaan',
                     '5.1.02.02' => 'Belanja Jasa',
                     '5.1.02.03' => 'Belanja Jasa Pemeliharaan',
@@ -48,13 +49,15 @@ class MasterKodeRekeningImport implements WithMultipleSheets
 
                     $namaJenis = 'Belanja Lainnya';
 
-                    foreach ($this->rules as $prefix => $jenisTujuan) {
+                    $prefixes = array_keys($this->rules);
+                    usort($prefixes, fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+
+                    foreach ($prefixes as $prefix) {
                         if (str_starts_with($kode, $prefix)) {
-                            $namaJenis = $jenisTujuan;
+                            $namaJenis = $this->rules[$prefix];
                             break;
                         }
                     }
-
                     if (!isset($this->jenisMapCache[$namaJenis])) {
                         $jenisObj = JenisBelanja::firstOrCreate(['nama' => $namaJenis]);
                         $this->jenisMapCache[$namaJenis] = $jenisObj->id;

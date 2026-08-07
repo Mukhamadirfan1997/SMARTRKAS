@@ -6,6 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri_plugin_dialog::DialogExt;
 
 #[cfg(windows)]
 use std::os::windows::io::RawHandle;
@@ -171,10 +172,55 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
     }
 }
 
+/// Simpan file biner yang diunduh dari server lokal (session cookie dipegang
+/// webview, jadi JS meng-fetch URL lalu mengirim hasilnya sebagai base64).
+/// Menampilkan dialog "Save As" native; return false bila user membatalkan.
+#[tauri::command]
+async fn save_download(
+    app: tauri::AppHandle,
+    base64_data: String,
+    filename: String,
+) -> Result<bool, String> {
+    use base64::Engine;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_data.as_bytes())
+        .map_err(|e| format!("Data yang diterima tidak valid ({e})."))?;
+
+    let default_name = if filename.trim().is_empty() {
+        "download".to_string()
+    } else {
+        filename
+    };
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    app.dialog()
+        .file()
+        .set_file_name(&default_name)
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+
+    let Some(path) = rx.recv().map_err(|_| "Dialog ditutup tanpa memilih file.".to_string())? else {
+        return Ok(false);
+    };
+
+    let Some(save_path) = path.as_path() else {
+        return Err("Lokasi penyimpanan tidak valid.".to_string());
+    };
+
+    std::fs::write(save_path, &bytes).map_err(|e| format!("Gagal menyimpan file ({e})."))?;
+
+    Ok(true)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![save_download])
         .setup(|app| {
             let handle = app.handle().clone();
             let data_dir = app

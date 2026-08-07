@@ -229,11 +229,15 @@
             <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
                 @foreach($importStatus as $imp)
                 <div class="block rounded-xl border p-3 text-center transition-all hover:shadow-md
-                    {{ $imp->status === 'success' ? 'border-emerald-200 bg-emerald-50' : ($imp->status === 'failed' ? 'border-red-200 bg-red-50' : ($imp->status === 'processing' || $imp->status === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')) }}">
+                    {{ $imp->status === 'success' ? 'border-emerald-200 bg-emerald-50' : ($imp->status === 'failed' ? 'border-red-200 bg-red-50' : ($imp->status === 'processing' || $imp->status === 'pending' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')) }}"
+                    title="@if($imp->status === 'success' && $imp->diimport_pada) Diimport {{ $imp->diimport_pada->format('d M Y H:i') }} @endif">
                     <div class="text-xs font-medium text-slate-500 mb-1">{{ $imp->nama }}</div>
                     @if($imp->status === 'success')
                         <svg aria-hidden="true" class="w-5 h-5 mx-auto text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <div class="text-xs text-emerald-600 font-medium mt-1">{{ $imp->baris_berhasil }} baris</div>
+                        @if($imp->data_berubah)
+                            <div class="text-[10px] text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5 mt-1" title="Rencana item diubah manual setelah import. Terakhir diubah: {{ $imp->diubah_terakhir?->format('d M Y H:i') }}">Rencana berubah</div>
+                        @endif
                     @elseif($imp->status === 'failed')
                         <svg aria-hidden="true" class="w-5 h-5 mx-auto text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <div class="text-xs text-red-600 font-medium mt-1">Gagal</div>
@@ -247,6 +251,16 @@
                 </div>
                 @endforeach
             </div>
+            @php
+                $changedMonths = $importStatus->filter(fn($s) => $s->data_berubah);
+            @endphp
+            @if($changedMonths->isNotEmpty())
+                <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <strong>{{ $changedMonths->count() }} bulan</strong> punya rencana yang diubah manual setelah import terakhir
+                    ({{ $changedMonths->map(fn($s) => $s->nama)->implode(', ') }}).
+                    Rencana di layar mungkin tidak sesuai file import — impor ulang atau sesuaikan manual agar akurat.
+                </div>
+            @endif
         </div>
     </div>
     @endif

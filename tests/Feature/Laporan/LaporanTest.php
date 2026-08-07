@@ -166,6 +166,16 @@ class LaporanTest extends TestCase
         $response->assertHeader('Content-Type', 'application/pdf');
     }
 
+    public function test_laporan_rekap_kuartal_menampilkan_realisasi(): void
+    {
+        // Item di bulan 1 masuk kuartal 1 (bulan 1-3). Realisasi 500.000 harus
+        // tampil sebagai angka, bukan '&mdash;' (regresi drop kolom m0/m1/m2).
+        $response = $this->actingAs($this->user)->get('/laporan/rekap-kuartal?bulan=2');
+        $response->assertStatus(200);
+        $response->assertSee('Rp 500.000');
+        $response->assertDontSee('&mdash;');
+    }
+
     // =================== LAPORAN REKAP SIPLAH ===================
 
     public function test_user_can_view_laporan_rekap_siplah(): void

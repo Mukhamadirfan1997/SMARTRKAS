@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Dashboard;
 
+use App\Models\AuditLog;
+use App\Models\ImportLog;
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
 use App\Models\RkasItem;
@@ -166,6 +168,52 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('ATK Terencana Januari')
             ->assertDontSee('ATK Tanpa Rencana Januari');
+    }
+
+    // =================== IMPORT STATUS ===================
+
+    public function test_dashboard_menampilkan_badge_rencana_berubah_setelah_import(): void
+    {
+        $this->makeItem();
+
+        ImportLog::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'status' => 'success',
+            'finished_at' => now()->subMinutes(10),
+        ]);
+
+        AuditLog::create([
+            'user_id' => $this->user->id,
+            'tabel' => 'rkas_item',
+            'aksi' => 'update',
+            'data_baru' => ['jumlah' => 2000000],
+            'created_at' => now()->subMinutes(5),
+        ]);
+
+        $this->actingAs($this->user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Rencana berubah');
+    }
+
+    public function test_dashboard_tanpa_perubahan_tidak_menampilkan_badge(): void
+    {
+        $this->makeItem();
+
+        ImportLog::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'status' => 'success',
+            'finished_at' => now(),
+        ]);
+
+        $this->actingAs($this->user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Rencana berubah');
     }
 
     // =================== STATUS BADGE ===================

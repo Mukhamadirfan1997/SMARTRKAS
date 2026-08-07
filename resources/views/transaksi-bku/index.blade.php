@@ -300,7 +300,7 @@
         function cetakTerpilih() {
             const checked = document.querySelectorAll('.check-item:checked');
             if (checked.length === 0) return;
-            document.getElementById('batch-kwitansi-form').submit();
+            document.getElementById('batch-kwitansi-form').requestSubmit();
         }
         function hapusTransaksi(id, noBukti) {
             if (!confirm('Hapus transaksi ' + noBukti + '?')) {

@@ -253,8 +253,12 @@
 
         function cetakPdf() {
             var tgl = document.getElementById('tanggal-cetak').value;
-            var url = '{{ route('laporan.rekap-siplah') }}?' + buildPeriodeParam() + '&cetak=pdf&tanggal_cetak=' + tgl;
-            window.open(url, '_blank');
+            var url = '{{ route('laporan.rekap-siplah') }}?' + buildPeriodeParam() + '&tanggal_cetak=' + tgl;
+            if (window.SmartRKAS && window.SmartRKAS.saveDownload) {
+                window.SmartRKAS.saveDownload(url + '&cetak=pdf');
+            } else {
+                window.open(url + '&cetak=pdf', '_blank');
+            }
         }
 
         function exportExcel() {

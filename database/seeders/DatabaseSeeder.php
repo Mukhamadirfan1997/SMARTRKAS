@@ -70,6 +70,7 @@ class DatabaseSeeder extends Seeder
             'Belanja Modal Peralatan & Mesin',
             'Belanja Modal Buku',
             'Belanja Modal Aset Tetap Lainnya',
+            'Belanja Cetak',
             'Belanja Lainnya',
         ];
 

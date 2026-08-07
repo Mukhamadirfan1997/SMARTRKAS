@@ -17,17 +17,21 @@ class RekapKuartalExport implements FromArray, WithHeadings, WithTitle, ShouldAu
     protected string $namaSekolah;
     protected ?string $tahunAnggaranId;
     protected ?string $sumberDanaId;
+    protected ?string $programId;
+    protected ?string $search;
     /** @var array<int, string> */
     protected array $bulanNames;
     /** @var array<int, int> */
     protected array $bulanMonths;
 
-    public function __construct(int $kuartal, string $namaSekolah, ?string $tahunAnggaranId = null, ?string $sumberDanaId = null)
+    public function __construct(int $kuartal, string $namaSekolah, ?string $tahunAnggaranId = null, ?string $sumberDanaId = null, ?string $programId = null, ?string $search = null)
     {
         $this->kuartal = $kuartal;
         $this->namaSekolah = $namaSekolah;
         $this->tahunAnggaranId = $tahunAnggaranId;
         $this->sumberDanaId = $sumberDanaId;
+        $this->programId = $programId;
+        $this->search = $search;
 
         $startMonth = ($kuartal - 1) * 3 + 1;
         $this->bulanMonths = [$startMonth, $startMonth + 1, $startMonth + 2];
@@ -61,15 +65,21 @@ class RekapKuartalExport implements FromArray, WithHeadings, WithTitle, ShouldAu
             ->whereIn('transaksi_bku.bulan', $months)
             ->where('ri_sub.tahun_anggaran_id', $tahunAnggaran->id)
             ->when($this->sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $this->sumberDanaId))
+            ->when($this->programId, fn($q) => $q->where('ri_sub.program_id', $this->programId))
             ->groupBy('transaksi_bku.rkas_item_id');
 
         $query = RkasItem::with(['kodeRekening.jenisBelanja', 'program'])
-            ->select('rkas_item.*');
+            ->select('rkas_item.*')
+            ->selectRaw('COALESCE(tb.m0, 0) as m0, COALESCE(tb.m1, 0) as m1, COALESCE(tb.m2, 0) as m2, COALESCE(tb.total_all, 0) as total_all');
         $query->leftJoinSub($realisasiSub, 'tb', fn(\Illuminate\Database\Query\JoinClause $j) => $j->on('rkas_item.id', '=', 'tb.rkas_item_id'));
         $query->where('rkas_item.tahun_anggaran_id', $tahunAnggaran->id);
 
         if ($this->sumberDanaId) {
             $query->where('rkas_item.sumber_dana_id', $this->sumberDanaId);
+        }
+
+        if ($this->search) {
+            $query->where('rkas_item.uraian', 'like', "%{$this->search}%");
         }
 
         $rkasItems = $query->get()

@@ -77,7 +77,7 @@
                         <td>{{ $item->uraian }}</td>
                         @foreach($bulanMonths as $bulan)
                             @php $r = $item->realisasi_per_bulan[$bulan] ?? 0; @endphp
-                            <td class="text-right">{{ $r > 0 ? 'Rp ' . number_format($r, 0, ',', '.') : '&mdash;' }}</td>
+                            <td class="text-right">{!! $r > 0 ? 'Rp ' . number_format($r, 0, ',', '.') : '&mdash;' !!}</td>
                         @endforeach
                         <td class="text-right"><strong>Rp {{ number_format($item->total_realisasi, 0, ',', '.') }}</strong></td>
                     </tr>

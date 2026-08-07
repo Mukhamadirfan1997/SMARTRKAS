@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\ImportLog;
 use App\Models\JenisBelanja;
 use App\Models\MasterKodeRekening;
@@ -139,11 +140,32 @@ class DashboardController extends Controller
                 $importStatus = collect(range(1, 12))->map(function (int $m) use ($importLogs): object {
                     $latest = $importLogs->where('bulan', $m)->sortByDesc('created_at')->first();
 
+                    $dataBerubah = false;
+                    $diubahTerakhir = null;
+
+                    if ($latest) {
+                        $importTime = $latest->finished_at ?? $latest->created_at;
+                        if ($importTime) {
+                            $change = AuditLog::query()
+                                ->where('created_at', '>', $importTime)
+                                ->where('tabel', 'rkas_item')
+                                ->orderByDesc('created_at')
+                                ->first();
+                            if ($change) {
+                                $dataBerubah = true;
+                                $diubahTerakhir = $change->created_at;
+                            }
+                        }
+                    }
+
                     return (object) [
                         'bulan' => $m,
                         'nama' => Carbon::createFromDate(null, $m, 1)->translatedFormat('F'),
                         'status' => $latest ? $latest->status : null,
                         'baris_berhasil' => $latest ? $latest->baris_berhasil : null,
+                        'diimport_pada' => $latest ? ($latest->finished_at ?? $latest->created_at) : null,
+                        'data_berubah' => $dataBerubah,
+                        'diubah_terakhir' => $diubahTerakhir,
                     ];
                 });
             }
