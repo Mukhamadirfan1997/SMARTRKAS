@@ -19,7 +19,7 @@
             </a>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ route('rkas.update', $rkasItem) }}">
+            <form method="POST" action="{{ route('rkas.update', $rkasItem) }}" id="form-rkas-edit">
                 @csrf
                 @method('PUT')
 
@@ -87,7 +87,7 @@
 
                     <div>
                         <label class="form-label">Volume</label>
-                        <input type="number" name="volume" value="{{ old('volume', $rkasItem->volume) }}" class="form-input">
+                        <input type="text" name="volume" value="{{ old('volume', $rkasItem->volume) }}" class="form-input" inputmode="decimal" autocomplete="off">
                         @error('volume')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -103,7 +103,7 @@
 
                     <div>
                         <label class="form-label">Tarif</label>
-                        <input type="number" name="tarif" value="{{ old('tarif', $rkasItem->tarif) }}" class="form-input">
+                        <input type="text" name="tarif" value="{{ old('tarif', $rkasItem->tarif) }}" class="form-input" inputmode="decimal" autocomplete="off" placeholder="Contoh: 1.500.000">
                         @error('tarif')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -111,7 +111,7 @@
 
                     <div>
                         <label class="form-label">Jumlah</label>
-                        <input type="number" name="jumlah" value="{{ old('jumlah', $rkasItem->jumlah) }}" class="form-input" required>
+                        <input type="text" name="jumlah" value="{{ old('jumlah', $rkasItem->jumlah) }}" class="form-input" inputmode="decimal" autocomplete="off" placeholder="Contoh: 1.500.000" required>
                         @error('jumlah')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -130,4 +130,21 @@
             </form>
         </div>
     </div>
+
+    <script>
+        document.getElementById('form-rkas-edit').addEventListener('submit', function() {
+            var normal = function (v) {
+                v = String(v).replace(/\s+/g, '');
+                if (/^[+-]?\d+(\.\d{1,2})?$/.test(v)) return v;
+                return v.replace(/\./g, '').replace(/,/g, '.');
+            };
+            var decimal = function (v) { return String(v).replace(/\s+/g, '').replace(/,/g, '.'); };
+            var tarif = document.querySelector('input[name="tarif"]');
+            var jumlah = document.querySelector('input[name="jumlah"]');
+            var volume = document.querySelector('input[name="volume"]');
+            if (tarif && tarif.value) tarif.value = normal(tarif.value);
+            if (jumlah && jumlah.value) jumlah.value = normal(jumlah.value);
+            if (volume && volume.value) volume.value = decimal(volume.value);
+        });
+    </script>
 </x-app-layout>

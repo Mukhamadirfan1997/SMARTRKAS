@@ -641,3 +641,43 @@ Perbaiki `Error opening file for writing: php_curl.dll` saat upgrade SmartRKAS (
 
 ## Test Status
 - Tidak ada perubahan logika PHP → PHPUnit `OK (285 tests, 768 assertions)`, PHPStan level 6: `[OK] No errors`. `cargo check` OK; `npm run build` OK; `tauri build` (NSIS + MSI) OK.
+
+---
+
+# Sesi 07 Agu 2026 — Fix 3 Bug (BKU Tak Tersimpan, Telegram SSL, Filter Dashboard) + Review Menyeluruh — v0.3.3
+
+## Goal
+Perbaiki bug yang dilaporkan user + 3 relawan aplikasi desktop: (1) input BKU tidak tersimpan, (2) notifikasi Telegram gagal (cURL error 60), (3) filter bulan dashboard menampilkan item tanpa rencana bulan terfilter. Ditutup dengan **review kualitas menyeluruh** (user: "kualitas jadi tolak ukur") sebelum rilis v0.3.3.
+
+## Summary
+- **Bug BKU ter-reproduksi definitif** terhadap server live `127.0.0.1:63483` (bukan asumsi): `jumlah=500.000` tersimpan **Rp 500** (bug titik ribuan); guard anggaran menolak → 302 ke `/transaksi-bku/create` + flash error TAMPIL tapi form **kosong** (back tanpa `withInput` + `type=number` tak bisa menampilkan nilai lama berformat titik) — persis gejala user. Guard sering terpukul karena banyak item sisa 0 → user "input hilang" tanpa sadar.
+- **Bug tambahan ditemukan saat review kedua & sudah di-fix**:
+  - **x100 pada output kalkulator**: `parseRupiah`/`NumberParser::rupiah` lama strip SEMUA titik → `(tarif*vol).toFixed(2)` = `"1000000.00"` jadi `"100000000"`. Fix: guard regex `^[+-]?\d+(\.\d{1,2})?$` → return apa adanya (PHP `NumberParser::rupiah` + JS `parseRupiah` di create/edit BKU + `normal` di `rkas/edit`).
+  - **Stale volume/satuan**: `toggleVisibility()` (jenis=penerimaan) tidak reset `volumeHidden`/`satuanHidden` → data basi terkirim. Fix di create + edit: reset keduanya di cabang penerimaan.
+  - **Volume edit terhapus (pra-ada)**: `init()` → `kalkulasiJumlah()` menulis `volumeHidden=''` saat input volume kosong → volume transaksi hilang walau tak disentuh. Fix: flag `var volumeTouched=false`; hidden hanya ditulis bila `volumeInput.value !== '' || volumeTouched`; listener input set flag.
+  - **Item penerimaan terhapus saat edit (pra-ada)**: `toggleVisibility` memanggil `setSelected(null)` saat load → item RKAS transaksi penerimaan hilang. Fix: flag `var initializing=true`; `setSelected(null)` hanya saat perubahan user (bukan load), `initializing=false` setelah `init()`.
+- Reproduksi memakai cookie sesi forge: nama cookie **`smartrkas-session`**, format `urlencode(base64(json{iv,value,mac,tag}))`, prefix `hash_hmac('sha1','smartrkas-sessionv2',APP_KEY).'|'`, AES-256-CBC (EncryptCookies tetap mengenkripsi walau `SESSION_ENCRYPT=false`). Data tes (3 transaksi REPRO + outbox 2 + audit 2) sudah dibersihkan.
+- **Bug Telegram SSL root cause 100%**: bundle PHP desktop tanpa CA bundle → `ERR 60 unable to get local issuer certificate`. Dgn `CURLOPT_CAINFO=C:\xampp\apache\bin\curl-ca-bundle.crt` → HTTP 200. Ekstensi curl/openssl aktif (bukan penyebab). Web (XAMPP) normal.
+
+## Changes
+- `app/Support/NumberParser.php` (BARU) — helper `rupiah()` (strip spasi+`.` ribu, koma→titik) & `decimal()` (pertahankan satu titik desimal).
+- `TransaksiBkuController::store`/`update` — merge `NumberParser::rupiah(jumlah)` + `decimal(volume)` SEBELUM validate; guard anggaran → `throw ValidationException::withMessages(['jumlah' => ...])` (ganti `back()->with('error')`) → form kembali dgn old + error inline. `create()` — `$pickerInitial` dari `old('rkas_item_id')` utk repopulasi picker.
+- `RkasController::update` — normalisasi `jumlah`/`tarif` (rupiah) + `volume` (decimal).
+- Views `transaksi-bku/create.blade.php` & `edit.blade.php` — `<form id="form-bku">`, `jumlah` `type="text" inputmode="decimal"` + hint format, JS `parseRupiah`/`parseDecimal` (normalisasi submit + kalkulasi volume via `parseDecimal`), include picker `['pickerInitial' => $pickerInitial]`, `window.RkasPicker.init()`.
+- `resources/views/rkas/edit.blade.php` — `volume`/`tarif`/`jumlah` type=text + JS normalisasi submit.
+- `DashboardController::index` — query tabel item tambah `->when($bulan, fn($q) => $q->whereHas('bulanRencana', fn($q2) => $q2->where('bulan',$bulan)))` → item tanpa rencana bulan terfilter TIDAK tampil. `/rkas` TIDAK diubah (filter bulan di sana tidak mengubah tampilan tabel).
+- **Telegram SSL**: `src-tauri/php/extras/ssl/cacert.pem` (CA bundle curl.se, 186KB, untracked — `php/` di-gitignore); `bootstrap/app.php` — `ini_set('curl.cainfo'/'openssl.cafile', __DIR__.'/../php/extras/ssl/cacert.pem')` bila file ada (web mode skip); `src-tauri/php/php.ini` — direktif `openssl.cafile`/`curl.cainfo = "php\extras\ssl\cacert.pem"` (relatif CWD instalasi). Verifikasi: PHP bundle curl ke `https://api.telegram.org/` → `HTTP OK len=145` (dgn `-d` & via php.ini di CWD instalasi).
+- Tests — `TransaksiBkuTest`: 2 test guard diubah `assertSessionHas('error')` → `assertSessionHasErrors('jumlah')` + test baru `test_store_normalizes_indonesian_number_format` (1.500.000 → 1500000, volume 2,5 → 2.5, butuh `RkasItemBulan` rencana cukup utk lolos guard). `DashboardTest`: test baru `test_dashboard_bulan_filter_hides_items_without_plan_for_that_month`.
+- **Review kedua** — test baru: `tests/Unit/NumberParserTest.php` (18 kasus via data-provider: "1.500.000"→"1500000", "1.500.000,50"→"1500000.50", "1000000.00" dipertahankan, spasi strip, dll); `TransaksiBkuTest::test_store_keeps_calculator_decimal_format` (2500000.00 → 2500000); `RkasControllerTest`: `test_edit_page_renders` (id="form-rkas-edit", name=tarif/volume) + `test_update_normalizes_indonesian_number_format` (volume 2,5→2.5, tarif 1.500.000→1500000, jumlah 3.750.000→3750000); `test_create_page_renders` BKU diperkuat (form-bku, jumlah, picker, row_override, "Format angka Indonesia" — sempat gagal karena ketik "format Indonesia").
+
+## Catatan
+- `php.ini` relatif CA path resolve thd CWD (bukan lokasi ini) — di desktop CWD = instal dir (`lib.rs` `current_dir(&root)`) → `php\extras\ssl\cacert.pem` benar. Standalone `php.exe -r` dari folder lain → ERR 77 (wajar; app selalu kena `ini_set` abslolut di bootstrap).
+- Guard BKU kini pakai `ValidationException` → kode view sudah render `$errors->first('jumlah')` (sudah ada sejak M-override); flash `error` redirect TIDAK dipakai lagi utk guard.
+- `NumberParser::decimal` mempertahankan titik desimal (volume 2.5 benar), `rupiah` membuang semua titik (1.500.000 → 1500000).
+- **Smoke test HTTP nyata (bukan harness PHPUnit)**: server `artisan serve` port 8099 + DB scratch sqlite (`%TEMP%\opencode\smoke-smartrkas.sqlite`). Kendala: `/login` 302 ke `/mulai` karena `AppState::isFirstRun()` (butuh `last_login_at` di user) + `PengaturanSekolah::get()->npsn` (butuh row); `MasterKodeRekening::factory()` TIDAK idempoten (UNIQUE `jenis_belanja.nama`) → seed pakai update-atau-create terpisah. Hasil: POST `500.000` → tersimpan 500000; POST `9.000.000` (guard) → kembali create, old dipertahankan, error inline tampil, picker ter-repopulasi. Server + file scratch dibersihkan setelahnya.
+- **Cargo.lock**: saat bump versi JANGAN `-replace '(?m)^version = "0.3.2"$'` pada seluruh file — ada crate lain versi 0.3.2 (mis. `objc2-app-kit`) yang ikut ter-replace → `failed to select a version`. Fix: `git checkout` lalu replace hanya blok `name = "smartrkas"` berikutnya (2 baris). Terverifikasi via `git diff --stat` (1 file, 1+/1-).
+- Bump versi v0.3.3: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (entry `smartrkas`).
+
+## Test Status
+- PHPUnit `OK (308 tests, 810 assertions)`, PHPStan level 6: `[OK] No errors`, `php artisan view:cache` OK.
+- BELUM di-commit; belum build/rilis v0.3.3 (build `--bundles nsis` jalan di background).

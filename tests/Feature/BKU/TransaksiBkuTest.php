@@ -183,6 +183,11 @@ class TransaksiBkuTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Tambah Transaksi BKU');
+        $response->assertSee('id="form-bku"', false);
+        $response->assertSee('name="jumlah"', false);
+        $response->assertSee('id="rkas_item_id"', false);
+        $response->assertSee('id="row_override"', false);
+        $response->assertSee('Format angka Indonesia', false);
     }
 
     public function test_store_penerimaan_transaksi(): void
@@ -264,8 +269,59 @@ class TransaksiBkuTest extends TestCase
             'jumlah' => 100000,
         ]);
 
-        $response->assertSessionHas('error');
+        $response->assertSessionHasErrors('jumlah');
         $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+    }
+
+    public function test_store_normalizes_indonesian_number_format(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => '1.500.000',
+            'volume' => '2,5',
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $this->assertDatabaseHas('transaksi_bku', [
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jumlah' => 1500000.0,
+            'volume' => 2.5,
+        ]);
+    }
+
+    public function test_store_keeps_calculator_decimal_format(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => '2500000.00',
+            'volume' => '25',
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $this->assertDatabaseHas('transaksi_bku', [
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jumlah' => 2500000.0,
+        ]);
     }
 
     public function test_store_pengeluaran_accepted_with_override(): void
@@ -578,7 +634,7 @@ class TransaksiBkuTest extends TestCase
             'jumlah' => 100000,
         ]);
 
-        $response->assertSessionHas('error');
+        $response->assertSessionHasErrors('jumlah');
         $transaksi->refresh();
         $this->assertSame(30000.0, (float) $transaksi->jumlah);
     }

@@ -26,7 +26,7 @@
                 </a>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ route('transaksi-bku.update', $transaksiBku) }}">
+                <form method="POST" action="{{ route('transaksi-bku.update', $transaksiBku) }}" id="form-bku">
                     @csrf
                     @method('PUT')
 
@@ -89,7 +89,8 @@
 
                     <div class="mb-5">
                         <label for="jumlah" class="form-label">Jumlah Nominal (Rp)</label>
-                        <input type="number" name="jumlah" id="jumlah" value="{{ old('jumlah', $transaksiBku->jumlah) }}" class="form-input text-lg font-bold" step="0.01" required>
+                        <input type="text" name="jumlah" id="jumlah" value="{{ old('jumlah', $transaksiBku->jumlah) }}" class="form-input text-lg font-bold" inputmode="decimal" autocomplete="off" placeholder="Contoh: 1.500.000" required>
+                        <p class="text-xs text-slate-400 mt-1">Format angka Indonesia: gunakan titik untuk ribuan (mis. 1.500.000).</p>
                         @error('jumlah')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -149,16 +150,35 @@
             const rowRkas = document.getElementById('row_rkas_item');
             const rowKalkulator = document.getElementById('row_kalkulator');
             const rowMetodePengadaan = document.getElementById('row_metode_pengadaan');
+            const formEl = document.getElementById('form-bku');
+            var volumeTouched = false;
+            var initializing = true;
+
+            function parseRupiah(value) {
+                value = String(value).replace(/\s+/g, '');
+                if (/^[+-]?\d+(\.\d{1,2})?$/.test(value)) {
+                    return value;
+                }
+                return value.replace(/\./g, '').replace(/,/g, '.');
+            }
+
+            function parseDecimal(value) {
+                return String(value).replace(/\s+/g, '').replace(/,/g, '.');
+            }
 
             function toggleVisibility() {
                 if (jenisSelect.value === 'penerimaan') {
                     rowRkas.style.display = 'none';
                     rowKalkulator.style.display = 'none';
                     rowMetodePengadaan.style.display = 'none';
-                    window.RkasPicker.setSelected(null);
+                    volumeInput.value = '';
+                    volumeHidden.value = '';
+                    satuanHidden.value = '';
+                    if (!initializing) {
+                        window.RkasPicker.setSelected(null);
+                    }
                     hargaInput.value = '';
                     hargaInput.dataset.val = 0;
-                    volumeInput.value = '';
                 } else {
                     rowRkas.style.display = 'block';
                     rowKalkulator.style.display = 'block';
@@ -189,8 +209,10 @@
 
             function kalkulasiJumlah() {
                 var tarif = parseFloat(hargaInput.dataset.val) || 0;
-                var vol = parseFloat(volumeInput.value) || 0;
-                volumeHidden.value = vol > 0 ? vol : '';
+                var vol = parseFloat(parseDecimal(volumeInput.value)) || 0;
+                if (volumeInput.value !== '' || volumeTouched) {
+                    volumeHidden.value = vol > 0 ? vol : '';
+                }
                 if (tarif > 0 && vol > 0 && jenisSelect.value === 'pengeluaran') {
                     jumlahInput.value = (tarif * vol).toFixed(2);
                 }
@@ -199,7 +221,16 @@
             window.RkasPicker.onSelect = onPickerSelect;
 
             jenisSelect.addEventListener('change', toggleVisibility);
-            volumeInput.addEventListener('input', kalkulasiJumlah);
+            volumeInput.addEventListener('input', function() {
+                volumeTouched = true;
+                kalkulasiJumlah();
+            });
+
+            formEl.addEventListener('submit', function() {
+                if (jumlahInput.value) {
+                    jumlahInput.value = parseRupiah(jumlahInput.value);
+                }
+            });
 
             toggleVisibility();
             volumeInput.disabled = true;
@@ -207,6 +238,7 @@
             window.RkasPicker.init();
 
             volumeInput.disabled = false;
+            initializing = false;
         });
     </script>
 </x-app-layout>

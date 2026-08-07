@@ -149,6 +149,9 @@ class DashboardController extends Controller
             }
 
             $rkasItems = (clone $baseQuery)
+                ->when($bulan, fn ($q) => $q->whereHas('bulanRencana', function ($q2) use ($bulan): void {
+                    $q2->where('bulan', $bulan);
+                }))
                 ->with([
                     'program',
                     'kodeRekening.jenisBelanja',

@@ -9,6 +9,7 @@ use App\Models\SumberDana;
 use App\Models\MasterProgram;
 use App\Models\MasterKodeRekening;
 use App\Models\TransaksiBku;
+use App\Support\NumberParser;
 use Illuminate\Http\Request;
 
 class RkasController extends Controller
@@ -100,6 +101,12 @@ class RkasController extends Controller
 
     public function update(Request $request, RkasItem $rkasItem): \Illuminate\Http\RedirectResponse
     {
+        $request->merge([
+            'jumlah' => NumberParser::rupiah($request->input('jumlah')),
+            'tarif' => NumberParser::rupiah($request->input('tarif')),
+            'volume' => NumberParser::decimal($request->input('volume')),
+        ]);
+
         $validated = $request->validate([
             'no_urut' => 'required|integer',
             'uraian' => 'required|string',

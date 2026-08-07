@@ -26,7 +26,7 @@
                 </a>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ route('transaksi-bku.store') }}">
+                <form method="POST" action="{{ route('transaksi-bku.store') }}" id="form-bku">
                     @csrf
 
                     {{-- Section 1: Info Dasar --}}
@@ -61,7 +61,7 @@
                     </div>
 
                     {{-- Section 2: Item RKAS --}}
-                    @include('transaksi-bku._rkas-picker', ['pickerInitial' => null])
+                    @include('transaksi-bku._rkas-picker', ['pickerInitial' => $pickerInitial])
 
                     {{-- Section 3: Kalkulator --}}
                     <div class="my-5 p-4 bg-blue-50 border border-blue-200 rounded-xl" id="row_kalkulator">
@@ -88,7 +88,8 @@
 
                     <div class="mb-5">
                         <label for="jumlah" class="form-label">Jumlah Nominal (Rp)</label>
-                        <input type="number" name="jumlah" id="jumlah" value="{{ old('jumlah') }}" class="form-input text-lg font-bold" step="0.01" required>
+                        <input type="text" name="jumlah" id="jumlah" value="{{ old('jumlah') }}" class="form-input text-lg font-bold" inputmode="decimal" autocomplete="off" placeholder="Contoh: 1.500.000" required>
+                        <p class="text-xs text-slate-400 mt-1">Format angka Indonesia: gunakan titik untuk ribuan (mis. 1.500.000).</p>
                         @error('jumlah')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -175,6 +176,21 @@
             const npsnCode = "{{ $npsn }}";
             const countPenerimaan = {{ $countPenerimaan }};
             const countPengeluaran = {{ $countPengeluaran }};
+            const formEl = document.getElementById('form-bku');
+            var volumeTouched = false;
+            var initializing = true;
+
+            function parseRupiah(value) {
+                value = String(value).replace(/\s+/g, '');
+                if (/^[+-]?\d+(\.\d{1,2})?$/.test(value)) {
+                    return value;
+                }
+                return value.replace(/\./g, '').replace(/,/g, '.');
+            }
+
+            function parseDecimal(value) {
+                return String(value).replace(/\s+/g, '').replace(/,/g, '.');
+            }
 
             function generateNoBukti() {
                 var dateVal = tanggalInput.value;
@@ -196,10 +212,14 @@
                     rowRkas.style.display = 'none';
                     rowKalkulator.style.display = 'none';
                     rowMetodePengadaan.style.display = 'none';
-                    window.RkasPicker.setSelected(null);
+                    volumeInput.value = '';
+                    volumeHidden.value = '';
+                    satuanHidden.value = '';
+                    if (!initializing) {
+                        window.RkasPicker.setSelected(null);
+                    }
                     hargaInput.value = '';
                     hargaInput.dataset.val = 0;
-                    volumeInput.value = '';
                 } else {
                     rowRkas.style.display = 'block';
                     rowKalkulator.style.display = 'block';
@@ -240,8 +260,10 @@
 
             function kalkulasiJumlah() {
                 var tarif = parseFloat(hargaInput.dataset.val) || 0;
-                var vol = parseFloat(volumeInput.value) || 0;
-                volumeHidden.value = vol > 0 ? vol : '';
+                var vol = parseFloat(parseDecimal(volumeInput.value)) || 0;
+                if (volumeInput.value !== '' || volumeTouched) {
+                    volumeHidden.value = vol > 0 ? vol : '';
+                }
                 if (tarif > 0 && vol > 0 && jenisSelect.value === 'pengeluaran') {
                     jumlahInput.value = (tarif * vol).toFixed(2);
                 }
@@ -250,11 +272,22 @@
             window.RkasPicker.onSelect = onPickerSelect;
 
             jenisSelect.addEventListener('change', toggleVisibility);
-            volumeInput.addEventListener('input', kalkulasiJumlah);
+            volumeInput.addEventListener('input', function() {
+                volumeTouched = true;
+                kalkulasiJumlah();
+            });
             tanggalInput.addEventListener('change', generateNoBukti);
 
+            formEl.addEventListener('submit', function() {
+                if (jumlahInput.value) {
+                    jumlahInput.value = parseRupiah(jumlahInput.value);
+                }
+            });
+
             toggleVisibility();
+            window.RkasPicker.init();
             generateNoBukti();
+            initializing = false;
         });
     </script>
 </x-app-layout>

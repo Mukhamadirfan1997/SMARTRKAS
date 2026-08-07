@@ -144,6 +144,30 @@ class DashboardTest extends TestCase
             ->assertDontSee('Rp 3.000.000');
     }
 
+    public function test_dashboard_bulan_filter_hides_items_without_plan_for_that_month(): void
+    {
+        $withPlan = $this->makeItem(['uraian' => 'ATK Terencana Januari']);
+        $withoutPlan = $this->makeItem(['uraian' => 'ATK Tanpa Rencana Januari']);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $withPlan->id,
+            'bulan' => 1,
+            'rencana' => 500000,
+        ]);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $withoutPlan->id,
+            'bulan' => 2,
+            'rencana' => 500000,
+        ]);
+
+        $this->actingAs($this->user)
+            ->get('/dashboard?bulan=1')
+            ->assertOk()
+            ->assertSee('ATK Terencana Januari')
+            ->assertDontSee('ATK Tanpa Rencana Januari');
+    }
+
     // =================== STATUS BADGE ===================
 
     public function test_dashboard_shows_over_budget_status(): void

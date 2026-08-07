@@ -124,6 +124,45 @@ class RkasControllerTest extends TestCase
         $response->assertSessionHasErrors(['no_urut', 'uraian', 'jumlah']);
     }
 
+    public function test_edit_page_renders(): void
+    {
+        $item = $this->makeItem(1, 'Belanja ATK', 100000);
+
+        $response = $this->actingAs($this->user)->get('/rkas/' . $item->id . '/edit');
+
+        $response->assertOk();
+        $response->assertSee('Edit Item RKAS');
+        $response->assertSee('id="form-rkas-edit"', false);
+        $response->assertSee('name="tarif"', false);
+        $response->assertSee('name="volume"', false);
+    }
+
+    public function test_update_normalizes_indonesian_number_format(): void
+    {
+        $item = $this->makeItem(1, 'Belanja ATK', 100000);
+
+        $response = $this->actingAs($this->user)->put('/rkas/' . $item->id, [
+            'no_urut' => 1,
+            'uraian' => 'Belanja ATK',
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'volume' => '2,5',
+            'satuan' => 'paket',
+            'tarif' => '1.500.000',
+            'jumlah' => '3.750.000',
+        ]);
+
+        $response->assertRedirect(route('rkas.index'));
+
+        $this->assertDatabaseHas('rkas_item', [
+            'id' => $item->id,
+            'volume' => 2.5,
+            'tarif' => 1500000.0,
+            'jumlah' => 3750000.0,
+        ]);
+    }
+
     public function test_destroy_removes_item_and_renumbers(): void
     {
         $item1 = $this->makeItem(1, 'Belanja ATK', 100000);

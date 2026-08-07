@@ -10,6 +10,7 @@ use App\Models\RkasItem;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
+use App\Support\NumberParser;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class TransaksiBkuController extends Controller
@@ -138,11 +140,33 @@ class TransaksiBkuController extends Controller
         $countPengeluaran = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranId)
             ->where('jenis', 'pengeluaran')->count() + 1;
 
-        return view('transaksi-bku.create', compact('npsn', 'countPenerimaan', 'countPengeluaran'));
+        $pickerInitial = null;
+        $oldItemId = old('rkas_item_id');
+        if (is_string($oldItemId) && $oldItemId !== '') {
+            $item = RkasItem::with('program', 'kodeRekening')->find($oldItemId);
+            if ($item) {
+                $pickerInitial = [
+                    'id' => $item->id,
+                    'text' => $item->no_urut . '. ' . $item->uraian,
+                    'program' => $item->program?->nama,
+                    'kode' => $item->kodeRekening?->kode,
+                    'tarif' => (float) $item->tarif,
+                    'satuan' => $item->satuan,
+                    'sisa' => (float) ($item->jumlah - $item->transaksiBkus()->where('jenis', 'pengeluaran')->sum('jumlah')),
+                ];
+            }
+        }
+
+        return view('transaksi-bku.create', compact('npsn', 'countPenerimaan', 'countPengeluaran', 'pickerInitial'));
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $request->merge([
+            'jumlah' => NumberParser::rupiah($request->input('jumlah')),
+            'volume' => NumberParser::decimal($request->input('volume')),
+        ]);
+
         $validated = $request->validate([
             'rkas_item_id' => 'nullable|exists:rkas_item,id',
             'tanggal' => 'required|date',
@@ -199,8 +223,11 @@ class TransaksiBkuController extends Controller
             $isOverriding = $request->boolean('override_anggaran') && $overrideNote !== '';
 
             if ($jumlah > $sisaBulanBerjalan && !$isOverriding) {
-                return back()->with('error', 'Gagal: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
-                                             ' melebihi sisa anggaran bulan berjalan (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') . '). Gunakan opsi override jika ingin melanjutkan.');
+                throw ValidationException::withMessages([
+                    'jumlah' => 'Gagal: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
+                        ' melebihi sisa anggaran bulan berjalan (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') .
+                        '). Gunakan opsi "Override Sisa Anggaran" jika ingin melanjutkan (wajib isi catatan, kwitansi akan terkunci).',
+                ]);
             }
 
             if ($isOverriding) {
@@ -258,6 +285,11 @@ class TransaksiBkuController extends Controller
 
     public function update(Request $request, TransaksiBku $transaksiBku): RedirectResponse
     {
+        $request->merge([
+            'jumlah' => NumberParser::rupiah($request->input('jumlah')),
+            'volume' => NumberParser::decimal($request->input('volume')),
+        ]);
+
         $validated = $request->validate([
             'rkas_item_id' => 'nullable|exists:rkas_item,id',
             'tanggal' => 'required|date',
@@ -301,8 +333,10 @@ class TransaksiBkuController extends Controller
             $sisaBulanBerjalan = $rencanaKumulatif - $realisasiKumulatif;
 
             if ($jumlah > $sisaBulanBerjalan) {
-                return back()->with('error', 'Gagal Update: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
-                                             ' melebihi sisa anggaran bulan berjalan (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') . ').');
+                throw ValidationException::withMessages([
+                    'jumlah' => 'Gagal Update: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
+                        ' melebihi sisa anggaran bulan berjalan (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') . ').',
+                ]);
             }
         }
 
