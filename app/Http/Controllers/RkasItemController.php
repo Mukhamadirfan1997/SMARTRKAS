@@ -60,6 +60,7 @@ class RkasItemController extends Controller
                 'kode' => optional($item->kodeRekening)->kode ?? '-',
                 'satuan' => $item->satuan ?? '',
                 'sisa' => $sisa,
+                'bulan' => $bulan,
             ];
         });
 

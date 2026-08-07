@@ -145,6 +145,7 @@ class TransaksiBkuController extends Controller
         if (is_string($oldItemId) && $oldItemId !== '') {
             $item = RkasItem::with('program', 'kodeRekening')->find($oldItemId);
             if ($item) {
+                $bulanPilihan = (int) Carbon::parse((string) old('tanggal', now()->toDateString()))->month;
                 $pickerInitial = [
                     'id' => $item->id,
                     'text' => $item->no_urut . '. ' . $item->uraian,
@@ -152,7 +153,8 @@ class TransaksiBkuController extends Controller
                     'kode' => $item->kodeRekening?->kode,
                     'tarif' => (float) $item->tarif,
                     'satuan' => $item->satuan,
-                    'sisa' => (float) ($item->jumlah - $item->transaksiBkus()->where('jenis', 'pengeluaran')->sum('jumlah')),
+                    'sisa' => $item->sisaKumulatifSd($bulanPilihan),
+                    'bulan' => $bulanPilihan,
                 ];
             }
         }
@@ -170,7 +172,7 @@ class TransaksiBkuController extends Controller
         $validated = $request->validate([
             'rkas_item_id' => 'nullable|exists:rkas_item,id',
             'tanggal' => 'required|date',
-            'no_bukti' => 'required|unique:transaksi_bku,no_bukti',
+            'no_bukti' => 'nullable|string|max:255',
             'jenis' => 'required|in:penerimaan,pengeluaran',
             'jumlah' => 'required|numeric|gt:0',
             'toko_penerima' => 'nullable|string|max:255',
@@ -186,7 +188,7 @@ class TransaksiBkuController extends Controller
         $jenis = (string) $validated['jenis'];
         $jumlah = (float) $validated['jumlah'];
         $rkasItemId = $validated['rkas_item_id'] ?? null;
-        $noBukti = (string) $validated['no_bukti'];
+        $noBukti = trim((string) ($validated['no_bukti'] ?? ''));
         $overrideNote = isset($validated['override_note']) ? trim($validated['override_note']) : '';
 
         $user = auth()->user();
@@ -198,6 +200,11 @@ class TransaksiBkuController extends Controller
         $validated['bulan'] = (int) Carbon::parse($tanggal)->month;
         $taRec = TahunAnggaran::where('status', true)->first(['id']);
         $validated['tahun_anggaran_id'] = $taRec ? $taRec->id : '';
+
+        if ($noBukti === '' || TransaksiBku::where('no_bukti', $noBukti)->exists()) {
+            $noBukti = $this->generateNoBukti($jenis, $tanggal);
+            $validated['no_bukti'] = $noBukti;
+        }
 
         if (!empty($rkasItemId)) {
             $rkasItem = RkasItem::find($rkasItemId);
@@ -225,7 +232,7 @@ class TransaksiBkuController extends Controller
             if ($jumlah > $sisaBulanBerjalan && !$isOverriding) {
                 throw ValidationException::withMessages([
                     'jumlah' => 'Gagal: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
-                        ' melebihi sisa anggaran bulan berjalan (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') .
+                        ' melebihi sisa anggaran s.d. bulan ' . $validated['bulan'] . ' (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') .
                         '). Gunakan opsi "Override Sisa Anggaran" jika ingin melanjutkan (wajib isi catatan, kwitansi akan terkunci).',
                 ]);
             }
@@ -263,12 +270,36 @@ class TransaksiBkuController extends Controller
         return redirect()->route('transaksi-bku.index')->with('success', 'Transaksi berhasil ditambahkan.');
     }
 
+    /**
+     * Buat no bukti (BBU/BPU) secara otomatis di sisi server bila field kosong
+     * atau duplikat. Dipakai sebagai fallback agar transaksi tidak pernah gagal
+     * hanya karena nomor bukti yang dihasilkan JavaScript bentrok.
+     */
+    private function generateNoBukti(string $jenis, string $tanggal): string
+    {
+        $prefix = strtolower($jenis) === 'penerimaan' ? 'BBU' : 'BPU';
+        $month = Carbon::parse($tanggal)->format('m');
+        $year = Carbon::parse($tanggal)->format('Y');
+        $npsn = PengaturanSekolah::get()->npsn ?? '00000000';
+
+        $seq = TransaksiBku::where('jenis', $jenis)->count();
+
+        do {
+            $seq++;
+            $candidate = $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT)
+                . '/' . $npsn . '/' . $month . '/' . $year;
+        } while (TransaksiBku::where('no_bukti', $candidate)->exists());
+
+        return $candidate;
+    }
+
     public function edit(TransaksiBku $transaksiBku): View
     {
         $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening');
         $selectedRkas = null;
         if ($transaksiBku->rkasItem) {
             $item = $transaksiBku->rkasItem;
+            $bulanTransaksi = (int) Carbon::parse($transaksiBku->tanggal)->month;
             $selectedRkas = [
                 'id' => $item->id,
                 'text' => $item->no_urut . '. ' . $item->uraian,
@@ -276,7 +307,8 @@ class TransaksiBkuController extends Controller
                 'kode' => $item->kodeRekening?->kode,
                 'tarif' => (float) $item->tarif,
                 'satuan' => $item->satuan,
-                'sisa' => (float) ($item->jumlah - $item->transaksiBkus()->where('jenis', 'pengeluaran')->sum('jumlah')),
+                'sisa' => $item->sisaKumulatifSd($bulanTransaksi),
+                'bulan' => $bulanTransaksi,
             ];
         }
 
@@ -335,7 +367,7 @@ class TransaksiBkuController extends Controller
             if ($jumlah > $sisaBulanBerjalan) {
                 throw ValidationException::withMessages([
                     'jumlah' => 'Gagal Update: Nominal Rp ' . number_format($jumlah, 0, ',', '.') .
-                        ' melebihi sisa anggaran bulan berjalan (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') . ').',
+                        ' melebihi sisa anggaran s.d. bulan ' . $validated['bulan'] . ' (Rp ' . number_format($sisaBulanBerjalan, 0, ',', '.') . ').',
                 ]);
             }
         }

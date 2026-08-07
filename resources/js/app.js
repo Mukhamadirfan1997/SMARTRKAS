@@ -59,20 +59,45 @@ function filenameFromDisposition(resp) {
 // Helper global untuk mode desktop. Tidak aktif di mode web.
 window.SmartRKAS = window.SmartRKAS || {};
 
+// Notifikasi toast sederhana (tanpa reload halaman).
+window.SmartRKAS.notify = (message, type = 'info') => {
+    const toast = document.createElement('div');
+    const kind = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+    toast.className = 'smart-toast alert alert-' + kind;
+    const text = document.createElement('span');
+    text.textContent = message;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Tutup');
+    close.textContent = '×';
+    close.style.cssText = 'margin-left:0.75rem;font-weight:bold;background:none;border:none;cursor:pointer;font-size:1.1rem;';
+    close.addEventListener('click', () => toast.remove());
+    toast.appendChild(text);
+    toast.appendChild(close);
+    document.body.appendChild(toast);
+    window.setTimeout(() => {
+        toast.classList.add('smart-toast-hide');
+        window.setTimeout(() => toast.remove(), 400);
+    }, 6000);
+};
+
 if (isTauri) {
     window.SmartRKAS.saveDownload = async (url, filename) => {
         try {
             const resp = await fetch(url, { credentials: 'same-origin' });
             if (!resp.ok) {
+                window.SmartRKAS.notify('Gagal mengunduh (server merespons ' + resp.status + ').', 'error');
                 return false;
             }
             return await window.SmartRKAS.saveResponse(resp, filename);
-        } catch {
+        } catch (e) {
+            window.SmartRKAS.notify('Gagal mengunduh: ' + (e && e.message ? e.message : 'terjadi kesalahan') + '.', 'error');
             return false;
         }
     };
 
     window.SmartRKAS.saveResponse = async (resp, filename) => {
+        let base64Data;
         try {
             const buffer = await resp.arrayBuffer();
             const bytes = new Uint8Array(buffer);
@@ -81,14 +106,31 @@ if (isTauri) {
             for (let i = 0; i < bytes.length; i += chunk) {
                 binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
             }
-            const base64Data = btoa(binary);
-            return await invoke('save_download', {
+            base64Data = btoa(binary);
+        } catch (e) {
+            window.SmartRKAS.notify('Gagal membaca file: ' + (e && e.message ? e.message : 'terjadi kesalahan') + '.', 'error');
+            return false;
+        }
+
+        let saved;
+        try {
+            saved = await invoke('save_download', {
                 base64Data,
                 filename: filename || filenameFromDisposition(resp),
             });
-        } catch {
+        } catch (e) {
+            const detail = typeof e === 'string' ? e : e && e.message ? e.message : 'terjadi kesalahan';
+            window.SmartRKAS.notify('Gagal menyimpan file: ' + detail + '.', 'error');
             return false;
         }
+
+        if (saved === null) {
+            // User membatalkan dialog — bukan error, tanpa pesan.
+            return false;
+        }
+
+        window.SmartRKAS.notify('File tersimpan: ' + saved, 'success');
+        return true;
     };
 }
 

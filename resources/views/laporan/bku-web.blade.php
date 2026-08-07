@@ -144,14 +144,14 @@
     </div>
 
     <script>
-    function cetakPdf() {
+    async function cetakPdf() {
         var tgl = document.getElementById('tanggal-cetak').value;
         var bulan = {{ $bulan }};
         var tahun = new URLSearchParams(window.location.search).get('tahun') || '{{ $tahunAnggaranAktif?->tahun ?? date('Y') }}';
         var sd = document.querySelector('select[name="sumber_dana_id"]')?.value || '';
         var url = '{{ route('laporan.bku') }}?bulan=' + bulan + '&tahun=' + tahun + '&tanggal_cetak=' + tgl + '&sumber_dana_id=' + sd;
         if (window.SmartRKAS && window.SmartRKAS.saveDownload) {
-            window.SmartRKAS.saveDownload(url + '&cetak=pdf');
+            await window.SmartRKAS.saveDownload(url + '&cetak=pdf');
         } else {
             window.open(url + '&cetak=pdf', '_blank');
         }

@@ -33,10 +33,4 @@ if ($dataDir !== false && $dataDir !== '') {
     DataDirEnv::load($dataDir);
 }
 
-$cacert = __DIR__.'/../php/extras/ssl/cacert.pem';
-if (is_file($cacert)) {
-    ini_set('curl.cainfo', $cacert);
-    ini_set('openssl.cafile', $cacert);
-}
-
 return $app;

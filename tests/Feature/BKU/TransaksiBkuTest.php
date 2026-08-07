@@ -695,4 +695,119 @@ class TransaksiBkuTest extends TestCase
         $response->assertSessionHas('error');
         $this->assertDatabaseCount('outbox', 0);
     }
+
+    public function test_store_generates_no_bukti_when_missing(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => '',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+
+        $saved = TransaksiBku::where('rkas_item_id', $item->id)->where('jumlah', 100000)->first();
+        $this->assertNotNull($saved);
+        $this->assertMatchesRegularExpression('/^BPU00\d\/\d+\/01\/2026$/', (string) $saved->no_bukti);
+    }
+
+    public function test_store_regenerates_duplicate_no_bukti_instead_of_rejecting(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $this->makeTransaksi([
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-10',
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jumlah' => 100000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $saved = TransaksiBku::where('rkas_item_id', $item->id)
+            ->orderBy('created_at')
+            ->get(['no_bukti']);
+        $this->assertCount(2, $saved);
+        $this->assertSame(
+            2,
+            $saved->pluck('no_bukti')->unique()->count(),
+            'Kedua transaksi tersimpan dengan no_bukti unik'
+        );
+    }
+
+    public function test_create_page_shows_monthly_cumulative_sisa_matching_guard(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $item->id, 'bulan' => 1, 'rencana' => 2000000]);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $item->id, 'bulan' => 2, 'rencana' => 3000000]);
+        $this->makeTransaksi([
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-10',
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jumlah' => 500000,
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->withSession(['_old_input' => ['rkas_item_id' => $item->id, 'tanggal' => '2026-02-05']])
+            ->get('/transaksi-bku/create');
+
+        $response->assertOk();
+        $response->assertSee('"bulan":2', false);
+        $response->assertSee('"sisa":4500000', false);
+        $response->assertSee('Sisa s.d. bulan', false);
+    }
+
+    public function test_edit_page_shows_monthly_cumulative_sisa(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $item->id, 'bulan' => 1, 'rencana' => 2000000]);
+        $this->makeTransaksi([
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-10',
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jumlah' => 500000,
+        ]);
+        $transaksi = $this->makeTransaksi([
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-12',
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'no_bukti' => 'BPU002/20519260/01/2026',
+            'jumlah' => 100000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/' . $transaksi->id . '/edit');
+
+        $response->assertOk();
+        $response->assertSee('"bulan":1', false);
+        $response->assertSee('"sisa":1400000', false);
+        $response->assertSee('Sisa s.d. bulan', false);
+    }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature\RKAS;
 
 use App\Models\AuditLog;
+use App\Models\JenisBelanja;
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
 use App\Models\RkasItem;
@@ -224,5 +225,154 @@ class RkasControllerTest extends TestCase
             'tabel' => 'rkas_item',
             'aksi' => 'delete_bulk',
         ]);
+    }
+
+    public function test_index_page_renders_new_filters(): void
+    {
+        $this->makeItem(1, 'Belanja ATK', 100000);
+
+        $response = $this->actingAs($this->user)->get('/rkas');
+
+        $response->assertOk();
+        $response->assertSee('Semua Kode Rekening');
+        $response->assertSee('Semua Jenis Belanja');
+    }
+
+    public function test_index_filters_by_kode_rekening(): void
+    {
+        $rekening2 = MasterKodeRekening::factory()->create();
+        $itemA = $this->makeItem(1, 'Belanja ATK', 100000);
+        RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekening2->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja Tinta',
+            'jumlah' => 200000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas?kode_rekening_id=' . $this->rekening->id);
+
+        $response->assertOk();
+        $response->assertSee($itemA->uraian);
+        $response->assertDontSee('Belanja Tinta');
+    }
+
+    public function test_index_filters_by_jenis_belanja(): void
+    {
+        $jb1 = JenisBelanja::factory()->create();
+        $jb2 = JenisBelanja::factory()->create();
+        $rekeningA = MasterKodeRekening::factory()->create(['jenis_belanja_id' => $jb1->id]);
+        $rekeningB = MasterKodeRekening::factory()->create(['jenis_belanja_id' => $jb2->id]);
+
+        RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekeningA->id,
+            'no_urut' => 1,
+            'uraian' => 'Belanja BOS',
+            'jumlah' => 100000,
+        ]);
+        RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekeningB->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja BOP',
+            'jumlah' => 200000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas?jenis_belanja_id=' . $jb1->id);
+
+        $response->assertOk();
+        $response->assertSee('Belanja BOS');
+        $response->assertDontSee('Belanja BOP');
+    }
+
+    public function test_destroy_all_filters_by_program_uuid(): void
+    {
+        $program2 = MasterProgram::factory()->create();
+        $itemA = $this->makeItem(1, 'Belanja ATK', 100000);
+        RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $program2->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja Lainnya',
+            'jumlah' => 200000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/rkas/hapus-semua', [
+            'tahun' => $this->tahun->tahun,
+            'program_id' => $this->program->id,
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseMissing('rkas_item', ['id' => $itemA->id]);
+        $this->assertDatabaseHas('rkas_item', ['uraian' => 'Belanja Lainnya']);
+    }
+
+    public function test_destroy_all_filters_by_kode_rekening(): void
+    {
+        $rekening2 = MasterKodeRekening::factory()->create();
+        $itemA = $this->makeItem(1, 'Belanja ATK', 100000);
+        RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekening2->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja Tinta',
+            'jumlah' => 200000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/rkas/hapus-semua', [
+            'tahun' => $this->tahun->tahun,
+            'kode_rekening_id' => $this->rekening->id,
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseMissing('rkas_item', ['id' => $itemA->id]);
+        $this->assertDatabaseHas('rkas_item', ['uraian' => 'Belanja Tinta']);
+    }
+
+    public function test_destroy_all_filters_by_jenis_belanja(): void
+    {
+        $jb1 = JenisBelanja::factory()->create();
+        $jb2 = JenisBelanja::factory()->create();
+        $rekeningA = MasterKodeRekening::factory()->create(['jenis_belanja_id' => $jb1->id]);
+        $rekeningB = MasterKodeRekening::factory()->create(['jenis_belanja_id' => $jb2->id]);
+
+        $itemA = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekeningA->id,
+            'no_urut' => 1,
+            'uraian' => 'Belanja BOS',
+            'jumlah' => 100000,
+        ]);
+        $itemB = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekeningB->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja BOP',
+            'jumlah' => 200000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/rkas/hapus-semua', [
+            'tahun' => $this->tahun->tahun,
+            'jenis_belanja_id' => $jb1->id,
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertDatabaseMissing('rkas_item', ['id' => $itemA->id]);
+        $this->assertDatabaseHas('rkas_item', ['id' => $itemB->id]);
     }
 }

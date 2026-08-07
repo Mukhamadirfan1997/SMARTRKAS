@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Models\JenisBelanja;
 use App\Models\RkasItem;
 use App\Models\TahunAnggaran;
 use App\Models\SumberDana;
@@ -18,6 +19,8 @@ class RkasController extends Controller
     {
         $bulan = $request->get('bulan', date('n'));
         $programId = $request->get('program_id');
+        $kodeRekeningId = $request->get('kode_rekening_id');
+        $jenisBelanjaId = $request->get('jenis_belanja_id');
         $tahunAnggaranAktif = TahunAnggaran::getActive();
         $tahunInput = $request->get('tahun');
         if ($tahunInput) {
@@ -30,6 +33,8 @@ class RkasController extends Controller
         $sumberDanaList = SumberDana::orderBy('kode')->get();
         $sumberDanaId = request('sumber_dana_id');
         $programs = MasterProgram::whereNull('parent_id')->orderBy('kode')->get();
+        $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
+        $jenisBelanjas = JenisBelanja::orderBy('nama')->get();
 
         $totalJumlah = 0;
         $totalRealisasi = 0;
@@ -49,6 +54,16 @@ class RkasController extends Controller
 
             if ($sumberDanaId) {
                 $baseQuery->where('sumber_dana_id', $sumberDanaId);
+            }
+
+            if ($kodeRekeningId) {
+                $baseQuery->where('kode_rekening_id', $kodeRekeningId);
+            }
+
+            if ($jenisBelanjaId) {
+                $baseQuery->whereHas('kodeRekening', function ($q) use ($jenisBelanjaId): void {
+                    $q->where('jenis_belanja_id', $jenisBelanjaId);
+                });
             }
 
             $filteredIds = fn () => (clone $baseQuery)->select('id');
@@ -86,7 +101,8 @@ class RkasController extends Controller
         return view('rkas.index', compact(
             'rkasItems', 'tahunAnggaranAktif', 'tahunList', 'bulan', 'programs', 'programId',
             'totalJumlah', 'totalRealisasi', 'belumLengkapCount',
-            'sumberDanaList', 'sumberDanaId'
+            'sumberDanaList', 'sumberDanaId',
+            'kodeRekenings', 'jenisBelanjas', 'kodeRekeningId', 'jenisBelanjaId'
         ));
     }
 
@@ -175,10 +191,10 @@ class RkasController extends Controller
             }
         }
 
-        $programIdRaw = $request->input('program_id');
-        $programId = is_numeric($programIdRaw) ? (int) $programIdRaw : 0;
-        $sumberDanaIdRaw = $request->input('sumber_dana_id');
-        $sumberDanaId = is_numeric($sumberDanaIdRaw) ? (int) $sumberDanaIdRaw : 0;
+        $programId = $request->input('program_id');
+        $sumberDanaId = $request->input('sumber_dana_id');
+        $kodeRekeningId = $request->input('kode_rekening_id');
+        $jenisBelanjaId = $request->input('jenis_belanja_id');
         $searchRaw = $request->input('search');
         $search = is_string($searchRaw) ? $searchRaw : '';
 
@@ -186,11 +202,17 @@ class RkasController extends Controller
         if ($tahunAnggaranAktif) {
             $query->where('tahun_anggaran_id', $tahunAnggaranAktif->id);
         }
-        if ($programId > 0) {
+        if (! empty($programId)) {
             $query->where('program_id', $programId);
         }
-        if ($sumberDanaId > 0) {
+        if (! empty($sumberDanaId)) {
             $query->where('sumber_dana_id', $sumberDanaId);
+        }
+        if (! empty($kodeRekeningId)) {
+            $query->where('kode_rekening_id', $kodeRekeningId);
+        }
+        if (! empty($jenisBelanjaId)) {
+            $query->whereHas('kodeRekening', fn ($q) => $q->where('jenis_belanja_id', $jenisBelanjaId));
         }
         if ($search !== '') {
             $query->where('uraian', 'LIKE', "%{$search}%");

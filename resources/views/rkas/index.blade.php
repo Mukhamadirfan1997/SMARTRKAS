@@ -105,6 +105,22 @@
                             </option>
                         @endforeach
                     </select>
+                    <select name="kode_rekening_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:180px">
+                        <option value="">Semua Kode Rekening</option>
+                        @foreach($kodeRekenings as $rek)
+                            <option value="{{ $rek->id }}" {{ request('kode_rekening_id', $kodeRekeningId ?? '') == $rek->id ? 'selected' : '' }}>
+                                {{ $rek->kode }} - {{ $rek->nama }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <select name="jenis_belanja_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:170px">
+                        <option value="">Semua Jenis Belanja</option>
+                        @foreach($jenisBelanjas as $jb)
+                            <option value="{{ $jb->id }}" {{ request('jenis_belanja_id', $jenisBelanjaId ?? '') == $jb->id ? 'selected' : '' }}>
+                                {{ $jb->nama }}
+                            </option>
+                        @endforeach
+                    </select>
                 </form>
                 <a href="{{ route('import-rkas.index') }}" class="btn-primary">
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -237,6 +253,8 @@
             <input type="hidden" name="program_id" value="{{ $programId ?? '' }}">
             <input type="hidden" name="tahun" value="{{ request('tahun', $tahunAnggaranAktif->tahun ?? '') }}">
             <input type="hidden" name="sumber_dana_id" value="{{ $sumberDanaId ?? '' }}">
+            <input type="hidden" name="kode_rekening_id" value="{{ $kodeRekeningId ?? '' }}">
+            <input type="hidden" name="jenis_belanja_id" value="{{ $jenisBelanjaId ?? '' }}">
         </form>
     </div>
 

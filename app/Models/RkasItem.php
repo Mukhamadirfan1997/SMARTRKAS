@@ -104,6 +104,27 @@ class RkasItem extends Model
     }
 
     /**
+     * Sisa anggaran kumulatif s.d. bulan tertentu: total rencana (rkas_item_bulan)
+     * dikurangi total realisasi pengeluaran (transaksi_bku) sampai bulan itu.
+     * Nilai inilah yang diperiksa oleh guard input BKU (store/update), jadi
+     * tampilan picker/form harus memakai nilai yang sama agar tidak ambigu.
+     */
+    public function sisaKumulatifSd(int $bulan): float
+    {
+        $rencana = (float) RkasItemBulan::query()
+            ->where('rkas_item_id', $this->id)
+            ->where('bulan', '<=', $bulan)
+            ->sum('rencana');
+
+        $realisasi = (float) $this->transaksiBkus()
+            ->where('jenis', 'pengeluaran')
+            ->where('bulan', '<=', $bulan)
+            ->sum('jumlah');
+
+        return $rencana - $realisasi;
+    }
+
+    /**
      * Normalisasi uraian agar dua uraian yang hampir sama (spasi ganda, kapital)
      * dianggap identik saat mencocokkan item RKAS.
      */

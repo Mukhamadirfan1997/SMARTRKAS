@@ -28,7 +28,7 @@
                     <p class="text-slate-800 font-semibold mt-0.5" id="detail_tarif">-</p>
                 </div>
                 <div>
-                    <span class="text-slate-500 font-medium">Sisa Anggaran</span>
+                    <span class="text-slate-500 font-medium" id="detail_sisa_label">Sisa</span>
                     <p class="text-emerald-700 font-bold mt-0.5" id="detail_sisa">-</p>
                 </div>
             </div>
@@ -53,6 +53,7 @@
     var detailKode = document.getElementById('detail_kode');
     var detailTarif = document.getElementById('detail_tarif');
     var detailSisa = document.getElementById('detail_sisa');
+    var detailSisaLabel = document.getElementById('detail_sisa_label');
 
     var selectedItem = @json($pickerInitial ?? null);
     var debounceTimer = null;
@@ -72,6 +73,7 @@
                 ? 'Rp ' + new Intl.NumberFormat('id-ID').format(item.tarif) + ' / ' + (item.satuan || '-')
                 : '-';
             detailTarif.textContent = tarifText;
+            detailSisaLabel.textContent = item.bulan ? 'Sisa s.d. bulan ' + item.bulan : 'Sisa';
             detailSisa.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(item.sisa || 0);
             detailCard.classList.remove('hidden');
             clearBtn.classList.remove('hidden');

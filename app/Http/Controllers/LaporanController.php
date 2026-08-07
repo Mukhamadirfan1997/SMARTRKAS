@@ -18,6 +18,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
 class LaporanController extends Controller
@@ -27,6 +28,16 @@ class LaporanController extends Controller
         $tahunAnggaranAktif = TahunAnggaran::getActive();
 
         return view('laporan.index', compact('tahunAnggaranAktif'));
+    }
+
+    private function streamPdf(\Barryvdh\DomPDF\PDF $pdf, string $filename): \Illuminate\Http\Response
+    {
+        try {
+            return $pdf->stream($filename);
+        } catch (\Throwable $e) {
+            Log::error('Gagal membuat PDF laporan.', ['exception' => $e->getMessage(), 'file' => $filename]);
+            abort(500, 'Gagal membuat PDF. Silakan coba lagi.');
+        }
     }
 
     public function bku(Request $request): \Illuminate\Http\Response|\Illuminate\View\View
@@ -90,7 +101,7 @@ class LaporanController extends Controller
                 'saldoAwal', 'totalPenerimaan', 'totalPengeluaran', 'saldoAkhir', 'tanggalCetak', 'sumberDanaId'
             ))->setPaper('a4', 'landscape');
 
-            return $pdf->stream('BKU-' . $namaSekolah . '-' . $bulanLabel . '_' . $tahunLabel . '.pdf');
+            return $this->streamPdf($pdf, 'BKU-' . $namaSekolah . '-' . $bulanLabel . '_' . $tahunLabel . '.pdf');
         }
 
         return view('laporan.bku', compact(
@@ -133,7 +144,7 @@ class LaporanController extends Controller
                 'grouped', 'profil', 'bulan', 'tahunAnggaranAktif', 'rkasItems', 'tanggalCetak', 'sumberDanaId'
             ))->setPaper('a4', 'landscape');
 
-            return $pdf->stream('Rekap_Rekening-' . $namaSekolah . '-' . $bulanLabel . '_' . $tahunLabel . '.pdf');
+            return $this->streamPdf($pdf, 'Rekap_Rekening-' . $namaSekolah . '-' . $bulanLabel . '_' . $tahunLabel . '.pdf');
         }
 
         return view('laporan.rekap-rekening', compact(
@@ -185,7 +196,7 @@ class LaporanController extends Controller
                 'qLabel', 'periodeLabel', 'bulanMonths', 'bulanNames', 'tanggalCetak', 'sumberDanaId'
             ))->setPaper('a4', 'landscape');
 
-            return $pdf->stream('Rekap_Kuartal-' . $namaSekolah . '-' . $qLabel . '_' . $tahunLabel . '.pdf');
+            return $this->streamPdf($pdf, 'Rekap_Kuartal-' . $namaSekolah . '-' . $qLabel . '_' . $tahunLabel . '.pdf');
         }
 
         return view('laporan.rekap-kuartal', compact(
@@ -215,7 +226,7 @@ class LaporanController extends Controller
             $tahunLabel = $tahunAnggaranAktif ? $tahunAnggaranAktif->tahun : date('Y');
             $pdf = Pdf::loadView('laporan.rekap-siplah', $data)->setPaper('a4', 'landscape');
 
-            return $pdf->stream('Rekap_Siplah-' . $namaSekolah . '-' . $slug . '_' . $tahunLabel . '.pdf');
+            return $this->streamPdf($pdf, 'Rekap_Siplah-' . $namaSekolah . '-' . $slug . '_' . $tahunLabel . '.pdf');
         }
 
         return view('laporan.rekap-siplah', $data);

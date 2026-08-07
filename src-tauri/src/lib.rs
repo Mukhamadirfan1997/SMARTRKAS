@@ -115,6 +115,27 @@ fn prepend_php_to_path(cmd: &mut Command, app: &tauri::AppHandle) {
     }
 }
 
+/// Argumen `-d` untuk memuat CA bundle (HTTPS Telegram/GitHub API). Wajib
+/// absolut karena `curl.cainfo`/`openssl.cafile` adalah direktif
+/// PHP_INI_SYSTEM — `ini_set()` di bootstrap PHP no-op, dan path relatif di
+/// php.ini resolve terhadap direktori php.exe (bukan direktori instalasi).
+fn cacert_args(app: &tauri::AppHandle) -> Vec<String> {
+    let Some(dir) = php_dir(app) else {
+        return Vec::new();
+    };
+    let cacert = dir.join("extras").join("ssl").join("cacert.pem");
+    if !cacert.is_file() {
+        return Vec::new();
+    }
+    let path = cacert.display().to_string();
+    vec![
+        "-d".to_string(),
+        format!("curl.cainfo={path}"),
+        "-d".to_string(),
+        format!("openssl.cafile={path}"),
+    ]
+}
+
 fn app_root(app: &tauri::AppHandle) -> PathBuf {
     if let Ok(dir) = app.path().resource_dir() {
         if dir.join("artisan").is_file() {
@@ -146,7 +167,9 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
     let db_path = data_dir.join("smartrkas.sqlite");
 
     let mut cmd = Command::new(&php);
-    cmd.args(args)
+    let mut all_args = cacert_args(app);
+    all_args.extend(args.iter().cloned());
+    cmd.args(&all_args)
         .current_dir(&root)
         .env("SMARTRKAS_DATA_DIR", &data_dir)
         .env("DB_DATABASE", &db_path)
@@ -174,13 +197,14 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
 
 /// Simpan file biner yang diunduh dari server lokal (session cookie dipegang
 /// webview, jadi JS meng-fetch URL lalu mengirim hasilnya sebagai base64).
-/// Menampilkan dialog "Save As" native; return false bila user membatalkan.
+/// Menampilkan dialog "Save As" native secara blocking. Return None bila user
+/// membatalkan; Some(path) bila file berhasil disimpan.
 #[tauri::command]
 async fn save_download(
     app: tauri::AppHandle,
     base64_data: String,
     filename: String,
-) -> Result<bool, String> {
+) -> Result<Option<String>, String> {
     use base64::Engine;
 
     let bytes = base64::engine::general_purpose::STANDARD
@@ -193,26 +217,23 @@ async fn save_download(
         filename
     };
 
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    app.dialog()
+    let picked = app
+        .dialog()
         .file()
         .set_file_name(&default_name)
-        .save_file(move |path| {
-            let _ = tx.send(path);
-        });
+        .blocking_save_file();
 
-    let Some(path) = rx.recv().map_err(|_| "Dialog ditutup tanpa memilih file.".to_string())? else {
-        return Ok(false);
+    let Some(picked) = picked else {
+        return Ok(None);
     };
 
-    let Some(save_path) = path.as_path() else {
+    let Some(save_path) = picked.as_path() else {
         return Err("Lokasi penyimpanan tidak valid.".to_string());
     };
 
     std::fs::write(save_path, &bytes).map_err(|e| format!("Gagal menyimpan file ({e})."))?;
 
-    Ok(true)
+    Ok(Some(save_path.display().to_string()))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -251,6 +272,9 @@ pub fn run() {
             let root = app_root(&handle);
 
             let mut cmd = Command::new(&php);
+            for a in cacert_args(&handle) {
+                cmd.arg(a);
+            }
             cmd.arg("artisan")
                 .arg("serve")
                 .arg("--host=127.0.0.1")

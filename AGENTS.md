@@ -701,3 +701,47 @@ Finalisasi rilis v0.3.3: build installer (NSIS + MSI), commit semua pekerjaan "F
 
 ## Test Status
 - Tidak ada perubahan logika app pada sesi rilis → suite tetap `OK (308 tests, 810 assertions)`, PHPStan clean.
+
+---
+
+# Sesi 08 Agu 2026 — Address 6 Temuan Uji v0.3.4 (Sisa BKU, TLS Desktop, Cetak PDF, Filter RKAS) — v0.3.5
+
+## Goal
+Selesaikan temuan pengujian v0.3.4: (1) filter data RKAS seperti dashboard (Kode Rekening + Jenis Belanja; realisasi tetap kumulatif tahunan), (2) input BKU "tidak tersimpan" — form kembali terisi tapi angka sisa berbeda dari yang dicek server, (3) Cetak PDF "tidak ada dialog apa pun" (gagal senyap), (4) Telegram `cURL error 77` cacert.pem, (5) "Gagal memeriksa pembaruan". Dashboard disetujui user. Rilis GitHub DITUNDA sampai hasil uji user.
+
+## Summary
+- **Akar #4/#5**: `curl.cainfo`/`openssl.cafile` = direktif `PHP_INI_SYSTEM` → `ini_set()` di `bootstrap/app.php` no-op; path relatif di php.ini resolve terhadap direktori php.exe → salah. Fix = argumen `-d curl.cainfo=<ABS> -d openssl.cafile=<ABS>` dari `lib.rs` (prioritas tertinggi). Terverifikasi: bundle php + `-d` → GET `api.github.com` HTTP 200 (curl_errno=0); tanpa `-d` → cURL 60 (reproduksi persis). Fix #4 otomatis menyembuhkan #5 (AppUpdateService→Http GitHub).
+- **Akar #2**: guard menolak berdasarkan **sisa kumulatif bulan berjalan**, tapi create/edit menampilkan **sisa tahunan** → angka layar ≠ angka penolakan. Fix: helper `RkasItem::sisaKumulatifSd($bulan)` dipakai picker + guard; `no_bukti` kini nullable + auto-generate server-side (`BPU…`/`BBU…`).
+- **Akar #3**: `save_download` lama pakai callback + channel mpsc — berisiko callback tak pernah jalan → hang tanpa dialog. Fix: `blocking_save_file()` (tauri-plugin-dialog) + feedback toast JS + logging PDF (`streamPdf`).
+- **#1**: `/rkas` tambah filter `kode_rekening_id` + `jenis_belanja_id` (whereHas `kodeRekening.jenis_belanja_id`), termasuk di `destroyAll` + fix bug bonus `is_numeric()` pada UUID (filter "Hapus Semua" diam-diam tidak berfungsi).
+
+## Changes
+- **B (BKU)**:
+  - `app/Models/RkasItem.php` — helper **`sisaKumulatifSd(int $bulan): float`** (rencana `RkasItemBulan`≤bulan − realisasi pengeluaran≤bulan); cek model sudah `use App\Models\RkasItemBulan` (headernya tidak dibaca penuh — pastikan saat review).
+  - `app/Http/Controllers/RkasItemController.php` (`select2`) — respons item kini sertakan `'bulan' => $bulan`.
+  - `TransaksiBkuController::create()` — `$pickerInitial['sisa']` pakai bulan `old('tanggal', now())` via `sisaKumulatifSd`; `edit()` — sisa dari bulan `$transaksiBku->tanggal`.
+  - `store()` — validasi `no_bukti` jadi `'nullable|string|max:255'`; kosong/duplikat → `generateNoBukti($jenis, $tanggal)` (prefix `BPU`/`BBU`, seq count+1 inkremental, format `BPU001/NPSN/MM/YYYY`, npsn dari `PengaturanSekolah::get()` fallback `'00000000'`).
+  - Pesan guard diselaraskan: "melebihi sisa anggaran s.d. bulan {N} (Rp …)".
+  - `resources/views/transaksi-bku/_rkas-picker.blade.php` — label `id="detail_sisa_label"` = "Sisa s.d. bulan {N}" saat `item.bulan` ada.
+- **A (TLS)**: `src-tauri/src/lib.rs` — helper `cacert_args()` (ABS `<resource_dir>\php\extras\ssl\cacert.pem`, skip bila tak ada) di-inject ke `run_php()` dan Command serve PHP (sebelum `artisan`). `bootstrap/app.php` — blok `ini_set` dihapus (no-op PHP_INI_SYSTEM, menyesatkan). `src-tauri/php/php.ini` — direktif cacert dikomentari + komentar menjelaskan kenapa.
+- **C (Cetak)**: `lib.rs` `save_download` → `Result<Option<String>, String>` pakai `blocking_save_file()` (None = dibatalkan; Some = path tersimpan); `resources/js/app.js` — `SmartRKAS.notify()` toast (`.smart-toast` CSS di app.css), `saveDownload`/`saveResponse` tak lagi return false senyap (toast error, sukses "File tersimpan: <path>"); `laporan/bku-web.blade.php` `cetakPdf()` jadi `async` + `await`; `LaporanController` — `streamPdf()` private (try/catch + `Log::error` + `abort(500)`) untuk 4 laporan PDF.
+- **D (Filter RKAS)**: `RkasController::index` — filter `kode_rekening_id` + `jenis_belanja_id` (whereHas `kodeRekening`), muat `$kodeRekenings`/`$jenisBelanjas`; `destroyAll` — ganti `is_numeric()` (UUID → selalu 0, filter mati) dengan cek `! empty()` + filter baru; `rkas/index.blade.php` — 2 select baru + hidden field di form hapus-semua.
+- Versi bump **0.3.4 → 0.3.5**: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (hanya blok `name = "smartrkas"`).
+
+## Tests
+- `tests/Feature/BKU/TransaksiBkuTest.php` — +4: `store_generates_no_bukti_when_missing` (regex `BPU00\d/\d+/01/2026`), `store_regenerates_duplicate_no_bukti`, `create_page_shows_monthly_cumulative_sisa_matching_guard`, `edit_page_shows_monthly_cumulative_sisa`. **Catatan**: label "Sisa s.d. bulan N" dirender JS (picker) → assert pakai `@json` payload (`assertSee('"bulan":2', false)` + `assertSee('"sisa":4500000', false)`) + `assertSee('Sisa s.d. bulan', false)`, bukan teks JS-rendered.
+- `tests/Feature/RKAS/RkasControllerTest.php` — +6: page renders filter, filter kode rekening, filter jenis belanja, destroyAll filter program UUID, destroyAll filter kode rekening, destroyAll filter jenis belanja.
+
+## Catatan Teknis
+- `blocking_save_file()` (tauri-plugin-dialog 2.7.2) = `blocking_fn!` (sync_channel) — aman dipanggil langsung di command async (pola doc plugin). `FilePath::into_path()` return `Result<PathBuf,Error>`, bukan `Option` → pakai `as_path()` (Option) seperti kode lama.
+- PHPStan: `Pdf::loadView()` mengembalikan `\Barryvdh\DomPDF\PDF` (bukan Facade) → param helper `streamPdf` tipe instance, bukan `Pdf` facade.
+- Toast `notify()` dipakai utk feedback tanpa reload (desktop); web mode tidak aktif (saveDownload/saveResponse hanya ada saat `isTauri`).
+- Verifikasi TLS desktop: `.\src-tauri\php\php.exe -d curl.cainfo=… -d openssl.cafile=… <script>` → `curl_errno=0`, HTTP 200; baseline tanpa `-d` → `curl_errno=60` (keluarga 60/77 sama-sama di-fix).
+
+## Build
+- `npm run build` OK; `php artisan view:cache` OK; `cargo check` OK; `tauri build --bundles nsis,msi` OK → NSIS 57.9MB + MSI 87.3MB.
+- BELUM di-commit; rilis GitHub v0.3.5 DITUNDA (menunggu hasil uji user terhadap installer).
+
+## Test Status
+- PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6: `[OK] No errors`.
+
