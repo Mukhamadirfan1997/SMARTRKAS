@@ -681,3 +681,23 @@ Perbaiki bug yang dilaporkan user + 3 relawan aplikasi desktop: (1) input BKU ti
 ## Test Status
 - PHPUnit `OK (308 tests, 810 assertions)`, PHPStan level 6: `[OK] No errors`, `php artisan view:cache` OK.
 - BELUM di-commit; belum build/rilis v0.3.3 (build `--bundles nsis` jalan di background).
+
+---
+
+# Sesi 07 Agu 2026 — Release v0.3.3 (Build + Push + GitHub)
+
+## Goal
+Finalisasi rilis v0.3.3: build installer (NSIS + MSI), commit semua pekerjaan "Fix 3 Bug + Review Menyeluruh", push, dan rilis ke GitHub.
+
+## Summary
+- Versi 0.3.3 (sudah di-bump sesi sebelumnya di 5 file). Build NSIS ter-produce 57.9MB; MSI 87MB.
+- Commit `b458b36` (18 file, +445/−31) → push `master`.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.3.3 (2 asset, state `uploaded`).
+
+## Catatan
+- Build Tauri via **background process** (`Start-Process cmd /c npm run tauri -- build --bundles nsis|msi > log`) — hindari timeout tool; poll log + cek folder bundle. NSIS: 9m10s compile + makensis; MSI: compile cached + candle/light.
+- **Cargo.lock** ikut ter-replace saat bump → `objc2-app-kit = "^0.3"` gagal select. Fix: `git checkout -- src-tauri/Cargo.lock` lalu replace presisi blok `name = "smartrkas"` (2 baris berikutnya) → `git diff --stat` = 1 file 1+/1-.
+- Release notes via `--notes-file` temp (hindari globbing PowerShell). Session context `b458b36`.
+
+## Test Status
+- Tidak ada perubahan logika app pada sesi rilis → suite tetap `OK (308 tests, 810 assertions)`, PHPStan clean.
