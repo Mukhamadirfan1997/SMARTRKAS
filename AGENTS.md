@@ -740,8 +740,64 @@ Selesaikan temuan pengujian v0.3.4: (1) filter data RKAS seperti dashboard (Kode
 
 ## Build
 - `npm run build` OK; `php artisan view:cache` OK; `cargo check` OK; `tauri build --bundles nsis,msi` OK → NSIS 57.9MB + MSI 87.3MB.
-- BELUM di-commit; rilis GitHub v0.3.5 DITUNDA (menunggu hasil uji user terhadap installer).
+- SUDAH di-commit (`697d19f`, push `master`); rilis GitHub v0.3.5 DITUNDA (menunggu hasil uji user terhadap installer).
 
 ## Test Status
 - PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6: `[OK] No errors`.
 
+---
+
+# Sesi 08 Agu 2026 — Hasil Uji USER v0.3.5: 4 dari 6 Temuan MASIH GAGAL (Komentar Lanjutan)
+
+## Status (dari user, setelah pasang installer v0.3.5)
+- Meski fix terverifikasi di test suite / verifikasi langsung, **user melaporkan 4 item MASIH tidak jalan** di instalasi:
+  1. **Telegram masih cURL error** (pesan uji / kode pemulihan tetap gagal).
+  2. **Cetak PDF masih tanpa dialog** Save As (gagal senyap).
+  3. **Input BKU masih "tidak tersimpan"** (sisa anggaran tampil masih beda / penolakan).
+  4. **Cek pembaruan masih "Gagal memeriksa pembaruan"**.
+- Dashboard & filter RKAS dianggap OK (tidak disebut gagal).
+- Rilis GitHub v0.3.5 TETAP ditahan; investigasi lanjutan dibuka.
+
+## Hipotesis Utama (untuk diselidiki sesi berikutnya)
+- **Semua fix server-side (BKU) + desktop (TLS/PDF) gagal bersamaan** → kuat dugaan instalasi TIDAK menjalankan bundle v0.3.5 yang baru:
+  - Verifikasi versi aktual: `About` app (versi terpasang), `smartrkas.exe` version info, atau `APP_VERSION` di halaman Tentang.
+  - Cek apakah upgrade benar-benar menimpa `php/`, `resources/`, `smartrkas.exe` di `C:\Users\yudhi\AppData\Local\SmartRKAS` (bandingkan mtime/size file vs source).
+  - Kemungkinan installer ABORT di tengah (seperti kasus v0.3.2 "Error opening file for writing" — proses php.exe yatim) sehingga exe baru tapi resource/php lama, ATAU user masih membuka app v0.3.4 lama.
+- **TLS tetap cURL error walaupun `-d`**: bila versi benar-benar v0.3.5, periksa apakah `-d` benar sampai ke child (`artisan serve`) — verifikasi `cacert_args()` path di instalasi terpasang (resource_dir ≠ path dev). Jangan lupa file cacert untracked (`src-tauri/php/extras/ssl/cacert.pem`) — kalau tidak ikut terbundle, `cacert_args()` skip → cURL error lagi.
+- **Cetak PDF masih senyap**: kemungkinan tetap memakai JS `app.js` lama (cache webview / aset build lama) atau kegagalan di sisi lain (PDF 500 yang tidak ditangani toast lama).
+- **BKU masih beda sisa**: bila server-side lama yang jalan, gejala otomatis sama.
+
+## Langkah Diagnostik yang Direkomendasikan (belum dikerjakan)
+1. Konfirmasi versi terpasang benar v0.3.5 (About/Tentang + file exe).
+2. `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'php.exe' }` — pastikan tidak ada php yatim dari versi lama yang menahan file.
+3. Buka `C:\Users\yudhi\AppData\Local\SmartRKAS\storage\logs\laravel.log` — cek error nyata saat user melakukan aksi (BKU store, PDF, Telegram).
+4. Uji `php.exe` bundle instalasi langsung: `.\php.exe -d curl.cainfo="<install>\php\extras\ssl\cacert.pem" -d openssl.cafile="<sama>" -r "echo curl_init();"` + `curl_errno` ke `https://api.telegram.org` — untuk memastikan CA benar-benar terbaca di instalasi.
+5. Uji aksi via HTTP terhadap server lokal yang berjalan (URL dari jendela app / `netstat`) tanpa UI: POST BKU, GET laporan `cetak=pdf`, GET `pengaturan/tentang/check`.
+
+## Catatan
+- Commit `697d19f` (20 file, +536/−48) SUDAH di-push `master` sebelum uji user. Rilis GitHub masih ditahan.
+- Perbaiki baris sesi v0.3.5 di atas ("BELUM di-commit") → SUDAH di-commit.
+- Jangan tulis token bot Telegram asli ke kode/file apa pun.
+
+---
+
+# Sesi 08 Agu 2026 — Root Cause TLS Terkonfirmasi & Fix E2E Terverifikasi (lanjutan Hasil Uji v0.3.5)
+
+## Kenapa 4 dari 6 temuan masih gagal di v0.3.5 padahal test suite hijau
+- **Root cause kunci** dikonfirmasi dari diff: **commit v0.3.5 (`697d19f`) masih menjalankan `artisan serve`** (`lib.rs` lama `cmd.arg("artisan").arg("serve")...arg("--no-reload")`). `ServeCommand` (Laravel) hanya meneruskan env ke proses server anak dan **TIDAK meneruskan argumen `-d`** → `curl.cainfo`/`openssl.cafile` tidak pernah termuat di proses yang benar-benar menangani HTTP → TLS (Telegram/cek pembaruan) selalu gagal. Ini penjelasan pastinya kenapa fix yang tampak benar di verif langsung (probe `curl_errno=0`) tidak berdampak di instalasi.
+- **BKU & PDF**: BUKAN TLS — 2 item itu tidak berhubungan dengan `-d`. Fix `-S` langsung hanya menjelaskan item Telegram + cek pembaruan. BKU/PDF didiagnosis terpisah (langkah 6–7).
+
+## Solusi (working tree, BELUM commit/build)
+- `src-tauri/src/lib.rs` — **spawn PHP built-in server LANGSUNG**: `php -S 127.0.0.1:{port} <resource>/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php` dengan `current_dir = public`, menggantikan `artisan serve --no-reload`. Alasan dalam komentar kode: `artisan serve` tidak meneruskan `-d` ke child proses server.
+- Ditambah `cacert_scan_dir()` + `apply_cacert_scan()`: tulis `cacert.ini` di `<data_dir>/php-ini-scan/` berisi `curl.cainfo="ABS"` + `openssl.cafile="ABS"`, lalu set env **`PHP_INI_SCAN_DIR`** pada SEMUA proses PHP (`run_php` + server) agar diwariskan ke proses anak (mis. `schedule:work`). Ini lapis kedua selain `-d` (yang hanya berlaku pada proses langsung).
+
+## Verifikasi E2E (nyata, bukan fake)
+- Route **`/__tlsprobe`** (di `routes/web.php`, TEMPORER utk diagnosis — HAPUS sebelum rilis) memanggil Http facade outbound ke GitHub + Telegram, terus mengembalikan `cainfo`/`scan`/`env_super`/`outbound`.
+- Jalankan `php -S` persis seperti lib.rs (bundle PHP instalasi + `-d curl.cainfo=... openssl.cafile=...` + router `server.php` + `cwd=public`, `SESSION_DRIVER=array` utk hindari DB) → **hasil `/__tlsprobe`**: `{"cainfo":"C:\\Users\\yudhi\\AppData\\Local\\SmartRKAS\\php\\extras\\ssl\\cacert.pem","outbound":{"github":{"http":200},"telegram":{"http":200}}}` → TLS fix TERBUKTI di proses yang melayani HTTP.
+- Kendala uji: (1) Start-Process PS5.1 tidak punya `-Environment` → set `$env:` dulu; (2) router `server.php` berisi spasi → quote argumen sebagai satu string; (3) opcache ASLR fatal saat banyak instance php → `-d opcache.enable=0` untuk probe; (4) 500 tanpa DB → `SESSION_DRIVER=array` + `CACHE_STORE=null`.
+- Dev server lama (port 18211, repo, tanpa `-d`/scan) masih berjalan → perubahan baru hanya aktif setelah rebuild .exe.
+
+## Langkah berikutnya (belum dikerjakan)
+- Hapus route `/__tlsprobe` sebelum commit final (jangan bocorkan info server tanpa auth).
+- Bump v0.3.5 → v0.3.6, commit berisi: `src-tauri/src/lib.rs` (fungsi baru) + `routes/web.php` (hapus probe) + AGENTS.md.
+- Diagnosis BKU & PDF terpisah — user diminta langkah 6–7 (cek `laravel.log` + uji di instalasi v0.3.6).

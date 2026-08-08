@@ -136,6 +136,38 @@ fn cacert_args(app: &tauri::AppHandle) -> Vec<String> {
     ]
 }
 
+/// Direktori tambahan scan ini yang berisi `cacert.ini` mengarah ke CA bundle
+/// absolut. DI-SET lewat env `PHP_INI_SCAN_DIR` pada SEMUA proses PHP supaya
+/// diwariskan otomatis ke seluruh child proses (termasuk yang di-spawn
+/// `schedule:work`) — tidak seperti argumen `-d` yang TIDAK ikut diteruskan
+/// ke proses anak yang di-spawn Laravel/Symfony. File ditulis ulang setiap
+/// startup karena path instalasi bisa berubah antar-instalasi.
+fn cacert_scan_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let Some(dir) = php_dir(app) else {
+        return None;
+    };
+    let cacert = dir.join("extras").join("ssl").join("cacert.pem");
+    if !cacert.is_file() {
+        return None;
+    }
+    let data_dir = app.path().app_data_dir().ok()?;
+    let scan_dir = data_dir.join("php-ini-scan");
+    std::fs::create_dir_all(&scan_dir).ok()?;
+    let contents = format!(
+        "curl.cainfo=\"{}\"\nopenssl.cafile=\"{}\"\n",
+        cacert.display().to_string().replace('\\', "\\\\"),
+        cacert.display().to_string().replace('\\', "\\\\"),
+    );
+    let _ = std::fs::write(scan_dir.join("cacert.ini"), contents);
+    Some(scan_dir)
+}
+
+fn apply_cacert_scan(cmd: &mut Command, app: &tauri::AppHandle) {
+    if let Some(scan) = cacert_scan_dir(app) {
+        cmd.env("PHP_INI_SCAN_DIR", scan);
+    }
+}
+
 fn app_root(app: &tauri::AppHandle) -> PathBuf {
     if let Ok(dir) = app.path().resource_dir() {
         if dir.join("artisan").is_file() {
@@ -178,6 +210,7 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     prepend_php_to_path(&mut cmd, app);
+    apply_cacert_scan(&mut cmd, app);
 
     #[cfg(windows)]
     {
@@ -271,16 +304,30 @@ pub fn run() {
             let php = php_binary(&handle);
             let root = app_root(&handle);
 
+            // Jalankan PHP built-in server LANGSUNG (tanpa `artisan serve`).
+            // ServeCommand hanya meneruskan env ke proses server anak dan
+            // TIDAK meneruskan argumen `-d` — akibatnya curl.cainfo /
+            // openssl.cafile tidak pernah termuat di proses yang benar-benar
+            // menangani HTTP, sehingga HTTPS (Telegram/GitHub) gagal. Dengan
+            // spawn langsung, `-d` berlaku di proses server itu sendiri.
+            let server_router = root
+                .join("vendor")
+                .join("laravel")
+                .join("framework")
+                .join("src")
+                .join("Illuminate")
+                .join("Foundation")
+                .join("resources")
+                .join("server.php");
+
             let mut cmd = Command::new(&php);
             for a in cacert_args(&handle) {
                 cmd.arg(a);
             }
-            cmd.arg("artisan")
-                .arg("serve")
-                .arg("--host=127.0.0.1")
-                .arg(format!("--port={port}"))
-                .arg("--no-reload")
-                .current_dir(&root)
+            cmd.arg("-S")
+                .arg(format!("127.0.0.1:{port}"))
+                .arg(&server_router)
+                .current_dir(&root.join("public"))
                 .env("SMARTRKAS_DATA_DIR", &data_dir)
                 .env("DB_DATABASE", &db_path)
                 .env("APP_ENV", "production")
@@ -288,6 +335,7 @@ pub fn run() {
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());
             prepend_php_to_path(&mut cmd, &handle);
+            apply_cacert_scan(&mut cmd, &handle);
 
             #[cfg(windows)]
             {
