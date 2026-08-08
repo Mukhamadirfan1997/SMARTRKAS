@@ -860,3 +860,31 @@ Lanjutan "Root Cause TLS Terkonfirmasi": implementasikan solusi (spawn `php -S` 
 - Working tree sekarang berisi perubahan MIXED (native_path + opcache off) — sengaja digabung dan di-ship **sebagaimana adanya**; keputusan: TIDAK memisahkan, uji 3× sudah membuktikan server sehat.
 - Versi bumped 0.3.6 → **0.3.7** di 6 file (`config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name = "smartrkas"`).
 - Commit dengan pesan menyebut root cause `\\?\` path pada server_router.
+
+---
+
+# Sesi 08 Agu 2026 — STATUS AKHIR v0.3.7 (sesi ditutup bersih)
+
+## Apa yang SUDAH dikerjakan & tuntas
+- **Dua root cause sudah ketemu & TERVERIFIKASI EMPIRIS, masing-masing 3× berturut pakai installer `SmartRKAS_0.3.6_x64-setup.exe` (source campuran)**:
+  1. **TLS desktop gagal** → fix: **spawn `php -S` langsung** (ganti `artisan serve --no-reload`) + `-d curl.cainfo`/`openssl.cafile` + `PHP_INI_SCAN_DIR` (cacert.ini). `artisan serve` tidak meneruskan `-d` ke proses server anak, jadi CA bundle tidak pernah termuat. Dibuktikan `/__tlsprobe` (github 200 / telegram 200) di sesi v0.3.6.
+  2. **500 body-kosong seluruh request** → fix: **`native_path()`** (strip prefix `\\?\` pada argumen router `php -S`). PHP CLI tidak memahami extended-length path → fatal `Failed opening required '\\?\...'` (bukti `php-error-final.log`). Diterapkan ke router `-S`, `current_dir` public, `cacert -d`, `cacert.ini`, `error_log` server. Uji 3× `/login` = **200/200/200** (port 55672/59224/50479).
+- **Opcache off** = pencegahan sekunder (crash ASLR), TIDAK penyebab 500 — dibiarkan aktif sampai ada waktu isolasi ulang (non-mendesak).
+- **Commit `5d0e081`** "Fix 500 desktop: native_path() hapus prefix `\\?\` pada server_router + error_log (v0.3.7)" — 7 file. Versi sudah bump **0.3.7** di 6 file, working tree BERSIH.
+
+## Status saat sesi berhenti (apa adanya)
+- **Installer berlabel v0.3.7 BELUM dibangun; karenanya belum sempat diuji ulang.** Yang terpasang & teruji 3× justru build SOURCE v0.3.6 (mixed: native_path + opcache off). Build v0.3.7 proper = langkah pertama sesi berikutnya.
+- Tidak ada proses build/kompilasi berjalan; tidak ada `php -S` aktif; tidak ada app SmartRKAS tersisa.
+- `master` ahead 1 commit (`5d0e081` vs `origin/master` `b7cf953`) — **belum push**.
+- **Rilis GitHub TETAP DITAHAN** (belum tag/release, menunggu uji installer v0.3.7 + uji user).
+- **BKU & PDF masih MENUNGGU data reproduksi dari user** (nama item RKAS, nominal, tanggal, perilaku; `storage/logs/laravel.log` + `<data-dir>/php-server-error.log` di instalasi user saat aksi) — belum bisa ditutup karena tidak bisa direproduksi di sini.
+
+## Langkah berikutnya (urutan sesi lanjut)
+1. **Build installer v0.3.7 proper** (working tree sudah v0.3.7): `npm run build` lalu `npm run tauri -- build --bundles nsis,msi` (atau nsis dulu). Hasil: `SmartRKAS_0.3.7_x64-setup.exe` + `.msi` di `src-tauri/target/release/bundle/`.
+2. **Verifikasi quick**: uninstall versi terpasang → install v0.3.7 → protokol 3× `/login` 200 (pilih port dari cmdline `php.exe -S`, bukan listener tertinggi — sebelumnya sempat salah ambil port VS Code jadi 403).
+3. **Serahkan ke user uji manual 2 grup**: (a) yang langsung terima dampak fix TLS/500 — Telegram pesan uji + kode pemulihan, "Periksa Pembaruan"; (b) yang masih menunggu reproduksi — BKU format 1.500.000 + Cetak PDF — MINTA data reproduksi.
+4. **Bila user OK**: `git push origin master` → `gh release create v0.3.7` (assets NSIS+MSI, notes via `--notes-file`).
+5. **Eksperimen terpisah (NON-mendesak)**: isolasi apakah opcache off benar-benar dibutuhkan — hanya jika ada waktu.
+
+## Cara membuktikan status 500→200 kapan pun
+`php -S "C:\...\server.php"` TANPA `\\?\` → 200; DENGAN `\\?\` → fatal `Failed opening required '\\?\...'`. (PHP CLI tidak memetakan prefix extended-length path.)
