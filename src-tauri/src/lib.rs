@@ -115,9 +115,35 @@ fn prepend_php_to_path(cmd: &mut Command, app: &tauri::AppHandle) {
     }
 }
 
+/// Konversi PathBuf (yang ddari Tauri/`\?\` berikutnya — `resource_dir()` dan
+/// hasil canonicalization Rust) menjadi string path biasa `C:\...` yang
+/// benar-benar bisa dibuka oleh PHP (fopen/PHP CLI) dan libcurl.
+///
+/// Bukti: PHP CLI TIDAK dapat membuka file-path yang ber-prefix `\\?\` —
+/// percobaan `php -S ... "\\?\C:\...\server.php"` menghasilkan fatal
+/// `Failed opening required '\\?\C:\...\server.php'` → HTTP 500 body kosong.
+/// Bentuk `\\?\UNC\server\share\...` juga ditranslasikan ke `\\server\share\...`.
+fn native_path(p: &PathBuf) -> String {
+    #[cfg(windows)]
+    {
+        let s = p.to_string_lossy();
+        if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{rest}")
+        } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+            rest.to_string()
+        } else {
+            s.to_string()
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        p.display().to_string()
+    }
+}
+
 /// Argumen `-d` untuk memuat CA bundle (HTTPS Telegram/GitHub API). Wajib
 /// absolut karena `curl.cainfo`/`openssl.cafile` adalah direktif
-/// PHP_INI_SYSTEM — `ini_set()` di bootstrap PHP no-op, dan path relatif di
+/// PHP_INI_SYSTEM �?" `ini_set()` di bootstrap PHP no-op, dan path relatif di
 /// php.ini resolve terhadap direktori php.exe (bukan direktori instalasi).
 fn cacert_args(app: &tauri::AppHandle) -> Vec<String> {
     let Some(dir) = php_dir(app) else {
@@ -127,7 +153,9 @@ fn cacert_args(app: &tauri::AppHandle) -> Vec<String> {
     if !cacert.is_file() {
         return Vec::new();
     }
-    let path = cacert.display().to_string();
+    // Path CA di-strip `\\?\` (native_path) supaya bisa dibaca libcurl —
+    // prefix extended-length path tidak dipahami fopen laten di Windows.
+    let path = native_path(&cacert);
     vec![
         "-d".to_string(),
         format!("curl.cainfo={path}"),
@@ -153,10 +181,9 @@ fn cacert_scan_dir(app: &tauri::AppHandle) -> Option<PathBuf> {
     let data_dir = app.path().app_data_dir().ok()?;
     let scan_dir = data_dir.join("php-ini-scan");
     std::fs::create_dir_all(&scan_dir).ok()?;
+    let cacert_path = native_path(&cacert).replace('\\', "\\\\");
     let contents = format!(
-        "curl.cainfo=\"{}\"\nopenssl.cafile=\"{}\"\n",
-        cacert.display().to_string().replace('\\', "\\\\"),
-        cacert.display().to_string().replace('\\', "\\\\"),
+        "curl.cainfo=\"{cacert_path}\"\nopenssl.cafile=\"{cacert_path}\"\n",
     );
     let _ = std::fs::write(scan_dir.join("cacert.ini"), contents);
     Some(scan_dir)
@@ -199,7 +226,12 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
     let db_path = data_dir.join("smartrkas.sqlite");
 
     let mut cmd = Command::new(&php);
-    let mut all_args = cacert_args(app);
+    // Opcache di PHP 8.2 dapat gagal dengan fatal "Opcode handlers are unusable
+    // due to ASLR" saat beberapa instance php berjalan bersamaan (Windows).
+    // Untuk mesin desktop single-user, disable opcache lebih aman daripada crash
+    // acak pada server web / scheduler.
+    let mut all_args = vec!["-d".to_string(), "opcache.enable=0".to_string()];
+    all_args.extend(cacert_args(app));
     all_args.extend(args.iter().cloned());
     cmd.args(&all_args)
         .current_dir(&root)
@@ -321,13 +353,22 @@ pub fn run() {
                 .join("server.php");
 
             let mut cmd = Command::new(&php);
+            let server_err_log = data_dir.join("php-server-error.log");
+            cmd.arg("-d")
+                .arg("opcache.enable=0")
+                .arg("-d")
+                .arg("log_errors=1")
+                .arg("-d")
+                .arg(format!("error_log={}", native_path(&server_err_log)))
+                .arg("-d")
+                .arg("display_errors=0");
             for a in cacert_args(&handle) {
                 cmd.arg(a);
             }
             cmd.arg("-S")
                 .arg(format!("127.0.0.1:{port}"))
-                .arg(&server_router)
-                .current_dir(&root.join("public"))
+                .arg(native_path(&server_router))
+                .current_dir(native_path(&root.join("public")))
                 .env("SMARTRKAS_DATA_DIR", &data_dir)
                 .env("DB_DATABASE", &db_path)
                 .env("APP_ENV", "production")

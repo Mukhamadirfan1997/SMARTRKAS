@@ -798,6 +798,65 @@ Selesaikan temuan pengujian v0.3.4: (1) filter data RKAS seperti dashboard (Kode
 - Dev server lama (port 18211, repo, tanpa `-d`/scan) masih berjalan → perubahan baru hanya aktif setelah rebuild .exe.
 
 ## Langkah berikutnya (belum dikerjakan)
-- Hapus route `/__tlsprobe` sebelum commit final (jangan bocorkan info server tanpa auth).
+- ~~Hapus route `/__tlsprobe` sebelum commit final~~ (SUDAH dihapus).
 - Bump v0.3.5 → v0.3.6, commit berisi: `src-tauri/src/lib.rs` (fungsi baru) + `routes/web.php` (hapus probe) + AGENTS.md.
-- Diagnosis BKU & PDF terpisah — user diminta langkah 6–7 (cek `laravel.log` + uji di instalasi v0.3.6).
+- Diagnosis BKU & PDF khusus terpisah — user diminta langkah 6–7 (cek `laravel.log` + uji di instalasi v0.3.6).
+
+---
+
+# Sesi 08 Agu 2026 — v0.3.6: Fix TLS (spawn `php -S` langsung) + ASLR opcache + buktikan di clean-install — RILIS DITAHAN
+
+## Goal
+Lanjutan "Root Cause TLS Terkonfirmasi": implementasikan solusi (spawn `php -S` langsung + `-d cacert` + `PHP_INI_SCAN_DIR`), rilis v0.3.6 sebagai installer, clean-install, dan buktikan dari app nyata bahwa Telegram & "Periksa Pembaruan" jalan. User menginstruksikan: **jangan rilis ke GitHub sampai clean-install + hasil uji user**; diagnosis BKU/PDF tetap paralel (dengan data reproduksi dari user).
+
+## Summary
+- Migrasi `npm run tauri build` v0.3.6: NSIS 57.9MB + MSI 87.4MB di `src-tauri/target/release/bundle/`. Commit `b7cf953` (lib.rs + versi + AGENTS).
+- Clean-install v0.3.6: uninstall v0.3.5 (`uninstall.exe /S`, exit 0 — DB user SELAMAT di `%APPDATA%\id.smartrkas.desktop\smartrkas.sqlite`). Instansi terverifikasi: `SmartRKAS.exe`, `php/php.exe`, `php/extras/ssl/cacert.pem` (186KB) ada; `.env` + artisan + `public/index.php` ikut terbundle.
+- **Bug v0.3.6 yang ditemukan saat verifikasi**: (1) server `php -S` dari dalam app kadang **mati sewaktu start** dengan `Fatal Error: Opcode handlers are unusable due to ASLR` — intermiten, muncul saat beberapa instance php pwaktu bersamaan; (2) playground: `php -S` yang jalan memberi **HTTP 500 body kosong** padahal manual-spawn server yang sama memberi `/login` **200**; `storage/logs/laravel.log` di instalasi TIDAK ter-update.
+- Reproduce manual: spawn server TANPA `-d opcache.enable=0` (`php.ini` bundel `opcache.enable=1`, ZTS php8ts) + penuh env (`SMARTRKAS_DATA_DIR`, `DB_DATABASE` Roaming, `APP_ENV=production`, `APP_VERSION=0.3.6`, `-d display_errors`), `-S 127.0.0.1:8942` + router `vendor/.../resources/server.php` → `/login` **`200`**, `/` 302 → `/mulai`. Artinya: dengan `-d opcache.enable=0` + env penuh, server sehat & DB Roaming terbaca.
+
+## Kesimpulan DIREVISI (penting — ganti catatan yang lebih lama)
+- Catatan lama sempat menyarankan: "ASLR/opcache bukan penyebab — app user jalan normal" (kesimpulan dari spawn manual `-d` yang memberi `/login` 200).
+  - **REVISI: kesimpulan itu BELUM PERNAH diuji kencang dengan skenario asli.** Skenario "shortcut biasa" terverifikasi DI KESEMPATAN INI: terminal PowerShell BARU (belum pernah eksperimen), `$env:DB_DATABASE` & `$env:SMARTRKAS_DATA_DIR` KOSONG (persis cara user membuka app), lalu `Start-Process …\SmartRKAS.exe` (v0.3.6 LAMA, sebelum fix opcache) — hasil **`/login` = HTTP 500 body-kosong**, server tetap hidup (bukan mati karena ASLR), `laravel.log` instalasi TIDAK memuat error produksi.
+  - Artinya: **v0.3.6 lama memang masih 500 di skenario asli**; pra-uji "manual-spawn 200" memberi rasa keyakinan palsu karena environment-nya tidak persis sama (PATH-prepend php, `PHP_INI_SCAN_DIR`, dsb).
+  - Jadi hipotesis "opcache ASLR / 500-kosong" masih terbuka — perlu dibuktikan dengan protokol 3× bersih setelah terpasang (lihat Next).
+
+## Kesimpulan AKHIR (root cause 500 di instalasi — menggantikan "opcache ASLR" sebagai tersangka utama)
+- **`php -S` gagal meload router karena argumen path ber-prefix `\\?\`** (extended-length path, output `resource_dir()` Tauri/Rust canonicalization). PHP tidak memahami prefix `\\?\` → fatal `Failed opening required '\\?\C:\...\server.php'` → **HTTP 500 body kosong** untuk SEMUA request (`/login` termasuk). Bukti rigorus:
+  - `php.exe -r "var_dump(is_file('\\?\C:\...\server.php'))"` → `bool(false)`; `var_dump(is_file('C:\...\server.php'))` → `bool(true)`.
+  - `php -S` mc report lain yang memakai `\\?\` router → error log instalasi (`%APPDATA%\id.smartrkas.desktop\php-server-error.log`, baru ada setelah `-d error_log` ditambahkan) memuat `PHP Fatal error: Failed opening required '\\?\C:\...\server.php'`.
+  - Manual-spawn pakai `C:\...\server.php` (biasa) → `/login` 200 — persis bedanya hanya pada prefix itu.
+- Ini juga kemungkinan alasan TLS tetap gagal walau `-d curl.cainfo` diinstal: `-d` path CA juga ber-prefix `\\?\` → curl tak bisa baca `cacert.pem` → cURL error. Fix `native_path()` membereskan keduanya (path router + path CA + `cacert.ini` scan).
+- **Kesimpulan lama "opcache bukan penyebab / app jalan normal" TIDAK terulang pada 500**: setelah rebuild fix opcache lalu Test skenario murni (PowerShell baru, env kosong, `Start-Process` app v0.3.6 fix-opcache) → **MASIH 500**. Jadi opcache bukan akar 500; `\\?\` prefix-lah yang benar. (Proses opcache tetap di-disable — aman, murah, mencegah crash ASLR terpisah yang memang pernah teramati.)
+
+## Changes (working tree, rebuild berjalan)
+- `src-tauri/src/lib.rs`:
+  - `run_php()` — tambah `-d opcache.enable=0` (SEMUA subprocess; opcache ASLR dapat memicu crash acak saat beberapa instance php jalan bersamaan).
+  - Spawn `php -S` — tambah `-d opcache.enable=0 -d log_errors=1 -d error_log=<data-dir>/php-server-error.log -d display_errors=0` agar fatal PHP tidak lagi tersembunyi oleh `Stdio::null()`.
+  - **`native_path()`** (BARU) — strip prefix `\\?\` / `\\?\UNC\` dari PathBuf → string path biasa. Diterapkan ke: path router `-S`, `current_dir` server (public), path `curl.cainfo`/`openssl.cafile` di `cacert_args`, isi `cacert.ini` di `cacert_scan_dir`. Ini fix utama untuk `HTTP 500` + jamin TLS `-d` benar-benar termuat.
+- `bootstrap/app.php` — *tidak diubah* lagi (blok `ini_set` sudah dihapus; cukup jalur `-d` + scan).
+
+## Catatan
+- Route `/__tlsprobe` dihapus (dirty uit: net-zero vs HEAD v0.3.5); E2E TLS sudah dibuktikan saat probe (github 200 / telegram 200 prosesnya= server itu sendiri).
+- Sisa php: XAMPP php (PID 57992 = VS Code intellisense, bukan masalah), dev server repo lama (PID 31948) sudah dibunuh.
+- Langkah verifikasi penuh setalah rebuild: cargo check → tauri build → uninstall v0.3.6 lama → install bundle baru → jalankan app → /login harus 200 & tidak mati lagi; lalu user menguji Telegram + cek-embaruan dari UI, plus mirror reproduksi BKU/PDF (dengan data dari user) dan `laravel.log`-install.
+
+## Test Status
+- Belum ada perubahan PHP telad; suite belum dijalankan ulang setelah perubahan lib.rs (CHANGES tidak menyentuh PHP). PHPStan/phpunit sebelumnya `321 tests, 851 assertions`. Commit v0.3.6.
+
+## Hasil TERKONFIRMASI (v0.3.7)
+- **Root cause tunggal 500 = prefix `\\?\` pada argumen router `php -S`** (BUKAN kontaminasi env var, BUKAN opcache). Dibuktikan empiris:
+  1. Spawn manual router **tanpa** `\\?\` (env benar, DB Roaming) → `/login` 200.
+  2. Spawn **persis** perintah exe terpasang (router `\\?\C:\...\server.php`) + `-d error_log` → log `php-error-final.log` menulis `PHP Fatal error: Failed opening required '\\?\C:\...\server.php'` → 500 body kosong. Perbedaannya PERSIS hanya pada prefix `\\?\`.
+  3. `php -S` yang router-nya ber-prefix `\\?\` selalu gagal `require`; PHP CLI tidak memahami prefix extended-length path (hasil `is_file` juga `false`).
+- Mengapa "sesi bersih" kemarin terlihat 500 padahal env kosong: itu persis build exe terpasang (cmdline server pakai router `\\?\`), bukan env var. Log `1:22:43` lama yang menunjuk `probe.sqlite` adalah gejala KEDUA (kontaminasi sesi probing), bukan penyebab utama — 500 tetap muncul walau sesi bersih.
+- **Opcache off** kini berperan sekunder: MURNI pencegahan crash ASLR (teramati saat kasih beberapa instance php paralel), TIDAK terkait 500 router. Dibiarkan tetap aktif (aman) sampai diisolasi sendiri nanti.
+- **Uji bersih 3× berturut** (uninstall murni via `uninstall.exe /S` → install `SmartRKAS_0.3.6_x64-setup.exe` dari source campuran → `Start-Process` di PowerShell baru env kosong → deteksi port dari proses `php.exe -S` → `GET /login`):
+  - ROUND 1 → 200 · ROUND 2 → 200 · ROUND 3 → 200 (port 55672/59224/50479).
+  - **PENTING pemilihan port di test**: jangan ambil listener port tertinggi milik proses lain (VS Code/devsense) — dapat "403"; ambil port dari commandline proses `php.exe -S 127.0.0.1:<port>` secara eksplisit.
+- `error_log` server (`php-server-error.log` di `<data-dir>`) kini juga lewat `native_path()` — konsisten dengan router/cacert, biar fatal PHP ke log instalasi bukan diam.
+
+## Commit v0.3.7
+- Working tree sekarang berisi perubahan MIXED (native_path + opcache off) — sengaja digabung dan di-ship **sebagaimana adanya**; keputusan: TIDAK memisahkan, uji 3× sudah membuktikan server sehat.
+- Versi bumped 0.3.6 → **0.3.7** di 6 file (`config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name = "smartrkas"`).
+- Commit dengan pesan menyebut root cause `\\?\` path pada server_router.
