@@ -64,6 +64,11 @@
             min-height: 28px;
             margin-top: 1px;
         }
+        .untuk-box .untuk-sub {
+            font-size: 10px;
+            color: #333;
+            margin-top: 2px;
+        }
 
         .ttd-table {
             width: 100%;

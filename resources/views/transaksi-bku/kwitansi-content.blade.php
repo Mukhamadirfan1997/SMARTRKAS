@@ -118,17 +118,28 @@
     </table>
 
     {{-- UNTUK --}}
+    @php
+        $untukUtama = $transaksiBku->rkasItem
+            ? (string) $transaksiBku->rkasItem->uraian
+            : (string) ($transaksiBku->uraian ?? '');
+        $untukSub = (string) ($transaksiBku->uraian ?? '');
+        if ($untukSub !== '') {
+            $untukSub = mb_strtolower(trim($untukSub)) === mb_strtolower(trim($untukUtama))
+                ? ''
+                : $untukSub;
+        }
+    @endphp
     <table class="field-table" style="margin-top:3px;">
         <tr>
             <td class="lbl">Untuk</td>
             <td class="sep">:</td>
             <td class="val">
                 <div class="untuk-box">
-                    @if($transaksiBku->rkasItem)
-                        {{ $transaksiBku->rkasItem->uraian }}
+                    @if($untukUtama !== '')
+                        <div>{{ $untukUtama }}</div>
                     @endif
-                    @if($transaksiBku->uraian)
-                        <br>{{ $transaksiBku->uraian }}
+                    @if($untukSub !== '')
+                        <div class="untuk-sub">{{ $untukSub }}</div>
                     @endif
                 </div>
             </td>

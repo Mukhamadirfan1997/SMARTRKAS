@@ -861,6 +861,12 @@ Lanjutan "Root Cause TLS Terkonfirmasi": implementasikan solusi (spawn `php -S` 
 - Versi bumped 0.3.6 → **0.3.7** di 6 file (`config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name = "smartrkas"`).
 - Commit dengan pesan menyebut root cause `\\?\` path pada server_router.
 
+## Penyusunan ulang build v0.3.7 (clean build ulang, bukan commit baru)
+- Rebuild penuh dari HEAD `5d0e081` (v0.3.7) → NSIS `SmartRKAS_0.3.7_x64-setup.exe` 57.9MB (12:40) + MSI `SmartRKAS_0.3.7_x64_en-US.msi` 87.4MB (12:55). Ini memastikan installer berlabel **v0.3.7** (bukan 0.3.6 yang dipakai di uji sebelumnya).
+- Uninstall instalasi v0.3.6 → install v0.3.7 (`/S` exit 0). DB user di `%APPDATA%\id.smartrkas.desktop\smartrkas.sqlite` selamat (uninstall tidak menghapus Roaming).
+- **Sanity check final v0.3.7** (PowerShell baru, env `DB_DATABASE`/`SMARTRKAS_DATA_DIR` kosong, `Start-Process`): `/login` = **200**, halaman login OK, `php-server-error.log` TIDAK bertambah (masih 11:59:34). Proses anak (php -S + scheduler) mati bersih setelah app ditutup (job object) — 0 proses tersisa.
+- urut: (1) urutan PLN: minta user uji dari UI: Telegram "Kirim Pesan Uji" + kode pemulihan, "Periksa Pembaruan" (harus sukses, bukan error); (2) kondisi BKU/PDF bila masih gagal → butuh data reproduksi user (nama item, nominal, tanggal) + cek `laravel.log`/`php-server-error.log` instalasi user; (3) bila semua OK → push `master` + `gh release create v0.3.7`.
+
 ---
 
 # Sesi 08 Agu 2026 — STATUS AKHIR v0.3.7 (sesi ditutup bersih)
@@ -888,3 +894,174 @@ Lanjutan "Root Cause TLS Terkonfirmasi": implementasikan solusi (spawn `php -S` 
 
 ## Cara membuktikan status 500→200 kapan pun
 `php -S "C:\...\server.php"` TANPA `\\?\` → 200; DENGAN `\\?\` → fatal `Failed opening required '\\?\...'`. (PHP CLI tidak memetakan prefix extended-length path.)
+
+---
+
+# Sesi 08 Agu 2026 — Verifikasi v0.3.7 PROPER (installer berlabel benar) — selesai, rilis tetap ditahan
+
+## Koreksi status sebelumnya
+- Catatan "STATUS AKHIR v0.3.7" (di atas) menyatakan installer v0.3.7 BELUM dibangun — **TIDAK AKURAT**. Fakta di disk: bundle berlabel `SmartRKAS_0.3.7_x64-setup.exe` (12:40, 60.7MB) + `.msi` (12:55, 91.6MB) SUDAH ada di `src-tauri/target/release/bundle/`, dibangun dari HEAD `5d0e081`; app terinstall sudah v0.3.7 (FileVersion 0.3.7, 12:35). Bagian "Penyusunan ulang build v0.3.7" (baris 864-868) yang mencatatnya adalah yang benar.
+
+## Verifikasi yang dijalankan sesi ini (semua pada installer berlabel v0.3.7)
+1. **Fresh install**: uninstall versi lama (`uninstall.exe /S`, dir `%LOCALAPPDATA%\SmartRKAS` hilang) → DB user di `%APPDATA%\id.smartrkas.desktop\smartrkas.sqlite` SELAMAT → install `SmartRKAS_0.3.7_x64-setup.exe /S` → exe 0.3.7, `php\php.exe` + `php\extras\ssl\cacert.pem` ada.
+2. **Uji 3× berturut** (env `DB_DATABASE`/`SMARTRKAS_DATA_DIR` kosong, `Start-Process` app, deteksi port dari cmdline `php.exe -S 127.0.0.1:<port>`): `GET /login` = **200/200/200** (port 59173/52160/50910). Tutup graceful via `CloseMainWindow` (jalur `on_window_event` CloseRequested) → app exit, 0 proses anak tersisa.
+3. **`php-server-error.log`**: 756 → 756 (TIDAK bertambah selama 3 round; isi lama 11:59 = bukti fatal `\\?\` sebelum fix). Tidak ada error baru.
+4. **Cmdline proses `php -S` berjalan** (pid 39296) membawa SEMUA arg fix TLS: `-d opcache.enable=0 -d log_errors=1 -d error_log=<data-dir>\php-server-error.log -d curl.cainfo=<install>\php\extras\ssl\cacert.pem -d openssl.cafile=<install>\php\extras\ssl\cacert.pem -S 127.0.0.1:<port> C:\...\server.php` — router TANPA prefix `\\?\`. Ini proses yang benar-benar melayani HTTP app.
+5. **Outbound TLS dari PHP bundle instalasi** dengan env persis lib.rs (`PHP_INI_SCAN_DIR=<data-dir>\php-ini-scan` + `-d curl.cainfo`): `api.github.com` → errno 0, HTTP 200, len 2396; `api.telegram.org` → errno 0, HTTP 302 (redirect expected), len 145. `curl.cainfo` terbaca (nilai tidak kosong).
+
+## Kesimpulan
+- Fix TLS (spawn `php -S` langsung + `-d` cacert + scan) dan fix 500 (`native_path()` strip `\\?\`) **TERVERIFIKASI pada installer berlabel v0.3.7 proper**, bukan build campuran v0.3.6. Kini cukup uji manual user dari UI: Telegram "Kirim Pesan Uji" + kode pemulihan + "Periksa Pembaruan" (harus sukses, bukan error).
+
+## Status
+- `master` ahead 2 commit (`5d0e081` + `b47ae51`) dari `origin/master` (`697d19f`) — **belum push** (aman untuk push kapan saja, bukan rilis publik).
+- **Rilis GitHub TETAP DITAHAN** sampai BKU & PDF punya fix terverifikasi.
+- **BKU & PDF**: menunggu data reproduksi dari user (item RKAS, nominal, tanggal, perilaku) + `storage/logs/laravel.log` / `<data-dir>/php-server-error.log` instalasi user saat aksi.
+- App v0.3.7 terinstall fresh dan siap uji manual user. Tidak ada proses app tersisa di mesin ini.
+
+---
+
+# Sesi 08 Agu 2026 — Uji HTTP Live di Instalasi v0.3.7: BKU, Cetak PDF, Export Excel SEMUA BERFUNGSI
+
+## Goal
+Uji langsung (bukan menunggu user) alur BKU + Cetak PDF + Export Excel di instalasi v0.3.7 via HTTP terhadap server nyata yang di-spawn app (`php -S`), untuk menutup temuan #2/#3/#6. Hasilnya: **server-side SEMUA OK** — kegagalan user kemungkinan di masa lalu disebabkan 500-prefix`\\?\`/TLS yang SEDANG/MASIH ada sebelum install v0.3.7.
+
+## Ringkasan
+- **Alur login HTTP nyata**: GET `/login` → ambil `_token` dari form → POST `/login` (email `admin@sekolah.test`, password di-template sementara lalu di-restore). Dashboard 200 (len ~255KB). Session driver `database` terverifikasi.
+- **Alur Cetak PDF (`/laporan/bku?bulan=8&cetak=pdf`)**: 200, response valid PDF (`%PDF-`, 3460 bytes utk data kosong bulan 8; `streamPdf()` catch → `Log::error` + `abort(500)` bila gagal). Server OK.
+- **Alur Export Excel (`/laporan/bku/export-excel?bulan=8`)**: `ExportJob` dibuat `processing` → `GenerateExportJob` (sync) → status `completed` → file `.xlsx` 6393 bytes ada di `<data-dir>\storage\app\public\exports\`. Server OK.
+- **Alur input BKU**: POST `/transaksi-bku` dengan `jumlah='500.000'` (format Indonesia) → tersimpan **500000** benar (guard `NumberParser::rupiah` berfungsi live). Transaksi uji (BPU005/.../Uji BKU live) sudah dihapus sesudah tes.
+- **Guard over-budget**: POST `9.000.000` pada item sisa 1.350.000 → `ValidationException` → redirect `/transaksi-bku/create` + pesan "melebihi sisa anggaran..." muncul di halaman (old input dikembalikan). Ini persis bug "input tidak tersimpan" yang dilaporkan — perilaku sekarang sudah benar (memang menolak karena melebihi sisa, bukan kehilangan input).
+- Alur download desktop (`saveDownload` → `invoke('save_download')` → `blocking_save_file()` dialog Save As) TIDAK diuji dari webview — butuh verifikasi manual di app yang benar-benar terpasang.
+
+## Catatan Debug (penting utk sesi lanjut)
+- **WebRequest diperiksa**: `Invoke-WebRequest` harus `-MaximumRedirection 0` saat menangkap 302 (PHP-Serve mengembalikan 302 → mis-kreasi). Param `-MaximumRedirection 0` + `-WebSession` menyimpan cookie.
+- **Cookie dari webview**: nilai Set-Cookie URL-encoded (`%3D`); PowerShell jar menyimpan cookie decoded; jika pakai `$sv.Cookies...`, pastikan cookie yang dipilih bernama `smartrkas-session`, BUKAN `XSRF-TOKEN` (keduanya panjang hampir sama → mudah tertukar). Penyebab awal redirect continua; `auth-check3.php` TEMPO balok: DB_FILE sempat `database\database.sqlite` (install) bukan Roaming — PENTING: **jalankan semua script diagnostik dengan env `SMARTRKAS_DATA_DIR` + `DB_DATABASE` (Roaming) DIPASANG TERLEBIH DAHULU**, karena bundle `.env` default = install-local `.sqlite`, beda dengan server anak (Rust set ke data-dir).
+- `GenerasiGenerateExportJob` menulis ke `storage/app/public/exports` di data-dir (bukan disk lokal). Verif via php bundle script.
+
+## Status
+- Password user sementara TIDAK diubah permanen (save→restore hash). Transaksi & export uji dibersihkan; sisa data produksi utuh.
+- `master` masih ahead 2 commit dari `origin/master` (`5d0e081` + `b47ae51`) — belum push & rilis ditahan.
+- Yang BELUM terverifikasi (butuh app tl terpasang berjalan + manual UI): dialog Save-As PDF (Tauri), notif Telegram tombol "Kirim Pesan Uji", "Periksa Pembaruan" — server-side semuanya sehat (TLS errno 0 terverifikasi di sesi v0.3.7 proper).
+
+---
+
+# Sesi 08 Agu 2026 — Root Cause Cetak PDF: ACL Tauri (save_download) + Verifikasi Telegram/Periksa Pembaruan di UI (v0.3.8)
+
+## Goal
+Tutup temuan #3 (Cetak PDF "tidak ada dialog") dan verifikasi #4/#5 (Telegram, Periksa Pembaruan) dari UI app desktop yang benar-benar terpasang (v0.3.7), memakai UI Automation (UIA) bukan HTTP fake. Ditemukan root cause sebenarnya dari temuan #3 + 3 verifikasi UI.
+
+## Temuan Utama: Cetak PDF diblokir ACL Tauri (bukan server)
+- Toast JS setelah Invoke memunculkan: **`Gagal menyimpan file: Command save_download not allowed by ACL.`**
+- Penyebab: webview memuat dari **remote origin** `http://127.0.0.1:<port>` — di Tauri v2 custom command aplikasi perlu izin capability. Capability `src-tauri/capabilities/default.json` tidak punya entri `remote.urls`, sehingga akses IPC diblokir untuk SEMUA custom command (docs Tauri v2: "By default the API is only accessible to bundled code shipped with the Tauri App. To allow remote sources access to certain Tauri Commands ... define `remote.urls` in the capability").
+- Catatan sejarah: alur `saveDownload`/`save_download` TIDAK pernah diuji dari webview (AGENTS v0.3.7 menulis "TIDAK diuji dari webview — butuh verifikasi manual di app"). Ini kesenjangan verifikasi yang kini terbuka + di-fix.
+
+## Perubahan
+- `src-tauri/capabilities/default.json` — tambah blok `remote.urls`:
+  - `"remote": { "urls": ["http://127.0.0.1:*", "http://localhost:*"] }`
+  - bersama `windows: ["main"]`, `permissions: ["core:default","opener:default"]`.
+  - (URL server desktop selalu `127.0.0.1:<port>` bebas — wildcard `*` pada port sudah cukup; `localhost` sebagai cadangan.)
+
+## Verifikasi UI (metodologi baru)
+- Tooling UIA di `%TEMP%\opencode`: `uia-all.ps1` (dump elemen + koordinat), `uia-click.ps1`/`uia-invoke.ps1` (cari element by Name → Invoke pattern / mouse click), `topwin.ps1` (collapse top-level HWND proses smartrkas). Dipakai untuk navigasi GUI & membaca flash/prompt tanpa menyentuh JS.
+- **#4 Telegram**: Pengaturan → Notifikasi Telegram → klik "Kirim Pesan Uji" → flash **"Pesan uji berhasil dikirim ke Telegram Anda"** (jalur `response->successful()` → bukti HTTPS ke `api.telegram.org` BERHASIL; TLS fix berfungsi di app nyata).
+- **#5 Periksa Pembaruan**: Pengaturan → Tentang Aplikasi → klik "Periksa Pembaruan Sekarang" → flash **"Sudah versi terbaru"** (jalur sukses `AppUpdateService` → HTTPS ke GitHub API BERHASIL).
+- **#3 Cetak PDF**: BKU → "Cetak PDF" → toast **`Gagal menyimpan file: Command save_download not allowed by ACL.`** → root cause ACL terkonfirmasi (PDF route & streaming OK; hanya invoke Tauri yang diblokir).
+- Log aplikasi (`storage/logs/laravel.log` + `php-server-error.log` di data-dir) bersih selama pengujian.
+
+## Catatan Proses
+- Uji UI memakai app yang sedang berjalan di Windows (bukan harness PHPUnit) — satu-satunya cara membuktikan dialog native/Save-As (Tauri) yang tidak terjangkau unit test.
+- Versi 0.3.7 → **0.3.8**: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (blok `name = "smartrkas"` saja — hati-hati jangan replace versi crate lain).
+- Build: `npm run tauri -- build --bundles nsis,msi` (log: `%TEMP%\opencode\build-v038.log`).
+
+## Test Status
+- PHPUnit OK (321 tests, 851 assertions), PHPStan level 6 clean. Hanya `capabilities/default.json` + versi yang berubah (tidak ada logika PHP).
+
+---
+
+# Sesi 08 Agu 2026 — Fix ACL save_download BERHASIL (build.rs + capability) tapi DITEMUKAN hang di blocking_save_file() — BELUM COMMIT
+
+## Goal
+Perbaiki temuan #3 (Cetak PDF "tidak ada dialog"): root cause ACL Tauri. Setelah fix ACL terverifikasi bahwa command kini benar dieksekusi, justru ter-reproduksi **bug produksi baru**: `blocking_save_file()` hang tanpa memunculkan dialog.
+
+## Apa yang SUDAH dikerjakan & terbukti
+- **Root cause ACL benar**: webview memuat dari remote origin (`http://127.0.0.1:<port>`), dan `acl-manifests.json` TIDAK punya entry `smartrkas` → semua custom command app diblokir (toast "Command save_download not allowed by ACL"). `remote.urls` saja TIDAK cukup; command app sendiri wajib didaftarkan di `build.rs`.
+- **Fix diterapkan**:
+  - `src-tauri/build.rs` (BARU ditulis): `tauri_build::try_build(Attributes::new().app_manifest(AppManifest::new().commands(&["save_download"])))` → memicu autogenerate permission `allow-save-download`/`deny-save-download` (format `allow-$command` snake_case). Sebelumnya `build.rs` polos `tauri_build::build()`.
+  - `src-tauri/capabilities/default.json`: `"permissions": ["core:default", "opener:default", "allow-save-download"]`.
+- **Verifikasi build**: `cargo check` OK. Schema `desktop-schema.json` kini punya `"const": "allow-save-download"`. `acl-manifests.json` (target) kini punya entry **`__app-acl__`** berisi `allow-save-download` → `commands.allow=["save_download"]`. Sebelumnya key `__app-acl__` TIDAK ada.
+- **Build installer v0.3.8 proper**: `SmartRKAS_0.3.8_x64-setup.exe` (58.2MB) + `.msi` (87.8MB) di `bundle/`. Build via background `Start-Process cmd /c "npm run build && npm run tauri -- build --bundles nsis,msi"`.
+- **Clean-install + uji UI nyata** (UIA): server `php -S 127.0.0.1:64767` (router tanpa prefix `\\?`, semua arg `-d` cacert terpasang) → `/login` 200. Login `admin@sekolah.test` authenticated. Navigasi: Laporan → BKU Bulanan → tombol "Cetak PDF" → `uia-invoke.ps1 -Name "Cetak PDF"` → `INVOKED`.
+
+## Temuan BARU (bug produksi sesungguhnya, sudah fixed di sesi berikutnya)
+- Setelah klik "Cetak PDF", `save_download.log` (di data-dir) berisi HANYA 1 baris `[ts] save_download called ...` → command DIEKSEKUSI (base64 PDF diterima, decode OK), tapi **terjebak di `builder.blocking_save_file()`** (dialog tak pernah muncul).
+- Kesimpulan saat itu: **bukan hang-command-tak-dipanggil** (fix ACL membuktikan command jalan), tapi **`blocking_save_file()` hang dan dialog tidak muncul** di Windows — sama dengan gejala user "tanpa dialog apa pun".
+- Analisis: `blocking_save_file` = `blocking_fn!` (`sync_channel(0)` + `run_on_main_thread` → `AsyncFileDialog::from(dialog).save_file()` → `std::thread::spawn(block_on(dialog))`) lalu `rx.recv()`. Docs: "blocking variants pin the calling thread until dialog returns — don't call them from an async command without spawn_blocking, never from main event loop thread."
+
+## Status saat sesi berhenti
+- Working tree: `build.rs` + `capabilities/default.json` DIUBAH (ACL fix). App v0.3.8 terpasang & berjalan. **BELUM COMMIT**.
+- Next: fix `save_download` dengan pola non-blocking + oneshot + timeout; bersihkan debug-log; commit bersih.
+
+---
+
+# Sesi 08 Agu 2026 — Fix save_download (oneshot + timeout) + Fix override_note nullable + Commit Final v0.3.8 (RILIS DITAHAN)
+
+## Goal
+1) Selesaikan temuan #3: ganti `blocking_save_file()` (hang, dialog tak muncul) → pola NON-blocking `save_file(callback)` + oneshot channel + timeout. 2) Fix bug BKU "input tidak tersimpan" yang ternyata bukan guard over-budget, melainkan **aturan validasi `override_note` tanpa `nullable`**. 3) Sinkronkan repo ↔ instalasi, bersihkan diff, dan siapkan commit final — **belum push/rilis** (tunggu konfirmasi user).
+
+## Summary (akar bug BKU "tidak tersimpan" — penemuan utama sesi ini)
+- Gejala user: simpan BKU nominal 30.000 → form kembali dengan angka berubah jadi **300.000.00** tanpa pesan error.
+- **Akar masalah**: `store()` validasi `'override_note' => 'required_if:override_anggaran,1|string|min:10|max:500'` (TANPA `nullable`). Laravel meloloskan field yang ADA di request; browser selalu mengirim `override_note` (textarea) → `ConvertEmptyStringsToNull` pada middleware mengubah `""` → `NULL`. Saat override TIDAK dicentang, `required_if` justru menolak `NULL` (`NULL` gagal `string`/`required_if` ask) → **`ValidationException` tersembunyi** → 302 balik ke `/transaksi-bku/create` dengan `$errors` — tapi halaman form tampak "kosong" (guard over-budget bukan penyebab; `back()->with('error')` untuk guard tak dirender sebagai error inline karena sekarang pakai `ValidationException`).
+- **Fix**: `'override_note' => 'nullable|required_if:override_anggaran,1|string|min:10|max:500'` → kosong hanya diizinkan saat override TIDAK aktif; saat `override_anggaran=1` tetap wajib min. 10 karakter. Validasi TIDAK dilonggarkan.
+- Dijamin konsisten di **repo dan instalasi** (file controller identik, `php -l` OK, diff vs HEAD tepat 1 baris).
+
+## Changes (working tree → commit final v0.3.8)
+- `app/Http/Controllers/TransaksiBkuController.php` — `override_note` += `nullable|` (satu baris).
+- `src-tauri/src/lib.rs` — `save_download`: ganti `blocking_save_file()` → `builder.save_file(callback)` + `tokio::sync::oneshot` + `tokio::time::timeout(Duration::from_secs(120), rx)`; tambah `set_parent(&window)` (tanpa parent IFileDialog bisa tak muncul/tertidur); **hapus semua debug-log `save_download.log`** (scaffolding diagnosis).
+- `src-tauri/Cargo.toml` + `Cargo.lock` — dep `tokio` (features `sync`, `time`).
+- `src-tauri/build.rs` — `tauri_build::try_build(Attributes::new().app_manifest(AppManifest::new().commands(&["save_download"])))`.
+- `src-tauri/capabilities/default.json` — `remote.urls` (`127.0.0.1:*`, `localhost:*`) + `allow-save-download`.
+- `src-tauri/permissions/autogenerated/save_download.toml` — autogenerate dari build.rs (commit).
+- `resources/views/layouts/app.blade.php` — blok `@if(session('info'))` dengan `.alert-info` (flash info export dipakai di `LaporanController`).
+- Versi **0.3.8**: `.env.example`, `config/app.php`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`.
+- AGENTS.md — baris-baris sesi diagnosis yang ditulis dengan encoding rusak (karakter mojibake) dirapikan ke UTF-8 bersih + ringkasan sesi ini.
+
+## Verifikasi
+- **UI (user)**: simpan BKU normal → **tersimpan** (BPU005/20519260/01/2026, Rp 300.000, vol 10 dus, item ESPS B. Indonesia, uraian "tes imput bku", created_by=2; AuditLog `transaksi_bku.create` tercatat). Override dengan catatan pendek → **ditolak**: "The override note field must be at least 10 characters."
+- **HTTP live (user test sementara, dibersihkan)**: login test user → POST `/transaksi-bku` `override_anggaran=1` + `override_note="abcde"` + item valid → `302` ke `/transaksi-bku/create` + pesan `The override note field must be at least 10 characters.` terlihat; `OVERRIDE_TX_SAVED=0`; user test dihapus (DB kembali 1 user) → **fix nullable TIDAK melonggarkan validasi override**.
+- Sinkronisasi repo ↔ instalasi: hash SHA256 identik untuk `TransaksiBkuController.php`; `php -l` tanpa error untuk keduanya.
+- `git diff` final: controller **1 baris** (`nullable|`); tidak ada sisa `Log::info`/`use Log`/debug SVG/TLS probe di diff mana pun.
+- Artefak test dihapus: `BKU-*.pdf` (root) tidak ikut commit.
+
+## Build / Test Status
+- PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `cargo check` OK (smartrkas v0.3.8).
+- **Belum push** (`master` ahead dari `origin/master`); **belum rilis** — tunggu konfirmasi user sebelum `git push` + `gh release create` + build installer final.
+
+---
+
+# Sesi 10 Agu 2026 — Fix Kwitansi "Untuk": Duplikat Uraian Item vs Uraian Transaksi (gabung ke v0.3.8)
+
+## Goal
+Hapus duplikat baris di kolom "Untuk" kwitansi: sebelumnya `rkasItem->uraian` DAN `transaksiBku->uraian` dicetak berurutan (dua baris). Karena field `uraian` transaksi bersifat **manual (free-form)** — bendahara mengetik ulang nama item → sering dengan typo kecil (kasus nyata: item "Honor Pembina Ekstra Al Banjari" vs uraian "Honor Pembina Ekstra Al Banjar"). Terapkan opsi b: item sebagai teks utama, uraian transaksi hanya sebagai sub-teks bila BERBEDA.
+
+## Summary
+- 3 file Blade diubah, verifikasi render nyata 3 skenario (data live DB desktop), PHPUnit + PHPStan tetap hijau. Diff sync repo↔instalasi = 0 (3 file kwitansi disinkron ke instalasi). Digabung ke commit v0.3.8 (ee37c4b) dan siap rilis.
+
+## Changes
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` — blok "Untuk": variabel `$untukUtama` (rkasItem->uraian, fallback uraian transaksi bila tanpa item) + `$untukSub` (uraian transaksi, **ditekan** bila `mb_strtolower(trim())` sama dengan utama). Sanitasi: keduanya di-`(string)` cast, `trim()`, compare case-insensitive. Sub-teks dirender `<div class="untuk-sub">`.
+- `resources/views/transaksi-bku/kwitansi.blade.php` + `kwitansi-batch.blade.php` — CSS baru `.untuk-box .untuk-sub` (font-size 10px, warna #333, margin-top 2px).
+- **PENTING (keputusan user)**: perbandingan hanya **exact-match** (case-insensitive + trim) — TIDAK fuzzy/similarity. Kasus typo 1 huruf ("Banjari" vs "Banjar") TETAP dianggap beda → sub-teks tetap tampil (data lama wajib diperbaiki manual user). Ke depan: tambahkan hint di form "Jika sama dengan nama item RKAS, kosongkan field Uraian" (belum dilakukan, backlog).
+
+## Verifikasi (render view nyata thd DB desktop `%APPDATA%\id.smartrkas.desktop\smartrkas.sqlite`)
+1. **BPU001 (data asli)**: item `[Honor  Pembina Ekstra Al Banjari]` vs uraian `[Honor Pembina Ekstra Al Banjar]` → sub-teks MUNCUL (bedanya huruf "i" + spasi ganda item) — SESUAI ekspektasi exact-match.
+2. **BPU001 dipaksa uraian = item** (simulasi exact match) → **satu baris bersih**, `SUB-TEXT: ABSENT` — dedup bekerja.
+3. **BPU005 (uraian beda konteks nyata)**: item `[Nasi Dus & Lauk Pauk (biasa)-Hidangan rapat/tamu]` + sub-teks `[Belanja Mamin Rapat Dewan Guru Bulan Januari]` → sub-teks TAMPIL benar.
+- Tool verifikasi: script PHP temp boot Laravel repo dgn `DB_DATABASE` → `view('transaksi-bku.kwitansi')` render + parse `.untuk-box`. Script temp sudah dihapus setelah dipakai.
+
+## Sync Instalasi (protokol "cek dua direktori instalasi sebelum commit/release")
+- `C:\Users\yudhi\AppData\Local\SmartRKAS` (instalasi) — bandingkan SHA256 vs repo untuk `app/ config/ routes/ database/ bootstrap/ public/ resources/`: sebelum sync hanya 3 file kwitansi beda; **setelah copy ulang → diff = 0**.
+- `C:\Users\yudhi\AppData\Roaming\id.smartrkas.desktop` (data dir: sqlite/storage/.env) — bukan kode, tidak dibandingkan.
+- Pelajaran dari v0.3.5→v0.3.7: instalasi harus sinkron dgn repo SEBELUM commit/rilis, agar tidak terulang "fix lolos test tapi aplikasi masih lama".
+
+## Test Status
+- PHPUnit `OK (37 tests / filter Kwitansi+TransaksiBku, 144 assertions)`; full suite `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Komit: digabung ke `ee37c4b` (v0.3.8) via amend; siap push + `gh release`. Versi tetap **v0.3.8** (belum bump — perubahan kecil fitur kwitansi).

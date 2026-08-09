@@ -181,7 +181,7 @@ class TransaksiBkuController extends Controller
             'satuan' => 'nullable|string|max:50',
             'uraian' => 'nullable|string',
             'override_anggaran' => 'nullable|in:1,on,true',
-            'override_note' => 'required_if:override_anggaran,1|string|min:10|max:500',
+            'override_note' => 'nullable|required_if:override_anggaran,1|string|min:10|max:500',
         ]);
 
         $tanggal = (string) $validated['tanggal'];

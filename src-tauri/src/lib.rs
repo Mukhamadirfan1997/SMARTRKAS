@@ -282,11 +282,31 @@ async fn save_download(
         filename
     };
 
-    let picked = app
-        .dialog()
-        .file()
-        .set_file_name(&default_name)
-        .blocking_save_file();
+    // Pakai versi NON-blocking (`save_file` + callback) alih-alih
+    // `blocking_save_file()` (yang di dalamnya = `blocking_fn!` =
+    // `sync_channel(0)` + `run_on_main_thread` + `std::thread::spawn` +
+    // `block_on`). Di Windows, kombinasi itu terbukti hang tanpa dialog
+    // muncul (lihat AGENTS.md sesi v0.3.8). Callback dijalankan setelah
+    // dialog selesai; hasil kita tunggu lewat oneshot channel + timeout agar
+    // command tidak pernah menggantung UI selamanya.
+    //
+    // Plugin resmi (commands.rs:230) SELALU memanggil set_parent(&window)
+    // sebelum memunculkan dialog — tanpa parent, IFileDialog di Windows bisa
+    // tidak muncul (atau muncul di belakang) secara senyap.
+    let mut builder = app.dialog().file().set_file_name(&default_name);
+    if let Some(window) = app.get_webview_window("main") {
+        builder = builder.set_parent(&window);
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    builder.save_file(move |path| {
+        let _ = tx.send(path);
+    });
+
+    let picked = tokio::time::timeout(Duration::from_secs(120), rx)
+        .await
+        .map_err(|_| "Dialog tidak merespons dalam 120 detik.".to_string())?
+        .map_err(|_| "Dialog dibatalkan atau gagal.".to_string())?;
 
     let Some(picked) = picked else {
         return Ok(None);
