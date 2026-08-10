@@ -1094,3 +1094,20 @@ Setelah v0.3.8 dirilis, **uji cetak user menunjukkan duplikat MASIH muncul** di 
 ## Konfirmasi User (10 Agu 2026)
 - User mencetak kwitansi dari app v0.3.9 yang terpasang → **BERHASIL, kwitansi sekarang satu baris** di kolom "Untuk".
 - Ini menutup rantai bug duplikat kwitansi (v0.3.8 belum cukup → v0.3.9 final). Data item ber-spasi ganda di DB sengaja tidak diubah; fix di level render tetap berlaku.
+
+---
+
+# Sesi 10 Agu 2026 — Verifikasi 2 Temuan Kas (Kwitansi Tanggal + Saldo Berjalan) — TANPA PERUBAHAN KODE
+
+## Goal
+Verifikasi 2 temuan user dari screenshot (ARKAS asli membolehkan pola input ini → cukup memastikan tampilan tidak menyesatkan, JANGAN tambah validasi penolakan): (1) kwitansi PDF dengan tanggal yang terlihat "akhir bulan", (2) transaksi pengeluaran bertanggal SEBELUM tarik tunai (BBU) sumber dananya.
+
+## Hasil
+- **Temuan 1 (kwitansi tanggal)**: TIDAK ada bug. Kwitansi memakai `$transaksiBku->tanggal` (`resources/views/transaksi-bku/kwitansi-content.blade.php:12`), dirender `translatedFormat('d F Y')` di kolom tanda tangan (baris :165). BUKAN (a) by-design tanggal_cetak akhir bulan, BUKAN juga (b) salah variabel. Terverifikasi render PDF nyata thd DB desktop: BPU011 (DB `tanggal`=2026-02-07) → PDF memuat `PASURUAN, 07 Februari 2026`; BPU010 → `12 Januari 2026`. Tidak ada `endOfMonth`/`lastOfMonth`/`startOfMonth` di PHP maupun Blade app (grep bersih). Catatan: tanggal yang tercetak SELALU = nilai kolom `transaksi_bku.tanggal`; bila user melihat "akhir bulan", itu nilai tanggal yang tersimpan di DB (input user), bukan hasil komputasi app.
+- **Temuan 2 (saldo berjalan)**: KONSISTEN & matematis benar. `TransaksiBkuController::index()` urut `->orderBy('tanggal')->orderBy('id')` (`:46-47`); `$saldoAwal` = sum semua transaksi sebelum baris pertama halaman via `tanggal < firstTanggal OR (tanggal = firstTanggal AND id < first->id)` (`:69-86`); `$saldoBerjalan` diakumulasi per baris dari `$saldoAwal` (`:88-92`). Jadi urutan = (tanggal, id), BUKAN created_at/urutan input. Data nyata: BPU011 (pengeluaran 07/02) sebelum BBU002 (tarik tunai 11/02) → saldo baris BPU011 = Rp 1.423.500 (BELUM termasuk +BBU002 27.014.500), lalu naik setelah baris BBU002 — mencerminkan akumulasi s.d. baris tersebut.
+
+## Keputusan
+- TIDAK ada perubahan kode. Kedua perilaku sudah benar sesuai desain (ARKAS membolehkan input transaksi dalam urutan tanggal apa pun; tampilan tidak menyesatkan). Tidak ada validasi baru.
+
+## Test Status
+- Tidak ada perubahan kode → suite tetap `OK (321 tests, 851 assertions)`, PHPStan clean. Script probe temp di `%TEMP%\opencode\probe-*.php` dipakai verifikasi.
