@@ -1090,3 +1090,7 @@ Setelah v0.3.8 dirilis, **uji cetak user menunjukkan duplikat MASIH muncul** di 
 
 ## Test Status
 - PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+
+## Konfirmasi User (10 Agu 2026)
+- User mencetak kwitansi dari app v0.3.9 yang terpasang → **BERHASIL, kwitansi sekarang satu baris** di kolom "Untuk".
+- Ini menutup rantai bug duplikat kwitansi (v0.3.8 belum cukup → v0.3.9 final). Data item ber-spasi ganda di DB sengaja tidak diubah; fix di level render tetap berlaku.
