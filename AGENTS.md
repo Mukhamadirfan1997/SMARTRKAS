@@ -1138,3 +1138,35 @@ Pola penulisan kolom nominal di 3 export tidak seragam soal cast (float) dan fal
 
 ## Keputusan
 - DIBIARKAN apa adanya untuk saat ini (tidak ada perubahan kode). Re-evaluasi setelah pekerjaan BKU (fix + penambahan card) selesai.
+
+---
+
+# Sesi 11 Agu 2026 — Redesain Kartu BKU (stat-card) + Release v0.4.0 — acuan v0.3.9
+
+## Goal
+Redesain kartu ringkasan halaman BKU yang tadinya baris polos `grid-cols-3` (Total Penerimaan / Total Pengeluaran / Saldo Akhir) menjadi KPI `stat-card` profesional, KONSISTEN dengan Dashboard / Data RKAS / Backup / Tentang. Titik acuan = **v0.3.9** (user: "titik perbaikan sempurna dari bug & error yang bikin frustasi"). KEPUTUSAN USER: kartu dikembalikan ke 3 kartu asli — skema 6 kartu (Tarik Tunai/Total kumulatif/+/−) yang sempat dikerjakan DIBATALKAN karena membingungkan.
+
+## Summary
+- 1 file view berubah (`transaksi-bku/index.blade.php`); TIDAK ada perubahan controller/logika — nilai & perhitungan identik v0.3.9 (`$saldoAkhir = $totalPenerimaan - $totalPengeluaran`, footer tabel tetap `$saldoAkhir`).
+- Full suite kembali ke baseline v0.3.9: `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`.
+- Bump **0.3.9 → 0.4.0** (5 file: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name="smartrkas"` saja).
+- Build: NSIS 58.2MB + MSI 88.0MB. Fresh install v0.4.0 (uninstall v0.3.9) → `/login` 200, halaman `/transaksi-bku?bulan=` 200 + `stat-card green/red` + label 3 kartu MUNCUL (via HTTP live, admin password di-save→restore hash). Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.4.0
+
+## Perubahan View
+- `resources/views/transaksi-bku/index.blade.php` — kartu dipindah KELUAR dari dalam `<form>`/`.card` menjadi blok `<div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">` sebelum form; pakai `stat-card green` (Total Penerimaan, ikon panah masuk, `stat-icon bg-emerald-50`), `stat-card red` (Total Pengeluaran, ikon panah keluar), `stat-card blue|red` dinamis (Saldo Akhir sesuai tanda ≥0/negatif, ikon uang). Label/value pakai `stat-label`/`stat-value`. Grid lama `grid-cols-3 divide-x` DIHAPUS.
+
+## Perjalanan (jujur — untuk diingat)
+- Awal sesi: 3 kartu div polos → rencana awal: "Saldo Akhir jadi kumulatif via anchor + kartu Surplus-Defisit" → berkembang jadi 6 kartu (Opsi L1) dengan `$saldoAkhir` anchor query + `$penerimaanKumulatif`/`$pengeluaranKumulatif`. Test ditulis (32 tests di BKU) dan sempat hijau.
+- USER MENYETOP: skema 6 kartu & tanda `+`/`−` membingungkan. Instruksi: kembalikan seperti AWAAL/versi release (v0.3.9), PERTAHANKAN hanya redesain card.
+- Aksi: `git checkout HEAD` controller + test (hapus semua perubahan logika sesi ini), view di-rewrite hanya bagian kartu → diff vs v0.3.9 = MURNI redesain visual, 0 perubahan controller/test.
+- Pelajaran: jangan ubah logika kartu BKU tanpa konfirmasi final user; acuan rilis selalu v0.3.9 (versi stabil). Jika ada perubahan baru, crosscheck dulu ke v0.3.9.
+
+## Catatan Proses
+- Sync instalasi repo↔instalasi sebelum commit: hanya `TransaksiBkuController.php` + `index.blade.php` DIFF → di-sync → ALL IDENTICAL.
+- Bump Cargo.lock: replace presisi blok `name = "smartrkas"` (2 baris) — JANGAN replace seluruh `^version` (ada crate `winapi` 0.3.9).
+- Secret scan diff (token bot/ghp/private key): bersih.
+- Verifikasi UI live: hash password admin (`admin@sekolah.test`) di-save ke variabel → set sementara `smartrkas-verify-2026` → login+cek halaman → restore hash asli (diverifikasi identik). Script temp `%TEMP%\opencode\pw-swap.php` dihapus setelahnya.
+- App fresh-install dimatikan setelah verifikasi → 0 proses anak tersisa (job object).
+
+## Test Status
+- PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK, `npm run build` OK, `cargo` compile OK. Commit `4f662d2` → push `master` → release GitHub v0.4.0 (2 asset, state uploaded).
