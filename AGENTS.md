@@ -1065,3 +1065,28 @@ Hapus duplikat baris di kolom "Untuk" kwitansi: sebelumnya `rkasItem->uraian` DA
 ## Test Status
 - PHPUnit `OK (37 tests / filter Kwitansi+TransaksiBku, 144 assertions)`; full suite `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
 - Komit: digabung ke `ee37c4b` (v0.3.8) via amend; siap push + `gh release`. Versi tetap **v0.3.8** (belum bump — perubahan kecil fitur kwitansi).
+
+---
+
+# Hotfix 10 Agu 2026 — Kwitansi "Untuk": Normalisasi Spasi Berlebih (v0.3.9)
+
+## Goal
+Setelah v0.3.8 dirilis, **uji cetak user menunjukkan duplikat MASIH muncul** di BPU001, padahal stringnya nyaris identik. Akar masalah: uraian item di DB punya **spasi ganda di tengah** (`"Honor  Pembina Ekstra Al Banjari"`, 32 char) sedangkan uraian transaksi spasi tunggal (`31 char`). `trim()` hanya buang spasi di awal/akhir → perbandingan eksak lama menganggap BEDA → sub-teks tercetak → di PDF kedua baris terlihat sama (spasi ganda menciut jadi satu).
+
+## Changes
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` — perbandingan `$untukSub` vs `$untukUtama` kini **collapse whitespace**: `preg_replace('/\s+/', ' ', trim(mb_strtolower(...)))` pada kedua sisi. Jadi spasi ganda/berlebih di dalam string juga diabaikan (bukan hanya awal/akhir). Sub-teks masih TETAP muncul untuk uraian yang memang beda makna.
+- **Catatan**: data item uraian `"Honor  Pembina Ekstra Al Banjari"` (spasi ganda) sengaja TIDAK diubah di DB — fix di level render (kwitansi) saja. Item RKAS itu sendiri tetap tampil apa adanya di tabel/laporan lain.
+
+## Verifikasi (render nyata thd DB desktop, script temp di `%TEMP%\opencode\render-kwitansi.php`)
+1. **BPU001 (data asli, spasi ganda di item)** → SUB-TEXT ABSENT, satu baris bersih.
+2. **BPU001 force-equal** → SUB-TEXT ABSENT (konsisten).
+3. **BPU005 / BPU004 (uraian beda konteks)** → SUB-TEXT PRESENT (kolom tidak hilang untuk uraian yang memang berbeda).
+4. **BPU002 (item spasi ganda, trx beda makna "( samroh )")** → SUB-TEXT PRESENT.
+- PHPStan: `preg_replace` return `string|null`; argumen sudah `trim(mb_strtolower(...))` → selalu string.
+
+## Build / Release
+- Bump **0.3.8 → 0.3.9** di 5 file (`config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name = "smartrkas"`).
+- Commit → push `master` → build NSIS+MSI (hasil harus menyertakan fix whitespace-collapse) → uninstall v0.3.8 → install baru v0.3.9 → verifikasi `/login` 200 + **cetak PDF BPU001 dari server yang berjalan = SATU BARIS** → `gh release create v0.3.9` (2 asset). Ini menindaklanjuti kesalahan v0.3.8 yang dirilis tanpa fix spasi ganda.
+
+## Test Status
+- PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.

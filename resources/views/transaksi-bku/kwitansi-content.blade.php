@@ -124,7 +124,7 @@
             : (string) ($transaksiBku->uraian ?? '');
         $untukSub = (string) ($transaksiBku->uraian ?? '');
         if ($untukSub !== '') {
-            $untukSub = mb_strtolower(trim($untukSub)) === mb_strtolower(trim($untukUtama))
+            $untukSub = preg_replace('/\s+/', ' ', trim(mb_strtolower($untukSub))) === preg_replace('/\s+/', ' ', trim(mb_strtolower($untukUtama)))
                 ? ''
                 : $untukSub;
         }
