@@ -37,6 +37,32 @@
         </div>
     @endif
 
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        <div class="stat-card green">
+            <div class="stat-icon bg-emerald-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+            </div>
+            <div class="stat-label">Total Penerimaan</div>
+            <div class="stat-value text-emerald-700">Rp {{ number_format($totalPenerimaan, 0, ',', '.') }}</div>
+        </div>
+
+        <div class="stat-card red">
+            <div class="stat-icon bg-red-50">
+                <svg aria-hidden="true" class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></svg>
+            </div>
+            <div class="stat-label">Total Pengeluaran</div>
+            <div class="stat-value text-red-700">Rp {{ number_format($totalPengeluaran, 0, ',', '.') }}</div>
+        </div>
+
+        <div class="stat-card {{ $saldoAkhir >= 0 ? 'blue' : 'red' }}">
+            <div class="stat-icon {{ $saldoAkhir >= 0 ? 'bg-blue-50' : 'bg-red-50' }}">
+                <svg aria-hidden="true" class="w-5 h-5 {{ $saldoAkhir >= 0 ? 'text-blue-500' : 'text-red-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+            </div>
+            <div class="stat-label">Saldo Akhir</div>
+            <div class="stat-value {{ $saldoAkhir >= 0 ? 'text-blue-700' : 'text-red-700' }}">Rp {{ number_format($saldoAkhir, 0, ',', '.') }}</div>
+        </div>
+    </div>
+
     <form method="GET" action="{{ route('transaksi-bku.index') }}">
     <div class="card">
         <div class="card-header">
@@ -82,23 +108,6 @@
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Tambah Transaksi
                 </a>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
-            <div class="px-6 py-3.5 text-center">
-                <div class="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Penerimaan</div>
-                <div class="text-lg font-bold text-emerald-700 mt-1">Rp {{ number_format($totalPenerimaan, 0, ',', '.') }}</div>
-            </div>
-            <div class="px-6 py-3.5 text-center">
-                <div class="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Pengeluaran</div>
-                <div class="text-lg font-bold text-red-700 mt-1">Rp {{ number_format($totalPengeluaran, 0, ',', '.') }}</div>
-            </div>
-            <div class="px-6 py-3.5 text-center">
-                <div class="text-xs text-slate-500 uppercase tracking-wide font-medium">Saldo Akhir</div>
-                <div class="text-lg font-bold {{ $saldoAkhir >= 0 ? 'text-blue-700' : 'text-red-700' }} mt-1">
-                    Rp {{ number_format($saldoAkhir, 0, ',', '.') }}
-                </div>
             </div>
         </div>
 

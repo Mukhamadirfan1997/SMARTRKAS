@@ -1111,3 +1111,30 @@ Verifikasi 2 temuan user dari screenshot (ARKAS asli membolehkan pola input ini 
 
 ## Test Status
 - Tidak ada perubahan kode → suite tetap `OK (321 tests, 851 assertions)`, PHPStan clean. Script probe temp di `%TEMP%\opencode\probe-*.php` dipakai verifikasi.
+
+---
+
+# Sesi 10 Agu 2026 — Temuan: Format Kolom Uang Export Excel Tidak Seragam (Belum Ada Rencana Perbaikan)
+
+## Status
+Catat sebagai **TEMUAN** saja. **Belum ada rencana perbaikan** — menunggu BKU selesai difix / penambahan card baru di halaman BKU terlebih dahulu.
+
+## Temuan (dari review `app/Exports/`)
+Pola penulisan kolom nominal di 3 export tidak seragam soal cast (float) dan fallback. Secara fungsional semua menghasilkan `number_format(..., 0, ',', '.')`, jadi TIDAK ada bug output saat ini — hanya inkonsistensi pola kode:
+
+| Kolom | Posisi | Pola | Cast (float) | Fallback |
+|---|---|---|---|---|
+| Penerimaan | BkuExport.php:116 | `number_format(->jumlah, 0, ',', '.')` via ternary | ? (attribute float) | ternary / '' |
+| Saldo | BkuExport.php:105,118 | `(float) ->getAttribute('saldo')` + isset() | ? eksplisit | isset() |
+| Pengeluaran | BkuExport.php:117 | `number_format(->jumlah, ...)` via ternary | ? (attribute float) | ternary / '' |
+| Realisasi | RekapRekeningExport.php:112 | `number_format(->realisasi_bulan ?? 0, ...)` | ? (SQL alias mentah) | ?? 0 |
+| Rencana/Sisa | RekapRekeningExport.php:110,113 | ?? 0 | ? / ? (sisa float hasil hitung) | ?? 0 |
+| Total/Total Pengeluaran | RekapSiplahExport.php:93 | `number_format(->total, ...)` | ? (via setAttribute di collection) | — |
+
+## Konteks
+- BkuExport.php (referensi "benar"): nilai selalu dari atribut model float (jumlah, saldo_berjalan, saldo) dengan cast eksplisit (float) saat header + guard isset()/ternary.
+- RekapRekeningExport.php: alias SQL mentah (selectRaw COALESCE(rib.total,0) / b.total) dipakai langsung tanpa (float); hanya ?? 0.
+- RekapSiplahExport.php: sebenarnya sudah aman ($total = (float) ->total lalu setAttribute), hanya polanya tidak uniform.
+
+## Keputusan
+- DIBIARKAN apa adanya untuk saat ini (tidak ada perubahan kode). Re-evaluasi setelah pekerjaan BKU (fix + penambahan card) selesai.
