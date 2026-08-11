@@ -187,6 +187,8 @@ class TransaksiBkuTest extends TestCase
         $response->assertSee('name="jumlah"', false);
         $response->assertSee('id="rkas_item_id"', false);
         $response->assertSee('id="row_override"', false);
+        $response->assertSee('id="no_invoice_siplah"', false);
+        $response->assertSee('id="row_no_invoice_siplah"', false);
         $response->assertSee('Format angka Indonesia', false);
     }
 
@@ -353,6 +355,155 @@ class TransaksiBkuTest extends TestCase
             'user_id' => $this->user->id,
             'tabel' => 'transaksi_bku',
             'aksi' => 'override_anggaran',
+        ]);
+    }
+
+    public function test_store_siplah_rejected_without_no_invoice_siplah(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'metode_pengadaan' => 'siplah',
+        ]);
+
+        $response->assertSessionHasErrors('no_invoice_siplah');
+        $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+    }
+
+    public function test_store_siplah_rejected_with_empty_no_invoice_siplah(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'metode_pengadaan' => 'siplah',
+            'no_invoice_siplah' => '',
+        ]);
+
+        $response->assertSessionHasErrors('no_invoice_siplah');
+        $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
+    }
+
+    public function test_store_non_siplah_allowed_without_no_invoice_siplah(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'metode_pengadaan' => 'non_siplah',
+            'no_invoice_siplah' => '',
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('transaksi_bku', [
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'no_invoice_siplah' => null,
+        ]);
+    }
+
+    public function test_store_siplah_saves_no_invoice_siplah(): void
+    {
+        $item = $this->makeItem(10000000);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'rkas_item_id' => $item->id,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'metode_pengadaan' => 'siplah',
+            'no_invoice_siplah' => 'INV/2026/000123',
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $this->assertDatabaseHas('transaksi_bku', [
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'no_invoice_siplah' => 'INV/2026/000123',
+        ]);
+    }
+
+    public function test_update_siplah_requires_no_invoice_siplah(): void
+    {
+        $transaksi = $this->makeTransaksi([
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'bulan' => 1,
+            'tanggal' => '2026-01-15',
+        ]);
+
+        $response = $this->actingAs($this->user)->put('/transaksi-bku/' . $transaksi->id, [
+            'rkas_item_id' => null,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'metode_pengadaan' => 'siplah',
+            'no_invoice_siplah' => '',
+        ]);
+
+        $response->assertSessionHasErrors('no_invoice_siplah');
+        $this->assertDatabaseHas('transaksi_bku', ['id' => $transaksi->id, 'no_invoice_siplah' => null]);
+    }
+
+    public function test_update_siplah_saves_no_invoice_siplah(): void
+    {
+        $transaksi = $this->makeTransaksi([
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'bulan' => 1,
+            'tanggal' => '2026-01-15',
+        ]);
+
+        $response = $this->actingAs($this->user)->put('/transaksi-bku/' . $transaksi->id, [
+            'rkas_item_id' => null,
+            'tanggal' => '2026-01-15',
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'metode_pengadaan' => 'siplah',
+            'no_invoice_siplah' => 'INV/2026/000456',
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $this->assertDatabaseHas('transaksi_bku', [
+            'id' => $transaksi->id,
+            'no_invoice_siplah' => 'INV/2026/000456',
         ]);
     }
 

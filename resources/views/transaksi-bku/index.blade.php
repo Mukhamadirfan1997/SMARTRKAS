@@ -229,6 +229,9 @@
                             <td class="text-center whitespace-nowrap">
                                 @if($transaksi->metode_pengadaan === 'siplah')
                                     <span class="badge badge-blue">SIPLAH</span>
+                                    @if(!empty($transaksi->no_invoice_siplah))
+                                        <div class="text-xs text-slate-500 mt-0.5 font-mono" title="Nomor Invoice SIPLah">{{ $transaksi->no_invoice_siplah }}</div>
+                                    @endif
                                 @elseif($transaksi->metode_pengadaan === 'non_siplah')
                                     <span class="badge badge-gray">Non-SIPLAH</span>
                                 @else

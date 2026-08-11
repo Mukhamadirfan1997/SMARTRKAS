@@ -101,6 +101,13 @@
             <td class="sep">:</td>
             <td class="val">{{ $terimaDari }}</td>
         </tr>
+        @if($transaksiBku->metode_pengadaan === 'siplah' && !empty($transaksiBku->no_invoice_siplah))
+        <tr>
+            <td class="lbl">No. Invoice SIPLah</td>
+            <td class="sep">:</td>
+            <td class="val">{{ $transaksiBku->no_invoice_siplah }}</td>
+        </tr>
+        @endif
         <tr>
             <td class="lbl">Sebesar</td>
             <td class="sep">:</td>

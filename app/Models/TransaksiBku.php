@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $satuan
  * @property string|null $toko_penerima
  * @property string|null $metode_pengadaan
+ * @property string|null $no_invoice_siplah
  * @property string|null $uraian
  * @property string|null $override_note
  * @property int $tahap
@@ -61,6 +62,7 @@ class TransaksiBku extends Model
         'satuan',
         'toko_penerima',
         'metode_pengadaan',
+        'no_invoice_siplah',
         'uraian',
         'override_note',
         'tahap',

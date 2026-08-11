@@ -114,6 +114,14 @@
                             @error('metode_pengadaan')
                                 <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                             @enderror
+                            <div id="row_no_invoice_siplah" class="mt-3 {{ old('metode_pengadaan', $transaksiBku->metode_pengadaan) == 'siplah' ? '' : 'hidden' }}">
+                                <label for="no_invoice_siplah" class="form-label">Nomor Invoice SIPLah</label>
+                                <input type="text" name="no_invoice_siplah" id="no_invoice_siplah" value="{{ old('no_invoice_siplah', $transaksiBku->no_invoice_siplah) }}" class="form-input" placeholder="Contoh: INV/2026/000123" maxlength="255">
+                                <p class="text-xs text-slate-400 mt-1">Wajib diisi saat metode pengadaan SIPLah.</p>
+                                @error('no_invoice_siplah')
+                                    <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                                @enderror
+                            </div>
                         </div>
                     </div>
 
@@ -150,6 +158,8 @@
             const rowRkas = document.getElementById('row_rkas_item');
             const rowKalkulator = document.getElementById('row_kalkulator');
             const rowMetodePengadaan = document.getElementById('row_metode_pengadaan');
+            const metodePengadaanSelect = document.getElementById('metode_pengadaan');
+            const rowNoInvoiceSiplah = document.getElementById('row_no_invoice_siplah');
             const formEl = document.getElementById('form-bku');
             var volumeTouched = false;
             var initializing = true;
@@ -207,6 +217,11 @@
                 updateHarga(data);
             }
 
+            function toggleNoInvoice() {
+                rowNoInvoiceSiplah.classList.toggle('hidden', metodePengadaanSelect.value !== 'siplah');
+            }
+            metodePengadaanSelect.addEventListener('change', toggleNoInvoice);
+
             function kalkulasiJumlah() {
                 var tarif = parseFloat(hargaInput.dataset.val) || 0;
                 var vol = parseFloat(parseDecimal(volumeInput.value)) || 0;
@@ -233,6 +248,7 @@
             });
 
             toggleVisibility();
+            toggleNoInvoice();
             volumeInput.disabled = true;
 
             window.RkasPicker.init();
