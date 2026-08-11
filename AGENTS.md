@@ -7,6 +7,7 @@
 - Jangan build/rebuild rangkap di folder yang sama secara bersamaan — cek dulu proses build lain yang mungkin masih jalan.
 - Jangan push ke GitHub atau buat rilis publik tanpa konfirmasi eksplisit dari user — commit lokal boleh, publikasi tidak.
 - Root cause harus dibuktikan dengan bukti keras (log error asli, payload nyata, render output nyata) — bukan dugaan dari baca kode saja, kalau memungkinkan untuk diverifikasi.
+- Sebelum uji manual via browser, selalu cek dulu apakah ada proses php.exe/server dev lain yang sudah listening di port yang sama (`Get-CimInstance Win32_Process -Filter "Name='php.exe'"` atau `netstat`) — server duplikat pernah 2x menyebabkan hasil uji tidak bisa dipercaya karena request jatuh acak ke server dengan state/DB berbeda.
 
 ---
 
@@ -1244,3 +1245,37 @@ Lanjutkan uji manual fitur `no_invoice_siplah` (langkah 1 dari Next sesi sebelum
 
 ## Test Status
 - PHPUnit `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`. Commit lokal, belum push/build/rilis.
+
+---
+
+# Sesi 11 Agu 2026 — Verifikasi E2E HTTP Fitur Nomor Invoice SIPLah (melengkapi uji manual) — TANPA PERUBAHAN KODE
+
+## Goal
+Tuntaskan "Next (1) Uji manual browser" fitur `no_invoice_siplah` dari sesi sebelumnya. Dikerjakan via HTTP end-to-end (bukan browser UI) terhadap server `php -S` nyata + DB scratch (SQLite temp `smoke-siplah.sqlite`), login sesi sungguhan. **Tidak ada perubahan kode** — hanya verifikasi + dokumentasi.
+
+## Status
+- **Fitur TERVERIFIKASI END-TO-END** (seluruh jalur yang direncanakan di "Next" sesi e96c19e). Header AGENTS sesi e96c19e "BELUM DIUJI MANUAL BROWSER" kini lunas lewat HTTP-E2E.
+
+## Verifikasi (HTTP live terhadap server bersih port 8025, XAMPP php)
+Setup: migrate + seed user `test@sekolah.test`/`password` (pw_ok via `password_verify`) + 1 tahun anggaran + 1 item RKAS (rencana cukup) di DB scratch; `php -S 127.0.0.1:8025 router-test.php` (router temp kustom: `/__diag` dijawab langsung, selain itu `require public/index.php`) dengan `DB_DATABASE` di-set; login via POST `/login` dengan `_token` dari form.
+
+- **01 login** → `/dashboard` 200.
+- **02 create page** memuat `id="no_invoice_siplah"` + `id="row_no_invoice_siplah"` (hidden saat non-siplah).
+- **03 SIPLah tanpa invoice** → 302 kembali `/transaksi-bku/create`, `old()` dipertahankan (metode `selected`), error inline render: **"Nomor Invoice SIPLah wajib diisi saat metode pengadaan SIPLah."** (pesan Indonesia dari 8a3a5b0 — regex lama bertulis Inggris gagal match, itu normal).
+- **04 SIPLah dengan invoice** (`INV/2026/000123`) → 302 `/transaksi-bku` (tersimpan).
+- **05 Non-SIPLah tanpa invoice (string kosong)** → 302 `/transaksi-bku` (tersimpan, `no_invoice_siplah` = **null**).
+- **06 index `?bulan=1`** menampilkan `INV/2026/000123` + `BPU801/20519260/01/2026` + `BPU802/20519260/01/2026`.
+- **DB**: BPU801 siplah punya invoice; BPU802 non_siplah null; transaksi siplah tanpa invoice TIDAK tersimpan.
+- **Kwitansi PDF** BPU801: route `cetak-kwitansi` → 200 `application/pdf` valid (`%PDF`); render view langsung (`view('transaksi-bku.kwitansi', ['transaksiBku'=>$tx,'profil'=>PengaturanSekolah::get()])`) → HTML memuat **"No. Invoice SIPLah"** + **"INV/2026/000123"**. (Raw bytes PDF tidak bisa dicari string karena content-stream dompdf ter-kompresi FlateDecode — kalau perlu cek teks PDF, ekstrak/view render saja.)
+- Kwitansi **BPU802 (non_siplah)** → segmen invoice TIDAK dirender (kondisi `metode_pengadaan==='siplah' && !empty(invoice)`).
+
+## Temuan Proses (penting — ulangi saja, jangan ulangi kesalahan)
+- **JANGAN pernah start 2 server pada port yang sama** — PHP built-in server di Windows bisa **keduanya LISTENING** di `127.0.0.1:<port>` (SO_REUSEADDR/race), request login/aksi di-distribusikan acak ke salah satunya → gejala "kredensial tidak cocok"/sesi aneh walau kredensial benar & DB benar. Sebelum start: `netstat -ano | findstr LISTENING | findstr :8025` → kill semua yang listen, lalu start SATU, verifikasi.
+- Verifikasi "database mana yang benar-benar dipakai server": boot-app CLI probe (`Auth::attempt` + `DB::connection()->getDatabaseName()`) bisa **lulus** padahal server HTTP memakai env DB berbeda — kalau POST login tetap gagal padahal probe CLI sukses, curiga **dual-server** dulu (bukan kode app).
+- `php -S` dengan router akan memproses `.php` yang ADA di docroot LEWAT router (laravel front-controller) sehingga file diag `public/__diag.php` tidak dieksekusi apa adanya (di-redirect Laravel). Pakai router kustom yang intercept path `/__diag` dulu, sisanya `require index.php`.
+
+## Cleanup
+- Transaksi uji hanya di DB scratch (temp) — tidak menyentuh produksi. `public/__diag.php` & router-test & probe disimpan di `%TEMP%\opencode` (di luar repo, tidak ikut commit); server 8025 dimatikan; `git status --short` bersih.
+
+## Test Status
+- Tidak ada perubahan kode → suite tetap `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`. Belum push/build/rilis.
