@@ -184,6 +184,8 @@ class TransaksiBkuController extends Controller
             'uraian' => 'nullable|string',
             'override_anggaran' => 'nullable|in:1,on,true',
             'override_note' => 'nullable|required_if:override_anggaran,1|string|min:10|max:500',
+        ], [
+            'no_invoice_siplah.required_if' => 'Nomor Invoice SIPLah wajib diisi saat metode pengadaan SIPLah.',
         ]);
 
         $tanggal = (string) $validated['tanggal'];
@@ -336,6 +338,8 @@ class TransaksiBkuController extends Controller
             'volume' => 'nullable|numeric|min:0',
             'satuan' => 'nullable|string|max:50',
             'uraian' => 'nullable|string',
+        ], [
+            'no_invoice_siplah.required_if' => 'Nomor Invoice SIPLah wajib diisi saat metode pengadaan SIPLah.',
         ]);
 
         $tanggal = (string) $validated['tanggal'];

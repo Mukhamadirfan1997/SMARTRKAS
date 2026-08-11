@@ -1216,3 +1216,31 @@ Tambahkan field `no_invoice_siplah` pada transaksi BKU: wajib diisi saat `metode
 
 ## Test Status
 - PHPUnit `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`. Tidak ada push, tidak ada build installer, tidak ada release.
+
+---
+
+# Sesi 11 Agu 2026 — Uji Manual Browser NOK + Pesan Validasi Bahasa Indonesia (commit 8a3a5b0)
+
+## Goal
+Lanjutkan uji manual fitur `no_invoice_siplah` (langkah 1 dari Next sesi sebelumnya) via browser terhadap server dev, lalu perbaiki pesan validasi default Laravel yang berbahasa Inggris saat field `no_invoice_siplah` kosong.
+
+## Hasil Uji Manual (browser, user)
+- **Skenario 1 (Metode=SIPLah, invoice kosong)**: berfungsi — form menolak & pesan error muncul, tapi **pesan masih bahasa Inggris** ("The no invoice siplah field is required when metode pengadaan is siplah.").
+- **Skenario 2 (Metode=Non-SIPLah, invoice kosong)**: berfungsi — transaksi tersimpan normal.
+- Kedua skenario "jalan semua" per user; hanya bahasa pesan yang perlu diubah.
+
+## Perubahan
+- `app/Http/Controllers/TransaksiBkuController.php` — tambah **custom message** param kedua `validate()` di `store()` dan `update()`: `['no_invoice_siplah.required_if' => 'Nomor Invoice SIPLah wajib diisi saat metode pengadaan SIPLah.']`. (Locale app tetap `en` — tidak ada folder `lang` proyek; custom message per-field dipilih supaya pesan lain tidak berubah.)
+
+## Verifikasi
+- Pesan error nyata dirender di form: `<p class="text-red-500">Nomor Invoice SIPLah wajib diisi saat metode pengadaan SIPLah.</p>` (periksa via HTTP live POST + `assertSee` semula bahasa Inggris; kini teks Indonesia terlihat di halaman create).
+- `vendor\bin\phpunit --filter TransaksiBkuTest` → `OK (36 tests, 140 assertions)`.
+- Full suite → `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`.
+
+## Catatan Debug (lingkungan dev, BUKAN kode)
+- DB dev `database/database.sqlite` awalnya 0 user → tidak bisa login. Solusi (state dev saja, tidak di-commit): buat user `admin@sekolah.test`/`password123` + buat marker `storage/app/private/.app-initialized`. Marker **harus dihapus** sebelum jalankan suite karena test `AuthenticationTest::test_login_redirects_to_onboarding_when_first_run` bergantung pada `isFirstRun()=true`. Login dev tetap bisa karena kolom `users.last_login_at` terisi (isFirstRun=false tanpa marker).
+- Ada **2 server php -S** melayani port 8025 (PID 52488 lama + PID 70620 baru) → browser kena server lama yang state-nya beda → login gagal "credentials do not match". Matikan semua, start satu bersih → login 200. JANGAN backup `.env`/DB via `custom`-sharing ke commit.
+- `public/__diag.php` (file diagnostik env/DB/users, bukan bagian fitur) **TIDAK ikut commit**.
+
+## Test Status
+- PHPUnit `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`. Commit lokal, belum push/build/rilis.
