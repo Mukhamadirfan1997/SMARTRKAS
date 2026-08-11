@@ -1182,3 +1182,37 @@ Redesain kartu ringkasan halaman BKU yang tadinya baris polos `grid-cols-3` (Tot
 
 ## Test Status
 - PHPUnit `OK (321 tests, 851 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK, `npm run build` OK, `cargo` compile OK. Commit `4f662d2` → push `master` → release GitHub v0.4.0 (2 asset, state uploaded).
+
+---
+
+# Sesi 11 Agu 2026 — Fitur Nomor Invoice SIPLah di Transaksi BKU (commit e96c19e) — BELUM DIUJI MANUAL BROWSER
+
+## Goal
+Tambahkan field `no_invoice_siplah` pada transaksi BKU: wajib diisi saat `metode_pengadaan=siplah`, tampil di tabel BKU dan di kwitansi (PDF). Dikerjakan di atas HEAD v0.4.1 (`3877af9`).
+
+## Status JUJUR
+- **Fitur SELESAI & DI-COMMIT** (`e96c19e`, 8 file, +219) — test otomatis hijau.
+- **BELUM diuji manual di browser** — uji manual yang sempat macet tidak dilanjutkan sesi ini; jadikan langkah pertama sesi berikutnya.
+
+## Changes
+- `database/migrations/2026_08_11_000021_add_no_invoice_siplah_to_transaksi_bku_table.php` (BARU) — `transaksi_bku.no_invoice_siplah` string(255) nullable `after('metode_pengadaan')`.
+- `app/Http/Controllers/TransaksiBkuController.php` — `store()` + `update()`: `'no_invoice_siplah' => 'nullable|required_if:metode_pengadaan,siplah|string|max:255'`.
+- `app/Models/TransaksiBku.php` — `@property` + `$fillable` `no_invoice_siplah`.
+- `resources/views/transaksi-bku/create.blade.php` + `edit.blade.php` — baris input (hidden saat metode ≠ siplah, toggle JS `toggleNoInvoice()` + dipanggil di `init()`), repopulasi `old()`.
+- `resources/views/transaksi-bku/index.blade.php` — di bawah badge SIPLAH tampilkan nomor invoice (`font-mono`, tooltip).
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` — baris "No. Invoice SIPLah" hanya saat siplah + invoice tidak kosong.
+- `tests/Feature/BKU/TransaksiBkuTest.php` — +7 test (+151 baris): store tanpa invoice ditolak, invoice kosong ditolak, non_siplah tanpa invoice boleh (tersimpan null), store siplah tersimpan, update siplah tanpa invoice ditolak (data lama utuh), update siplah tersimpan, create page render field.
+
+## Verifikasi
+- `git diff` penuh diverifikasi: validasi `nullable|required_if:metode_pengadaan,siplah|string|max:255` ADA di `store()` dan `update()`.
+- `php artisan migrate --force` OK (000018/000019/000020/000021 DONE; 000018-20 tertinggal dari sesi lama, ikut tereksekusi).
+- `vendor\bin\phpunit --filter TransaksiBkuTest` → `OK (36 tests, 140 assertions)`.
+- Full suite → `OK (330 tests, 882 assertions)`.
+- PHPStan level 6 → `[OK] No errors`.
+
+## Next (sesi berikutnya — urutan)
+1. **Uji manual browser** fitur no invoice SIPLah: create BKU dengan metode SIPLAH → wajib isi invoice; tanpa invoice → error inline; non-SIPLAH → field tersembunyi; tampil di tabel + kwitansi PDF.
+2. (Opsional) Bump versi + build installer + push + release bila user setuju — **TIDAK dilakukan sesi ini** (instruksi user: cukup commit lokal).
+
+## Test Status
+- PHPUnit `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`. Tidak ada push, tidak ada build installer, tidak ada release.
