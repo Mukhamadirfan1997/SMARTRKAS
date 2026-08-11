@@ -1279,3 +1279,29 @@ Setup: migrate + seed user `test@sekolah.test`/`password` (pw_ok via `password_v
 
 ## Test Status
 - Tidak ada perubahan kode → suite tetap `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors`. Belum push/build/rilis.
+
+---
+
+# Sesi 11 Agu 2026 — Release v0.4.2 (Fitur Nomor Invoice SIPLah + Auto-Migrate Terverifikasi di Instalasi Nyata)
+
+## Goal
+Rilis v0.4.2: fitur `no_invoice_siplah` (bukan hanya sampai test/commit), verifikasi auto-migrate DB lama saat upgrade di instalasi desktop nyata, lalu push + `gh release create`.
+
+## Summary
+- Bump **0.4.1 → 0.4.2** (5 file: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name="smartrkas"` saja).
+- Build: `cargo check` OK (v0.4.2), `npm run build` OK, `tauri build --bundles nsis,msi` → NSIS `SmartRKAS_0.4.2_x64-setup.exe` 61.0MB + MSI `SmartRKAS_0.4.2_x64_en-US.msi` 92.0MB.
+- **Auto-migrate TERVERIFIKASI di instalasi nyata** (snapshot sebelum/sesudah): sebelum install, `migrate:status` pada DB Roaming (`%APPDATA%\id.smartrkas.desktop\smartrkas.sqlite`) → `2026_08_11_000021_add_no_invoice_siplah...` = **Pending** (batch 1-2 Ran). Setelah clean-install v0.4.2 + buka app → migration yang sama = **[3] Ran** → fix auto-migrate `lib.rs` (migrate --force tiap startup) bekerja pada DB lama yang sudah ada.
+- Clean-install: uninstall v0.4.1 (`uninstall.exe /S`, exit 0) → folder `%LOCALAPPDATA%\SmartRKAS` terhapus, **data user di Roaming SELAMAT** (DB + storage tetap ada) → install v0.4.2 (/S) → exe ProductVersion 0.4.2 + `php\php.exe` + `php\extras\ssl\cacert.pem` terbundle.
+- `/login` pada server app terpasang = **200**.
+- Fitur `no_invoice_siplah` terverifikasi end-to-end via HTTP (server nyata, sesi login asli) di sesi sebelumnya: SIPLah tanpa invoice ditolak (pesan Indonesia), SIPLah+invoice tersimpan, Non-SIPLah tanpa invoice tersimpan (null), tampil di index, kwitansi PDF merender baris "No. Invoice SIPLah".
+
+## Perubahan Kode Sesi Ini (dari v0.4.1 → v0.4.2)
+- Tidak ada perubahan logika app — hanya bump versi + dokumentasi. Fitur `no_invoice_siplah` (commit `e96c19e` + pesan validasi Indonesia `beee121`) sudah masuk sejak sebelumnya.
+
+## Catatan Proses
+- **SOP baru ditambahkan**: sebelum uji manual via browser, cek proses `php.exe`/server dev lain yang listening di port sama (pernah 2x request jatuh acak ke server duplikan dengan state/DB beda). Commit `472f892` (docs).
+- Temuan proses penting: **PHP built-in server di Windows bisa dua-duanya LISTENING di port yang sama** → login "credentials do not match" palsu padahal kredensial & DB benar; matikan SEMUA yang listen baru start satu.
+- `migrate:status` untuk snapshot memakai `DB_DATABASE` menunjuk langsung file sqlite Roaming (bukan env desktop).
+
+## Test Status
+- Backlog commit final: bump versi + AGENTS.md. Suite PHP tetap `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors` (tidak ada perubahan kode PHP). Rilis v0.4.2 di GitHub: 2 asset (NSIS + MSI), notes berisi fitur invoice SIPLah + pesan Indonesia + auto-migrate terverifikasi.
