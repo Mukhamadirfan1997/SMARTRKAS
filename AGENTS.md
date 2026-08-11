@@ -1,3 +1,15 @@
+## SOP Wajib — Baca Sebelum Mulai Kerja
+
+- Jangan percaya klaim "berhasil"/"commit selesai"/"test hijau" tanpa verifikasi independen. Untuk commit: `git log --oneline -3` + `git diff-tree --stat HEAD` untuk konfirmasi nyata, bukan cuma percaya output tool. Untuk file hasil export (Excel/PDF): buka dan periksa isinya langsung (cek tipe sel/nilai asli), jangan cuma percaya `number_format()` di kode.
+- Jalankan test/lint dari kondisi final, setelah SEMUA perubahan selesai (termasuk file yang dihapus) — bukan dari state sebelumnya. Kalau ada error aneh setelah hapus/pindah file, coba `composer dump-autoload` dulu sebelum menyalahkan cache tool lain.
+- Bug yang sifatnya intermiten butuh verifikasi berulang (minimal 3x berturut-turut), bukan sekali sukses langsung dianggap selesai.
+- Satu perubahan, satu isolasi bukti — kalau menggabungkan beberapa fix sekaligus karena waktu terbatas, itu boleh, tapi harus dicatat jujur mana yang belum diisolasi/diverifikasi terpisah.
+- Jangan build/rebuild rangkap di folder yang sama secara bersamaan — cek dulu proses build lain yang mungkin masih jalan.
+- Jangan push ke GitHub atau buat rilis publik tanpa konfirmasi eksplisit dari user — commit lokal boleh, publikasi tidak.
+- Root cause harus dibuktikan dengan bukti keras (log error asli, payload nyata, render output nyata) — bukan dugaan dari baca kode saja, kalau memungkinkan untuk diverifikasi.
+
+---
+
 # SmartRKAS — Catatan Pengembangan
 
 Proyek target Laravel untuk aplikasi RKAS (versi tanpa `ProfilSekolah`/`sekolah_id`). Referensi/asal fitur ada di `D:\aplikasi sekolah\New folder\sira-rkas` (repo terpisah, punya `sekolah_id` + `RkasItemObserver` — TIDAK ada di sini).
