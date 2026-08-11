@@ -37,7 +37,7 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
         <div class="stat-card green">
             <div class="stat-icon bg-emerald-50">
                 <svg aria-hidden="true" class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
@@ -60,6 +60,14 @@
             </div>
             <div class="stat-label">Saldo Akhir</div>
             <div class="stat-value {{ $saldoAkhir >= 0 ? 'text-blue-700' : 'text-red-700' }}">Rp {{ number_format($saldoAkhir, 0, ',', '.') }}</div>
+        </div>
+
+        <div class="stat-card {{ $selisihBulanIni >= 0 ? 'orange' : 'red' }}">
+            <div class="stat-icon {{ $selisihBulanIni >= 0 ? 'bg-amber-50' : 'bg-red-50' }}">
+                <svg aria-hidden="true" class="w-5 h-5 {{ $selisihBulanIni >= 0 ? 'text-amber-500' : 'text-red-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            </div>
+            <div class="stat-label">Selisih Bulan Ini</div>
+            <div class="stat-value {{ $selisihBulanIni >= 0 ? 'text-amber-700' : 'text-red-700' }}">Rp {{ number_format($selisihBulanIni, 0, ',', '.') }}</div>
         </div>
     </div>
 
@@ -266,7 +274,7 @@
                         <td colspan="8" class="text-right text-slate-700">Total</td>
                         <td class="text-right text-emerald-700 whitespace-nowrap">Rp {{ number_format($totalPenerimaan, 0, ',', '.') }}</td>
                         <td class="text-right text-red-700 whitespace-nowrap">Rp {{ number_format($totalPengeluaran, 0, ',', '.') }}</td>
-                        <td class="text-right whitespace-nowrap {{ $saldoAkhir >= 0 ? 'text-blue-700' : 'text-red-700' }}">Rp {{ number_format($saldoAkhir, 0, ',', '.') }}</td>
+                        <td class="text-right whitespace-nowrap {{ $selisihBulanIni >= 0 ? 'text-blue-700' : 'text-red-700' }}">Rp {{ number_format($selisihBulanIni, 0, ',', '.') }}</td>
                         <td colspan="3"></td>
                     </tr>
                 </tfoot>

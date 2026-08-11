@@ -5,12 +5,14 @@ namespace App\Exports;
 use App\Models\TransaksiBku;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
 /** @implements WithMapping<TransaksiBku> */
-class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, WithMapping
+class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, WithMapping, WithColumnFormatting, WithStrictNullComparison
 {
     /** @var array<int, int> */
     protected array $months;
@@ -25,6 +27,7 @@ class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, With
         $this->periodeLabel = $periodeLabel;
         $this->tahunAnggaranId = $tahunAnggaranId ?? (function () {
             $ta = \App\Models\TahunAnggaran::where('status', true)->first(['id']);
+
             return $ta ? (string) $ta->id : '';
         })();
         $this->sumberDanaId = $sumberDanaId;
@@ -37,7 +40,7 @@ class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, With
             ->where('transaksi_bku.tahun_anggaran_id', $this->tahunAnggaranId)
             ->where('transaksi_bku.jenis', 'pengeluaran')
             ->whereIn('transaksi_bku.bulan', $this->months)
-            ->when($this->sumberDanaId, fn($q) => $q->where('transaksi_bku.sumber_dana_id', $this->sumberDanaId));
+            ->when($this->sumberDanaId, fn ($q) => $q->where('transaksi_bku.sumber_dana_id', $this->sumberDanaId));
 
         $rows = $query
             ->join('rkas_item', 'rkas_item.id', '=', 'transaksi_bku.rkas_item_id')
@@ -65,6 +68,7 @@ class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, With
                 $result->setAttribute('belum_diisi', max(0, $belumDiisi));
                 $result->setAttribute('persen_siplah', $total > 0 ? round(($siplah / $total) * 100, 1) : 0);
                 $result->setAttribute('persen_non_siplah', $total > 0 ? round(($nonSiplah / $total) * 100, 1) : 0);
+
                 return $result;
             });
 
@@ -85,17 +89,28 @@ class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, With
         ];
     }
 
-    /** @return array<int, string> */
+    /** @return array<int, mixed> */
     public function map($row): array
     {
         return [
             $row->jenis_belanja,
-            number_format($row->total, 0, ',', '.'),
-            number_format($row->siplah, 0, ',', '.'),
-            number_format($row->non_siplah, 0, ',', '.'),
-            number_format($row->belum_diisi, 0, ',', '.'),
+            (int) round((float) $row->total),
+            (int) round((float) $row->siplah),
+            (int) round((float) $row->non_siplah),
+            (int) round((float) $row->belum_diisi),
             $row->persen_siplah . '%',
             $row->persen_non_siplah . '%',
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function columnFormats(): array
+    {
+        return [
+            'B' => '#,##0',
+            'C' => '#,##0',
+            'D' => '#,##0',
+            'E' => '#,##0',
         ];
     }
 

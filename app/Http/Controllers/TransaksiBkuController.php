@@ -101,7 +101,8 @@ class TransaksiBkuController extends Controller
             ")->firstOrFail();
         $totalPenerimaan = (float) $totals->getAttribute('total_penerimaan');
         $totalPengeluaran = (float) $totals->getAttribute('total_pengeluaran');
-        $saldoAkhir = $totalPenerimaan - $totalPengeluaran;
+        $selisihBulanIni = $totalPenerimaan - $totalPengeluaran;
+        $saldoAkhir = $saldo;
 
         $belumMetodePengadaan = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->when($sumberDanaId, fn (Builder $q) => $q->where('sumber_dana_id', $sumberDanaId))
@@ -123,7 +124,7 @@ class TransaksiBkuController extends Controller
             ->count();
 
         return view('transaksi-bku.index', compact(
-            'transaksis', 'bulan', 'totalPenerimaan', 'totalPengeluaran', 'saldoAkhir',
+            'transaksis', 'bulan', 'totalPenerimaan', 'totalPengeluaran', 'saldoAkhir', 'selisihBulanIni',
             'belumMetodePengadaan', 'belumCetakKwitansi', 'countOverride', 'tahunAnggaranAktif', 'tahunList',
             'sumberDanas', 'sumberDanaId'
         ));

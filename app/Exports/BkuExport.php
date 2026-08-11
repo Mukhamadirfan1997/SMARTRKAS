@@ -6,12 +6,14 @@ use App\Models\TransaksiBku;
 use App\Models\TahunAnggaran;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithTitle;
 
 /** @implements WithMapping<TransaksiBku> */
-class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping
+class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping, WithColumnFormatting, WithStrictNullComparison
 {
     protected int $bulan;
     protected string $profil;
@@ -102,7 +104,7 @@ class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping
     {
         if (isset($row->is_header)) {
             $label = $row->uraian;
-            $saldo = number_format((float) $row->getAttribute('saldo'), 0, ',', '.');
+            $saldo = (int) round((float) $row->getAttribute('saldo'));
 
             return ['', '', '', '', $label, '', '', $saldo];
         }
@@ -113,9 +115,19 @@ class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping
             $row->rkasItem && $row->rkasItem->program ? $row->rkasItem->program->kode : '',
             $row->rkasItem && $row->rkasItem->kodeRekening ? $row->rkasItem->kodeRekening->kode : '',
             $row->uraian ?? '',
-            strtolower($row->jenis) == 'penerimaan' ? number_format($row->jumlah, 0, ',', '.') : '',
-            strtolower($row->jenis) == 'pengeluaran' ? number_format($row->jumlah, 0, ',', '.') : '',
-            isset($row->saldo_berjalan) ? number_format($row->saldo_berjalan, 0, ',', '.') : '',
+            strtolower($row->jenis) == 'penerimaan' ? (int) round((float) $row->jumlah) : '',
+            strtolower($row->jenis) == 'pengeluaran' ? (int) round((float) $row->jumlah) : '',
+            isset($row->saldo_berjalan) ? (int) round((float) $row->saldo_berjalan) : '',
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function columnFormats(): array
+    {
+        return [
+            'F' => '#,##0',
+            'G' => '#,##0',
+            'H' => '#,##0',
         ];
     }
 
