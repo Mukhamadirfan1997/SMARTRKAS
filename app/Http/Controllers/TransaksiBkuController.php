@@ -10,6 +10,7 @@ use App\Models\RkasItem;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
+use App\Support\NomorDokumen;
 use App\Support\NumberParser;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -206,7 +207,7 @@ class TransaksiBkuController extends Controller
         $validated['tahun_anggaran_id'] = $taRec ? $taRec->id : '';
 
         if ($noBukti === '' || TransaksiBku::where('no_bukti', $noBukti)->exists()) {
-            $noBukti = $this->generateNoBukti($jenis, $tanggal);
+            $noBukti = NomorDokumen::noBukti($jenis, $tanggal);
             $validated['no_bukti'] = $noBukti;
         }
 
@@ -279,24 +280,6 @@ class TransaksiBkuController extends Controller
      * atau duplikat. Dipakai sebagai fallback agar transaksi tidak pernah gagal
      * hanya karena nomor bukti yang dihasilkan JavaScript bentrok.
      */
-    private function generateNoBukti(string $jenis, string $tanggal): string
-    {
-        $prefix = strtolower($jenis) === 'penerimaan' ? 'BBU' : 'BPU';
-        $month = Carbon::parse($tanggal)->format('m');
-        $year = Carbon::parse($tanggal)->format('Y');
-        $npsn = PengaturanSekolah::get()->npsn ?? '00000000';
-
-        $seq = TransaksiBku::where('jenis', $jenis)->count();
-
-        do {
-            $seq++;
-            $candidate = $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT)
-                . '/' . $npsn . '/' . $month . '/' . $year;
-        } while (TransaksiBku::where('no_bukti', $candidate)->exists());
-
-        return $candidate;
-    }
-
     public function edit(TransaksiBku $transaksiBku): View
     {
         $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening');

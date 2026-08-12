@@ -1305,3 +1305,122 @@ Rilis v0.4.2: fitur `no_invoice_siplah` (bukan hanya sampai test/commit), verifi
 
 ## Test Status
 - Backlog commit final: bump versi + AGENTS.md. Suite PHP tetap `OK (330 tests, 882 assertions)`, PHPStan level 6 `[OK] No errors` (tidak ada perubahan kode PHP). Rilis v0.4.2 di GitHub: 2 asset (NSIS + MSI), notes berisi fitur invoice SIPLah + pesan Indonesia + auto-migrate terverifikasi.
+
+---
+
+# Sesi 11 Agu 2026 — KLARIFIKASI & RENCANA FITUR NOTA MULTI-ITEM (1 nota = 1 kegiatan = banyak item) — BELUM DIPUTUSKAN / BELUM ADA PERUBAHAN KODE
+
+## Status (Jujur — Sesuai SOP)
+- Ini adalah sesi **perencanaan/diskusi saja**. User menyatakan **BELUM bisa memutuskan** langkah karena ini fitur perubahan besar. Diskusi & rencana dicatat untuk bahan pertimbangan; **TIDAK ada perubahan kode, TIDAK ada commit fitur**.
+- User akan memberi kabar bila sudah memutuskan / berdiskusi lagi dengan berbagai pertimbangan.
+
+## Requirement Final (klarifikasi user)
+- Fitur adalah **NOTA/KWITANSI MULTI-ITEM**, BUKAN multi-kegiatan.
+- **1 Nota = tepat 1 Kegiatan + boleh banyak Item Belanja.** Jangan pernah buat 1 nota dengan >1 kegiatan.
+- Jika kegiatan berbeda → buat nota baru (NOTA-0001 Belanja ATK, NOTA-0002 Belanja Obat, dst).
+- Struktur konseptual: `nota_bku` (id, no_nota, tanggal, kegiatan, sumber_dana, toko_penerima, metode_pengadaan, no_invoice_siplah, uraian, tahun_anggaran_id, created_by, timestamps, deleted_at) → `nota_bku_item` (id, nota_bku_id, rkas_item_id, jumlah, harga_satuan, subtotal, urutan). TIDAK ada perantara `nota_bku_kegiatan` (1 nota = 1 kegiatan).
+- `TransaksiBku` TETAP transaksi finansial utama. Nota hanya pengelompokan/dokumen; saat disimpan, item di-*flatten* jadi satu `transaksi_bku` per item (BPU018→Item1, BPU019→Item2, ...), semua memegang `nota_bku_id`.
+- **`no_nota` ≠ `no_bukti`** (keputusan desain final — jangan pakai no_nota sebagai no_bukti). Format contoh: nota `NOTA-0001/20519260/08/2026`, item menghasilkan `BPU018/20519260/08/2026` dst.
+- **Validasi Kegiatan wajib server-side** (bukan cuma JS): item dari kegiatan berbeda → tolak dengan pesan menjelaskan item itu milik kegiatan lain + sarankan nota baru.
+- **1 Nota = 1 Sumber Dana** (batch pertama); sumber dana berbeda → nota baru.
+- **Guard anggaran all-or-nothing** (§12): semua item divalidasi dulu; jika ada ≥1 item tidak cukup anggaran → **SELURUH nota ditolak** (jangan simpan sebagian). Pakai database transaction.
+- Kwitansi utama lama tetap dipertahankan; transaksi hasil flatten bisa pakai mekanisme kwitansi lama. Nota punya halaman **Detail Nota** (header + rincian item + total).
+- Cetak dari Detail Nota: checkbox **"Sertakan Lampiran Rincian Nota"** default **OFF**. OFF → kwitansi utama saja; ON → kwitansi utama + lampiran rincian nota (semua item dalam kegiatan tersebut).
+- Form: pilih kegiatan → sistem tampilkan item RKAS anggota kegiatan itu; checkbox pilih banyak item; ada tombol "Tambah Item"; TIDAK ada tombol "Tambah Kegiatan".
+- Jangan rusak fitur lama: input BKU single-item tetap ada; TransaksiBku tetap sumber transaksi; laporan/ekspor lama tidak boleh rusak.
+
+## Audit Struktur Aktual SmartRKAS v0.4.2 (hasil pengecekan langsung)
+- `transaksi_bku` (migrasi 000009 + 000020 override_note + 000021 no_invoice_siplah): UUID PK, `no_bukti` unique(100), `rkas_item_id` FK nullable set-null, `sumber_dana_id` FK nullable, `tahun_anggaran_id` FK restrict, enum `jenis`, `jumlah decimal(15,2)`, `volume`, `satuan`, `toko_penerima`, `metode_pengadaan`, `no_invoice_siplah`, `uraian`, `created_by`, softDeletes. BELUM ada kolom `nota_bku_id`.
+- `TransaksiBku` model: HasUuids+SoftDeletes, relasi rkasItem/tahunAnggaran/sumberDana/createdBy/kwitansi(HasOne), `masihOverBudget()`.
+- `TransaksiBkuController`: store() normalisasi `NumberParser::rupiah/decimal`, guard `sisaBulanBerjalan` (= rencana rkas_item_bulan ≤ bulan − realisasi pengeluaran ≤ bulan, `RkasItem::sisaKumulatifSd`), `ValidationException`, AuditLog+Outbox+`Cache::increment`. `generateNoBukti()` private: BPU/BBU + 0001 + /NPSN/MM/YYYY + loop anti-bentrok.
+- **Kegiatan di aplikasi = `MasterProgram`** (`rkas_item.program_id` → `master_program`, kolom `kode`/`nama`/`program`/`sub_program`/`level`). Kwitansi menampilkan "Kegiatan" = `program->kode . nama`. Sumber dana item = `rkas_item.sumber_dana_id`.
+- Delete transaksi: soft-delete + Audit + Outbox per baris (`destroy` & `destroyAll`).
+- `AuditLog::record(tabel, aksi, dataBaru, dataLama, userId)`; `Outbox::record(model, modelId, aksi, payload)`.
+- Kwitansi PDF: Barryvdh\DomPDF, view `transaksi-bku.kwitansi`/`kwitansi-content`, paper `[0,0,609.4488,935.433]`, `terbilang()` lokal, dedup "Untuk" (collapse whitespace); disimpan di tabel `kwitansi`.
+- Tes: `TransaksiBkuTest` (guard, override, normalisasi angka, no_bukti auto, siplah), `KwitansiTest`, `DatabaseIndexTest`, dll. PHPUnit 11 · PHP 8.2 · Laravel 12.
+- PHPStan level 6 (`app/`, `config/`, `database/factories/`, `tests/`) — model butuh `@property`.
+- Migrasi terakhir `000021`; versi app `0.4.2`. Tidak ada referensi `nota_bku`/`NotaBku` di kode maupun view.
+
+## Keputusan yang SUDAH dikonfirmasi user (sesi ini)
+1. **Kegiatan & Sumber Dana = FK** (bukan teks bebas): `nota_bku.kegiatan_id` → `master_program`, `nota_bku.sumber_dana_id` → `sumber_dana`.
+2. **Sumber dana diturunkan dari item**; item campur sumber dana → ditolak (sesuai mockup: form hanya kegiatan + checklist item).
+3. **Override Sisa Anggaran untuk nota = TIDAK ada** (user: di ARKAS pergeseran/perubahan anggaran hanya untuk item yang BELUM dibelanjakan; nota = belanja yang sudah berjalan → tolak tegas all-or-nothing).
+4. **Delete nota = hapus (soft) nota + SEMUA BPU hasil flatten** (Audit + Outbox per transaksi + nota).
+
+## PERTIMBANGAN BESAR: Pergeseran / Perubahan Anggaran (PA) — BELUM ditentukan, krusial untuk keputusan nota multi-item
+- **Definisi & alur PA di ARKAS** (aturan utama): **hanya item yang BELUM dibelanjakan yang bisa dilakukan pergeseran / perubahan anggaran**. Item yang sudah ada transaksi/realisasi TIDAK bisa diubah via PA. Konsekuensi untuk nota: nota = belanja yang SUDAH berjalan (item sudah dibelanjakan), sehingga begitu nota dibuat, item-nya tidak akan bisa diperbaiki lewat PA kalau ada kesalahan nominal.
+- **Kaitan PA dengan nota multi-item**: guard anggaran nota **all-or-nothing** menolak seluruh nota bila ada ≥1 item tidak cukup anggaran. Jalur legal untuk mencukupkan anggaran = PA (geser/perubahan) pada item yang **belum dibelanjakan** SEBELUM membuat nota. Karena itu keputusan "tidak ada override untuk nota" terkait erat dengan keberadaan fitur PA.
+- **PA vs Override Sisa Anggaran (fitur yang sudah ada)**: dua mekanisme berbeda, jangan dicampur.
+  - Override (`transaksi_bku.override_note`, M-Override): memungkinkan transaksi melebihi sisa anggaran dengan catatan wajib min. 10 karakter; konsekuensi = **kwitansi terkunci** sampai item RKAS disesuaikan; flash mengingatkan "Segera ajukan pergeseran / Perubahan Anggaran (PA)". Override pakai `masihOverBudget()` untuk mengunci kwitansi.
+  - PA (pergeseran/perubahan anggaran): mekanisme ARKAS untuk menyesuaikan rencana anggaran (memindahkan pagu antar item/kegiatan, atau revisi ATK). **BELUM diimplementasikan di SmartRKAS** — saat ini satu-satunya cara menyesuaikan rencana = ubah manual `rkas_item_bulan`/item RKAS.
+- **Rencana fitur PA di masa depan (BACKLOG)**: PA yang proper (geser pagu antar item/kegiatan + revisi, diaudit, mereset kunci kwitansi) kemungkinan perlu dibangun agar: (1) jalur legal mencukupkan anggaran sebelum nota, (2) membuka kunci kwitansi override setelah item disesuaikan, (3) mendukung alur ARKAS. Belum ada keputusan scope/waktu; menjadi salah satu pertimbangan besar bagi user sebelum menyetujui nota multi-item.
+
+## RENCANA IMPLEMENTASI (acuan bila user setuju lanjut — BELUM dikerjakan)
+- **Migrasi** `2026_08_11_000022_create_nota_bku_tables.php` (tabel `nota_bku` + `nota_bku_item`) dan `2026_08_11_000023_add_nota_bku_id_to_transaksi_bku_table.php` (`transaksi_bku.nota_bku_id` FK nullable onDelete set null + index). Detail kolom sesuai requirement; `nota_bku_item.nota_bku_id` cascade; `rkas_item_id` set null; index pendukung.
+- **Model** `NotaBku` (HasUuids+SoftDeletes+HasFactory; relasi kegiatan/sumberDana/tahunAnggaran/createdBy/items(HasMany order urutan)/transaksiBkus), `NotaBkuItem` (notaBku/rkasItem), `TransaksiBku` += `nota_bku_id` + relasi `notaBku()`.
+- **Factory** `NotaBkuFactory`, `NotaBkuItemFactory`.
+- **Nomor dokumen**: refactor `generateNoBukti` → `app/Support/NomorDokumen.php` (noBukti, noNota `NOTA-{0001}/{NPSN}/{MM}/{YYYY}`), perilaku identik.
+- **Controller `NotaBkuController`**: index/create/store/show/destroy/cetak + AJAX `/nota-bku/items?kegiatan_id&bulan&q`; route prefix `nota-bku` dalam grup auth (route `{notaBku}` DIBAWAH route `/nota-bku/items`). store(): normalisasi angka, validasi (tanggal, kegiatan_id exists, items.*, distinct rkas_item_id, subtotal dihitung server-side), validasi kegiatan & sumber dana server-side, guard all-or-nothing (bulan dari tanggal, `sisaKumulatifSd`), `DB::transaction` → NotaBku + NotaBkuItems + N× TransaksiBku (jenis pengeluaran, no_bukti unik, jumlah=subtotal, volume=qty, satuan item, uraian=item->uraian, nota_bku_id), Audit `nota_bku.create` + Outbox nota & tiap transaksi + `Cache::increment`. destroy(): soft-delete nota + transaksiBkus-nya. cetak(): PDF nota + lampiran opsional (`?lampiran=1`).
+- **View**: `nota-bku/index|create|show|kwitansi|lampiran`; tombol "Tambah Nota Multi-Item" di `transaksi-bku/index.blade.php`; link sidebar "Nota Multi-Item".
+- **Tests** `tests/Feature/BKU/NotaBkuTest.php` + update `DatabaseIndexTest`; pertahankan 330 test lama hijau.
+- **Verifikasi akhir**: full PHPUnit, PHPStan level 6, `view:cache`, E2E HTTP live (cek proses php.exe duplikat di port sama sebelum uji manual — SOP).
+- Bump versi/build/rilis = langkah TERPISAH menunggu keputusan user.
+
+## Catatan jujur
+- Rencana di atas BELUM dieksekusi; bisa berubah bila user mendiskusikan ulang (mis. skema 6-kartu BKU dibatalkan user di sesi lalu — jadi jangan asumsi, crosscheck dulu).
+- Bug "saldo dobel" & "input BKU" dll sudah ditutup di sesi-sesi sebelumnya; acuan stabilitas v0.3.9/baseline v0.4.2.
+
+---
+
+# Sesi 11 Agu 2026 — IMPLEMENTASI FITUR NOTA MULTI-ITEM (NotaBku) — commit lokal, BELUM push/build/rilis
+
+## Goal
+Eksekusi rencana "Nota/Kwitansi Multi-Item" yang telah disetujui user (session sebelumnya): 1 nota = 1 kegiatan = banyak item → di-flatten menjadi satu `transaksi_bku` per item, semua memegang `nota_bku_id`. Diaudit all-or-nothing.
+
+## Summary
+- Fitur SELESAI + 19 test di `tests/Feature/BKU/NotaBkuTest.php`. Full suite `OK (349 tests, 974 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- BELUM push, BELUM bump versi, BELUM build installer, BELUM rilis GitHub (sesuai instruksi user: commit lokal dulu).
+
+## Changes
+- `database/migrations/2026_08_12_000022_create_nota_bku_tables.php` — tabel `nota_bku` (id uuid, no_nota, tanggal, bulan, kegiatan_id FK master_program, sumber_dana_id FK, toko_penerima, metode_pengadaan, no_invoice_siplah, uraian, tahun_anggaran_id FK, created_by, timestamps, softDeletes) + `nota_bku_item` (nota_bku_id FK cascade, rkas_item_id FK null, urutan, jumlah, satuan, harga_satuan, subtotal).
+- `database/migrations/2026_08_12_000023_add_nota_bku_id_to_transaksi_bku_table.php` — `transaksi_bku.nota_bku_id` nullable FK set null + index (soft-delete aware).
+- `app/Models/NotaBku.php` — HasUuids+SoftDeletes+HasFactory; relasi kegiatan/sumberDana/tahunAnggaran/createdBy/items(orderBy urutan)/transaksiBkus; `@property` dinamis.
+- `app/Models/NotaBkuItem.php` — relasi notaBku/rkasItem.
+- `app/Models/TransaksiBku.php` — tambah `nota_bku_id` di `$fillable` + relasi `notaBku(): BelongsTo`.
+- `app/Support/NomorDokumen.php` (BARU) — `noBukti(string $jenis, string $tanggal)` (BPU/BBU+0001/NPSN/MM/YYYY, count by jenis, loop anti-bentrok) + `noNota(string $tanggal)` (`NOTA-0001/NPSN/MM/YYYY`, hitung denganTrashed agar nomor tidak terpakai ulang). `TransaksiBkuController::generateNoBukti` dihapus → pakai NomorDokumen.
+- `app/Http/Controllers/NotaBkuController.php` (BARU) — index/create/items/store/show/destroy/cetak:
+  - `items()` AJAX `GET /nota-bku/items?kegiatan_id&bulan` → `{results:[{id,no_urut,uraian,tarif,satuan,sumber_dana,sisa}]}`; **hanya item tahun anggaran aktif** (where tahun_anggaran_id status true) + filter kegiatan. `sisa` = bulan valid ? `sisaKumulatifSd(bulan)` : jumlah.
+  - `store()`: validasi tanggal (required), kegiatan_id (exists master_program), toko_penerima required, metode_pengadaan in siplah/non_siplah, `no_invoice_siplah` required_if siplah, items array min:1 + items.*.rkas_item_id exists + items.*.qty gt:0 + items.*.harga. Normalisasi `NumberParser::rupiah/decimal`. Server-side: semua item dimuat (with sumberDana/tahunAnggaran), cek item milik kegiatan terpilih, item harus tahun anggaran aktif (`tahun_anggaran_id === $tahunAnggaranId`), sumber dana harus SERAGAM (item campur sumber dana → tolak), guard anggaran per item via `sisaKumulatifSd(bulan dari tanggal)` — jika ADA ≥1 item over-budget → `ValidationException` "SELURUH nota dibatalkan" (all-or-nothing). `DB::transaction` jika lolos: buat NotaBku + NotaBkuItems (subtotal = qty*harga) + N transaksi pengeluaran (no_bukti unik, uraian=item uraian, volume=qty, satuan, jumlah=subtotal, nota_bku_id). AuditLog `nota_bku.create` + Outbox per transaksi & nota. Flash sukses berisi no_nota + jumlah transaksi.
+  - `destroy()`: soft-delete nota + semua transaksiBkus-nya (Audit+Outbox per transaksi, lalu nota).
+  - `cetak()`: PDF via DomPDF gambar `[0,0,609.4488,935.433]` dari `nota-bku.cetak`, filename `NOTA-....-000001-2026.pdf` (safe). Belum ada opsi "lampiran" (sesi ini minimal; `?lampiran=1` belum dipakai).
+- `resources/views/nota-bku/index.blade.php` — card Grid 3 kolom? TIDAK — tabel: No / No. Nota / Tanggal·Bulan / Kegiatan / Sumber Dana / Jumlah Item / Total / Aksi (Detail btn-info, Cetak btn-secondary, Hapus form DELETE dengan confirm). Empty-state. Pagination.
+- `resources/views/nota-bku/create.blade.php` — form: tanggal (default now), pilih kegiatan (select dari MasterProgram), pilih sumber dana (select), toko penerima, metode pengadaan + row invoice SIPLah (hidden toggle), uraian, daftar item dinamis via JS: pilih item dengan menu `items()` berbasis kegiatan+bulan, setiap baris punya select item + input qty + harga (format rupiah) + satuan readonly + subtotal live + tombol hapus; tombol "Tambah Item"; sumbit dengan nilai-norm (parseRupiah/parseDecimal). Baris tambahan "Batal/Reset".
+- `resources/views/nota-bku/show.blade.php` — Detail Nota: info header (no_nota, tanggal, bulan, kegiatan, sumber dana, metode+invoice, toko, uraian, pembuat), tabel item (urutan, uraian, qty×satuan, harga, subtotal) + footer total, ringkasan stat-card (Total, Jumlah Item, Transaksi Terkait), tabel transaksi terkait (no_bukti, tanggal, jumlah), tombol Cetak PDF (`target=_blank`), Hapus (form DELETE + confirm modal/JS).
+- `resources/views/nota-bku/cetak.blade.php` — PDF nota: kop sekolah (nama, npsn, alamat, kab/kec), judul, field no_nota/tanggal/kegiatan/sumber dana/metode+invoice/toko/uraian, tabel item + total + terbilang, TTD (Bendahara & Kepala Sekolah). Paper custom.
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` — tambah baris **No. Nota** saat `$transaksiBku->notaBku` ada (kwitansi transaksi hasil flatten menampilkan referensi nota asal).
+- `resources/views/layouts/navigation.blade.php` — link sidebar "Nota Multi-Item" (di bawah Buku Kas Umum, ikon receipt).
+- `resources/views/transaksi-bku/index.blade.php` — tombol "Nota Multi-Item" (btn-info) di header card.
+- `routes/web.php` — grup auth: `GET /nota-bku` (index), `GET /nota-bku/create`, `GET /nota-bku/items`, `POST /nota-bku` (store), `GET /nota-bku/{notaBku}`, `DELETE /nota-bku/{notaBku}`, `GET /nota-bku/{notaBku}/cetak`. Route `{notaBku}` DIBAWAH `/items`.
+- `database/factories/NotaBkuFactory.php` + `NotaBkuItemFactory.php`.
+
+## Guard Anggaran All-or-Nothing (detail yang diverifikasi user)
+- Test `test_store_rejects_entire_nota_when_any_item_over_budget`: buat 2 item (rencana cukup 1jt & sisa 50rb), post nota dengan item2 qty 10×10rb = 100rb > sisa 50rb → `assertSessionHasErrors('items')` + teks "SELURUH nota dibatalkan". Ditegaskan dengan **`assertDatabaseMissing` eksplisit untuk SEMUA baris**:
+  - `nota_bku` (no_nota `NOTA-0001/20519260/01/2026`)
+  - `nota_bku_item` (kedua rkas_item_id)
+  - `transaksi_bku` (kedua item, jenis pengeluaran)
+  - + assertDatabaseCount 0 pada ketiga tabel.
+
+## Verifikasi
+- `vendor\bin\phpunit --filter NotaBkuTest` → `OK (19 tests, 92 assertions)`.
+- Full suite → `OK (349 tests, 974 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Kedua konfirmasi user dituntaskan: (1) all-or-nothing test pakai `assertDatabaseMissing` utk semua tabel; (2) `kwitansi-content.blade.php` punya baris "No. Nota" untuk transaksi flatten (+test render).
+
+## Catatan
+- Item bukan tahun anggaran aktif ditolak di `store()` DAN tidak muncul di `items()`.
+- `no_nota` ≠ `no_bukti`: nota TIDAK menggunakan nomor BPU; transaksi hasil flatten tetap dapat `no_bukti` sendiri.
+- Override sisa anggaran untuk nota TIDAK ada (keputusan user).
+- Catatan: sebagian teks sesi perencanaan di AGENTS.md (sebelum ini) masih mengandung mojibake karakter (utk kasus lama); bagian ini ditulis UTF-8 bersih.
+- Belum: bump versi, build installer, push, release — menunggu instruksi user.
+
+## Test Status
+- PHPUnit `OK (349 tests, 974 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM push; commit lokal sesuai instruksi.

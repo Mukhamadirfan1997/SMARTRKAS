@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * @property string $id
  * @property string|null $rkas_item_id
+ * @property string|null $nota_bku_id
  * @property string $tahun_anggaran_id
  * @property string|null $sumber_dana_id
  * @property string $tanggal
@@ -51,6 +52,7 @@ class TransaksiBku extends Model
 
     protected $fillable = [
         'rkas_item_id',
+        'nota_bku_id',
         'tahun_anggaran_id',
         'sumber_dana_id',
         'tanggal',
@@ -85,6 +87,12 @@ class TransaksiBku extends Model
     public function rkasItem(): BelongsTo
     {
         return $this->belongsTo(RkasItem::class);
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\NotaBku, $this> */
+    public function notaBku(): BelongsTo
+    {
+        return $this->belongsTo(NotaBku::class, 'nota_bku_id');
     }
 
     /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\TahunAnggaran, $this> */

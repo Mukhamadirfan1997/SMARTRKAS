@@ -10,6 +10,7 @@ use App\Http\Controllers\JenisBelanjaController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MasterKodeRekeningController;
 use App\Http\Controllers\MasterProgramController;
+use App\Http\Controllers\NotaBkuController;
 use App\Http\Controllers\PengaturanSekolahController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecoveryCodeController;
@@ -77,6 +78,14 @@ Route::middleware(['auth'])->group(function () {
     Route::post('transaksi-bku/hapus-semua', [TransaksiBkuController::class, 'destroyAll'])->name('transaksi-bku.hapus-semua');
     Route::get('transaksi-bku/{transaksiBku}/cetak-kwitansi', [TransaksiBkuController::class, 'cetakKwitansi'])->name('transaksi-bku.cetak-kwitansi');
     Route::post('transaksi-bku/cetak-kwitansi-batch', [TransaksiBkuController::class, 'cetakKwitansiBatch'])->name('transaksi-bku.cetak-kwitansi-batch');
+
+    Route::get('nota-bku', [NotaBkuController::class, 'index'])->name('nota-bku.index');
+    Route::get('nota-bku/create', [NotaBkuController::class, 'create'])->name('nota-bku.create');
+    Route::post('nota-bku', [NotaBkuController::class, 'store'])->name('nota-bku.store');
+    Route::get('nota-bku/items', [NotaBkuController::class, 'items'])->name('nota-bku.items');
+    Route::get('nota-bku/{notaBku}', [NotaBkuController::class, 'show'])->name('nota-bku.show');
+    Route::delete('nota-bku/{notaBku}', [NotaBkuController::class, 'destroy'])->name('nota-bku.destroy');
+    Route::get('nota-bku/{notaBku}/cetak', [NotaBkuController::class, 'cetak'])->name('nota-bku.cetak');
 
     Route::get('laporan/bku', [LaporanController::class, 'bku'])->name('laporan.bku');
     Route::get('laporan/bku/export-excel', [LaporanController::class, 'bkuExportExcel'])->name('laporan.bku.export-excel');

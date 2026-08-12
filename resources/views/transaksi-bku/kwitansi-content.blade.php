@@ -108,6 +108,13 @@
             <td class="val">{{ $transaksiBku->no_invoice_siplah }}</td>
         </tr>
         @endif
+        @if($transaksiBku->notaBku)
+        <tr>
+            <td class="lbl">No. Nota</td>
+            <td class="sep">:</td>
+            <td class="val">{{ $transaksiBku->notaBku->no_nota }}</td>
+        </tr>
+        @endif
         <tr>
             <td class="lbl">Sebesar</td>
             <td class="sep">:</td>
