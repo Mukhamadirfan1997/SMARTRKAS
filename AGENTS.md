@@ -1803,3 +1803,38 @@ User: "sistem pencarian kegiatan dan rekening kok gak kayak sistem pencarian di 
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
+
+---
+
+# Sesi 13 Agu 2026 — Audit Dampak Menyeluruh (dashboard → laporan, semua cetak) + Laporan MD Terpisah
+
+## Goal
+Jawaban permintaan user: "sekarang cek ke semua apakah ada dampak dari perubahan kita sesuai sop dan buatkan laporan md terpisah", lalu "di cek semua halaman dan fungsinya dari dashboard sampai laporan tanpa terlewatkan, dan juga isi cetak yang lain". Selesai: 69 cek PASS, laporan `LAPORAN-PERUBAHAN.md` dibuat di root repo.
+
+## Summary
+- **Probe komprehensif** `%TEMP%\opencode\probe-all-pages.php` (login admin, render controller via `app()->call`, PDF via stream, export via `Excel::store`, AJAX via Request): **69/69 PASS**.
+- Tidak ada perubahan kode aplikasi pada sesi ini (murni audit + laporan). Working tree bersih (3 commit lokal: `8c96eb0`, `b748a4b`, `7076b98`; belum push).
+
+## Cakupan Verifikasi (69 cek)
+- **BKU**: index (judul, tombol Riwayat Nota btn, tombol "Tambah Pembelanjaan" dihapus, no_bukti nota tampil), create (form+jumlah, picker kegiatan/rekening search+hidden+results, initEntityPicker+event, `<select>` lama absen, rkas picker penerimaan tetap, override, no_invoice_siplah, hint format), edit single (picker + preset, tanpa panel nota), edit nota (panel read-only + tabel item, tanpa picker).
+- **Nota**: index (Kembali, kolom No. Bukti, Tambah Transaksi), show (No. Bukti di Informasi, card Transaksi BKU Terkait dihapus, KPI Total Belanja, Rincian Item), cetak PDF (`%PDF` + judul "Rincian Belanja" + field No. BPU via render view karena stream PDF terkompresi FlateDecode).
+- **Kwitansi**: single + batch PDF valid.
+- **Dashboard**: render OK.
+- **Laporan 4×**: web render + PDF valid (bku, rekapRekening, rekapKuartal, rekapSiplah).
+- **Export 4×**: file `.xlsx` valid (PK, >1KB) — BkuExport, RekapRekeningExport, RekapKuartalExport, RekapSiplahExport.
+- **AJAX**: `/nota-bku/items` (filter kegiatan+rekening+bulan) → `{results:[...]}`; `/rkas-items/select2` → `{results:[...]}`.
+- **Master & pengaturan 21 halaman**: rkas index+edit, master-program, master-kode-rekening, sumber-dana, tahun-anggaran, jenis-belanja (index+create), pengaturan-sekolah, backup, riwayat aktivitas, telegram, kode-pemulihan, tentang, import-rkas — render tanpa error.
+
+## Catatan Teknis Probe
+- `Excel` facade alias TIDAK terdaftar di config → pakai `\Maatwebsite\Excel\Facades\Excel::store`. Path export **relatif** ke disk `local` (root = `storage/app/private`), bukan `storage/app`.
+- Controller dgn dependency (mis. `AboutController(AppUpdateService)`) harus `app()->make()`, bukan `new`; route-model-bound page (rkas edit) butuh model nyata (`RkasItem::withTrashed()->first()`).
+- Controller return `Illuminate\View\View` → `->render()`; View TIDAK punya `getContent()`.
+- Cek PDF: `str_starts_with($body, '%PDF')` + status 200. Teks di dalam PDF TIDAK bisa dicari di stream (content terkompresi) → render view langsung untuk cek isi.
+- 3 FAIL pertama saat iterasi = salah pilih data (probe awal pakai `withTrashed()->first()` → ambil transaksi soft-deleted yang memang tidak tampil di index; edit nota kosong). Setelah pakai transaksi aktif → 69/69.
+- Sisa proses php dev: 8026 (repo) + 61389 (app desktop terinstall, kode sendiri) — tidak ada duplikat port (SOP).
+
+## Laporan MD
+- `LAPORAN-PERUBAHAN.md` (root repo) — ringkasan perubahan 3 commit, tabel verifikasi 69 cek, dampak per halaman/fungsi, keterbatasan jujur (belum uji browser klik penuh picker; `npm run build` tidak dijalankan ulang karena tanpa perubahan aset; export diuji via class langsung; probe DB dev), status rilis (lokal, belum push).
+
+## Test Status
+- PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Tidak ada perubahan kode. `LAPORAN-PERUBAHAN.md` + AGENTS.md ini BELUM di-commit.
