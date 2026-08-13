@@ -1950,3 +1950,34 @@ Tindak lanjut laporan user (setelah app v0.5.1 berjalan lancar): (1) di laporan 
 
 ## Test Status
 - PHPUnit `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM commit; BELUM push — commit lokal sesuai instruksi user.
+
+---
+
+# Sesi 13 Agu 2026 — Migrasi Universal Jenis Belanja "Belanja Cetak" (kode 5.1.02.01.01.0026) → masuk v0.5.2
+
+## Goal
+Jadikan mapping kode rekening `5.1.02.01.01.0026` (Bahan Cetak & Penggandaan) → jenis belanja **"Belanja Cetak"** sebagai **patokan konsisten di laporan untuk SEMUA instalasi** (bukan hanya DB sekolah ini). Klarifikasi user: **hanya `jenis_belanja_id` yang diubah, NAMA REKENING TETAP** — seperti kode lain yang ikut jenisnya (Belanja Modal, Belanja Jasa, dst).
+
+## Fakta (jawaban pertanyaan user "apakah user lain juga berfungsi")
+- Fix **kode** laporan (fallback kegiatan/rekening/jenis dari nota) = kode aplikasi → berlaku untuk semua user yang pakai v0.5.2.
+- Kategori "Belanja Cetak" sudah ter-seed di **semua instalasi** (`DatabaseSeeder`, `app:install`).
+- **Mapping** kode→jenis adalah **data per-instalasi** (hasil import master data masing-masing via `MasterKodeRekeningImport::firstOrCreate`); edit DB langsung sebelumnya HANYA mengubah DB sekolah ini. Untuk patokan universal → dibuat migrasi.
+
+## Changes
+- `database/migrations/2026_08_13_000026_set_jenis_belanja_cetak_for_kode_0026.php` (BARU) — pakai **DB facade + `Str::uuid()`** (bukan Eloquent model, agar tahan perubahan model di masa depan):
+  - up(): `jenis_belanja` di-`value('id')` by nama "Belanja Cetak"; bila belum ada → insert dengan uuid baru; lalu `master_kode_rekening WHERE kode='5.1.02.01.01.0026'` di-`update(['jenis_belanja_id'=>...])`; `Cache::forget('master_kode_rekenings')` + `Cache::forget('jenis_belanjas')` (cache store desktop = `database`).
+  - down(): no-op (nilai sebelumnya per instalasi tidak bisa diketahui).
+- Idempoten: bila sudah "Belanja Cetak" tidak mengubah apa pun. Berlaku di first-run (`app:install`) dan upgrade (auto-migrate `lib.rs` tiap startup).
+
+## Verifikasi (salinan DB produksi, bukan asli)
+- Salin Roaming DB → `%TEMP%\opencode\mig-000026-test2.sqlite`; 000026 Pending.
+- Revert mapping ke "Belanja Barang Persediaan" (simulasi kondisi lama) → `php artisan migrate --force` (env `DB_DATABASE` salinan) → **000026 DONE** (7.61ms).
+- Hasil: `KODE 5.1.02.01.01.0026` → `JENIS: Belanja Cetak`, **nama rekening tetap** "Belanja Alat/Bahan untuk Kegiatan Kantor- Bahan Cetak dan Penggandaan"; jenis id `019fda40-b84c-7203-86fc-fa24f493fde9` (sama dengan edit manual). Script verify `mig-000026-verify.php` di temp.
+
+## Build & Release
+- Karena migrasi ditambahkan SETELAH build v0.5.2 dimulai (tanpa migrasi), build lama **di-kill** dan **di-restart** agar installer menyertakan migrasi (build v0.5.2 berjalan di background; log `C:\Users\yudhi\AppData\Local\Temp\opencode\build-v052.log`).
+- **Catatan log redirect**: Start-Process `cmd /c "npm run build && npm run tauri -- build --bundles nsis,msi > LOG"` — LOG harus **path absolut** (`>` relatif akan menulis di repo root). Terverifikasi log di `%TEMP%\opencode`.
+- Belum push; release menunggu build selesai + verifikasi installer + uji manual user.
+
+## Test Status
+- PHPUnit `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK. Commit lokal menyusul setelah verifikasi build (migrasi + AGENTS).
