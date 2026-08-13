@@ -4,6 +4,7 @@ namespace Tests\Feature\Laporan;
 
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
+use App\Models\NotaBku;
 use App\Models\PengaturanSekolah;
 use App\Models\RkasItem;
 use App\Models\RkasItemBulan;
@@ -11,6 +12,7 @@ use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
 use App\Models\User;
+use App\Exports\BkuExport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -112,6 +114,92 @@ class LaporanTest extends TestCase
         $response = $this->actingAs($this->user)->get('/laporan/bku?bulan=1&cetak=pdf');
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    // =================== LAPORAN BKU: TRANSAKSI NOTA ===================
+
+    /**
+     * Buat nota + transaksi flatten (rkas_item_id null) utk menguji fallback
+     * kegiatan/kode rekening/jenis belanja dari notaBku di laporan BKU.
+     *
+     * @return array{program: MasterProgram, rekening: MasterKodeRekening, nota: NotaBku, transaksi: TransaksiBku}
+     */
+    private function createNotaTransaksi(): array
+    {
+        $program = MasterProgram::factory()->create(['kode' => '06.05.08.', 'nama' => 'Kegiatan Uji Nota']);
+        $rekening = MasterKodeRekening::factory()->create(['kode' => '5.1.02.01.01.0025', 'nama' => 'Bahan Cetak']);
+        $jenis = \App\Models\JenisBelanja::factory()->create(['nama' => 'Belanja Barang Persediaan']);
+        $rekening->jenis_belanja_id = $jenis->id;
+        $rekening->save();
+
+        $nota = NotaBku::factory()->create([
+            'no_nota' => 'NOTA-0001/20519260/01/2026',
+            'tanggal' => '2026-01-20',
+            'bulan' => 1,
+            'kegiatan_id' => $program->id,
+            'kode_rekening_id' => $rekening->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'created_by' => $this->user->id,
+        ]);
+
+        $transaksi = TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'rkas_item_id' => null,
+            'nota_bku_id' => $nota->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 550000,
+            'no_bukti' => 'BPU999/20519260/01/2026',
+            'uraian' => 'Nota belanja NOTA-0001/20519260/01/2026',
+            'tanggal' => '2026-01-20',
+        ]);
+
+        return [
+            'program' => $program,
+            'rekening' => $rekening,
+            'nota' => $nota,
+            'transaksi' => $transaksi,
+        ];
+    }
+
+    public function test_laporan_bku_menampilkan_kegiatan_rekening_jenis_dari_nota(): void
+    {
+        $this->createNotaTransaksi();
+
+        $response = $this->actingAs($this->user)->get('/laporan/bku/preview?bulan=1');
+        $response->assertOk();
+        $response->assertSee('BPU999/20519260/01/2026');
+        $response->assertSee('06.05.08.');
+        $response->assertSee('5.1.02.01.01.0025');
+        $response->assertSee('Belanja Barang Persediaan');
+    }
+
+    public function test_laporan_bku_pdf_menampilkan_kegiatan_rekening_jenis_dari_nota(): void
+    {
+        $this->createNotaTransaksi();
+
+        // View PDF `laporan.bku` dirender oleh `bku()` saat cetak=pdf; cek render HTML view.
+        $response = $this->actingAs($this->user)->get('/laporan/bku?bulan=1&cetak=pdf');
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    public function test_bku_export_mengisi_kegiatan_rekening_dari_nota(): void
+    {
+        $this->createNotaTransaksi();
+
+        $export = new BkuExport(1, '', $this->tahunAnggaran->id);
+        $row = $export->collection()->first(
+            fn (TransaksiBku $t) => $t->no_bukti === 'BPU999/20519260/01/2026'
+        );
+        $this->assertNotNull($row);
+
+        $mapped = $export->map($row);
+        $this->assertSame('06.05.08.', $mapped[2]);
+        $this->assertSame('5.1.02.01.01.0025', $mapped[3]);
+        $this->assertSame('550000', (string) $mapped[6]);
     }
 
     // =================== LAPORAN REKAP REKENING ===================

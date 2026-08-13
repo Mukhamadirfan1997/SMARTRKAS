@@ -1914,3 +1914,39 @@ Bawa fix "kwitansi tidak bisa dicetak" (yang selama ini hanya di repo) ke app te
 ## Status
 - Commit lokal bump v0.5.1 + AGENTS.md. **BELUM push, BELUM rilis GitHub** — menunggu uji manual user + keputusan release.
 - App v0.5.1 dibiarkan berjalan untuk uji manual user (user: "saya akan cek juga jadi kita sama sama cek").
+
+---
+
+# Sesi 13 Agu 2026 — Laporan BKU Bulanan: Kolom Kegiatan/Rekening/Jenis Isi dari Nota + Jenis Belanja "Belanja Cetak" (commit lokal)
+
+## Goal
+Tindak lanjut laporan user (setelah app v0.5.1 berjalan lancar): (1) di laporan BKU bulanan, transaksi hasil nota menampilkan kolom Kode Kegiatan, Kode Rekening, Jenis Belanja KOSONG; (2) mapping jenis belanja kode rekening `5.1.02.01.01.0026` (Bahan Cetak dan Penggandaan) → "Belanja Cetak". Konfirmasi user: (a) ubah jenis belanja langsung di DB; (b) scope fix laporan = PDF + Web + Export Excel.
+
+## Root Cause
+- `LaporanController` hanya eager-load `rkasItem.program` + `rkasItem.kodeRekening.jenisBelanja`; transaksi hasil nota punya `rkas_item_id = null` → `rkasItem?->...` null → kolom tampil `-`. Data sebenarnya tersedia di `notaBku->kegiatan` + `notaBku->kodeRekening`.
+- Kasus nyata DB produksi: BPU018/20519260/02/2026 (Rp 550.000, NOTA-0003) → kegiatan `06.05.08.`, rekening `5.1.02.01.01.0025`, jenis "Belanja Barang Persediaan".
+
+## Changes (repo)
+- `app/Http/Controllers/LaporanController.php` — `bku()` (line 65) DAN `prepareBkuData()` (line 523, dipakai `bkuWeb`): eager-load ditambah `notaBku.kegiatan`, `notaBku.kodeRekening.jenisBelanja`.
+- `resources/views/laporan/bku.blade.php` (PDF) — `$jenisBelanja` fallback ke nota; sel Kode Kegiatan/Kode Rekening `rkasItem?->... ?? notaBku?->... ?? '-'`.
+- `resources/views/laporan/bku-web.blade.php` — 3 sel (Kegiatan/Rekening/Jenis Belanja) fallback nota.
+- `app/Exports/BkuExport.php` — `collection()` eager-load nota; `map()` kolom Kode Kegiatan/Kode Rekening fallback nota.
+- `tests/Feature/Laporan/LaporanTest.php` — +3 test: `test_laporan_bku_menampilkan_kegiatan_rekening_jenis_dari_nota` (preview), `test_laporan_bku_pdf_menampilkan_kegiatan_rekening_jenis_dari_nota` (PDF), `test_bku_export_mengisi_kegiatan_rekening_dari_nota` (map kolom 2/3/6). Helper private `createNotaTransaksi()`.
+
+## Perubahan DB produksi (langsung, sesuai keputusan user)
+- `UPDATE master_kode_rekening SET jenis_belanja_id = '019fda40-b84c-7203-86fc-fa24f493fde9' WHERE kode = '5.1.02.01.01.0026'` (jenis "Belanja Cetak" sudah ada di DB; sebelum = "Belanja Barang Persediaan"). Memakai kode Laravel TERPASANG (v0.5.1) dengan `DB_DATABASE` → Roaming DB.
+- `Cache::forget('master_kode_rekenings')` + `Cache::forget('jenis_belanjas')` — cache store desktop = `database` (bundle `.env` `CACHE_STORE=database`), tabel `caches` di DB produksi; forget lintas-proses berlaku utk app yang berjalan.
+- Berlaku retroaktif: transaksi BPU017 (item "FOTOCOPI HITAM PUTIH", 1.176.000) kini "Belanja Cetak".
+
+## Verifikasi
+- Probe render thd DB produksi (kode repo, read-only, login admin): **9/9 PASS** — BPU018 tampil kegiatan `06.05.08.`/rekening `5.1.02.01.01.0025`/"Belanja Barang Persediaan"; BPU017 jadi "Belanja Cetak"; bku-web render OK; export map BPU018 kolom 2=`06.05.08.`, kolom 3=`5.1.02.01.01.0025`, BPU017 rekening tetap `5.1.02.01.01.0026`.
+- PHPUnit `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Script temp di `%TEMP%\opencode` dihapus; tidak ada perubahan pada instalasi (`AppData\Local\SmartRKAS`) — fix baru masuk rilis berikutnya.
+
+## Catatan
+- Baris BBU (penerimaan/tarik tunai) tetap `-` di kolom tsb (wajar, tanpa item & tanpa kegiatan nota).
+- `prepareBkuData()` dipakai `bkuWeb` (preview interaktif) — sama-sama di-fix agar web & PDF & export konsisten.
+- Aplikasi terpasang (v0.5.1) BELUM berisi fix laporan ini — perlu build installer baru bila user ingin fix masuk app (menunggu keputusan release v0.5.1 vs bump berikutnya).
+
+## Test Status
+- PHPUnit `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM commit; BELUM push — commit lokal sesuai instruksi user.

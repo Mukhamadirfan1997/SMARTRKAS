@@ -35,7 +35,12 @@ class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping,
     /** @return Collection<int, TransaksiBku> */
     public function collection()
     {
-        $query = TransaksiBku::with('rkasItem.program', 'rkasItem.kodeRekening.jenisBelanja')
+        $query = TransaksiBku::with(
+            'rkasItem.program',
+            'rkasItem.kodeRekening.jenisBelanja',
+            'notaBku.kegiatan',
+            'notaBku.kodeRekening.jenisBelanja'
+        )
             ->where('tahun_anggaran_id', $this->tahunAnggaranId)
             ->where('bulan', $this->bulan)
             ->when($this->sumberDanaId, fn ($q) => $q->where('sumber_dana_id', $this->sumberDanaId))
@@ -112,8 +117,8 @@ class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping,
         return [
             $row->tanggal ? \Carbon\Carbon::parse($row->tanggal)->format('d/m/Y') : '',
             $row->no_bukti ?? '',
-            $row->rkasItem && $row->rkasItem->program ? $row->rkasItem->program->kode : '',
-            $row->rkasItem && $row->rkasItem->kodeRekening ? $row->rkasItem->kodeRekening->kode : '',
+            $row->rkasItem && $row->rkasItem->program ? $row->rkasItem->program->kode : ($row->notaBku && $row->notaBku->kegiatan ? $row->notaBku->kegiatan->kode : ''),
+            $row->rkasItem && $row->rkasItem->kodeRekening ? $row->rkasItem->kodeRekening->kode : ($row->notaBku && $row->notaBku->kodeRekening ? $row->notaBku->kodeRekening->kode : ''),
             $row->uraian ?? '',
             strtolower($row->jenis) == 'penerimaan' ? (int) round((float) $row->jumlah) : '',
             strtolower($row->jenis) == 'pengeluaran' ? (int) round((float) $row->jumlah) : '',

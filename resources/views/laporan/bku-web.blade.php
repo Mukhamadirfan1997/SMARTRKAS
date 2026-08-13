@@ -90,9 +90,9 @@
                             <td class="text-center">{{ $no + 1 }}</td>
                             <td>{{ \Carbon\Carbon::parse($t->tanggal)->format('d/m/Y') }}</td>
                             <td style="font-size:12px">{{ $t->no_bukti }}</td>
-                            <td>{{ $t->rkasItem?->program?->kode ?? '-' }}</td>
-                            <td>{{ $t->rkasItem?->kodeRekening?->kode ?? '-' }}</td>
-                            <td>{{ $t->rkasItem?->kodeRekening?->jenisBelanja?->nama ?? '-' }}</td>
+                            <td>{{ $t->rkasItem?->program?->kode ?? $t->notaBku?->kegiatan?->kode ?? '-' }}</td>
+                            <td>{{ $t->rkasItem?->kodeRekening?->kode ?? $t->notaBku?->kodeRekening?->kode ?? '-' }}</td>
+                            <td>{{ $t->rkasItem?->kodeRekening?->jenisBelanja?->nama ?? $t->notaBku?->kodeRekening?->jenisBelanja?->nama ?? '-' }}</td>
                             <td>{{ $t->uraian ?? $t->rkasItem?->uraian ?? '-' }}</td>
                             <td>{{ $t->toko_penerima ?? '-' }}</td>
                             <td class="text-center whitespace-nowrap">

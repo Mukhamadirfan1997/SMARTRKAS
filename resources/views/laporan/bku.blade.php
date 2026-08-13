@@ -73,14 +73,16 @@
             @php $saldo = $saldoAwal; @endphp
             @forelse($transaksis as $no => $t)
                 @php
-                    $jenisBelanja = $t->rkasItem?->kodeRekening?->jenisBelanja?->nama ?? '';
+                    $jenisBelanja = $t->rkasItem?->kodeRekening?->jenisBelanja?->nama
+                        ?? $t->notaBku?->kodeRekening?->jenisBelanja?->nama
+                        ?? '';
                 @endphp
                 <tr>
                     <td class="text-center">{{ $no + 1 }}</td>
                     <td class="font-mono">{{ \Carbon\Carbon::parse($t->tanggal)->format('d/m/Y') }}</td>
                     <td class="font-mono" style="font-size:8px">{{ $t->no_bukti }}</td>
-                    <td style="font-size:8px">{{ $t->rkasItem?->program?->kode ?? '-' }}</td>
-                    <td class="font-mono" style="font-size:8px">{{ $t->rkasItem?->kodeRekening?->kode ?? '-' }}</td>
+                    <td style="font-size:8px">{{ $t->rkasItem?->program?->kode ?? $t->notaBku?->kegiatan?->kode ?? '-' }}</td>
+                    <td class="font-mono" style="font-size:8px">{{ $t->rkasItem?->kodeRekening?->kode ?? $t->notaBku?->kodeRekening?->kode ?? '-' }}</td>
                     <td style="font-size:8px">{{ $jenisBelanja ?: '-' }}</td>
                     <td style="font-size:8px">{{ $t->uraian ?? $t->rkasItem?->uraian ?? '-' }}</td>
                     <td style="font-size:8px">{{ $t->toko_penerima ?? '-' }}</td>

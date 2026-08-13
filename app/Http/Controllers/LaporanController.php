@@ -62,7 +62,12 @@ class LaporanController extends Controller
         $sumberDanaId = $request->input('sumber_dana_id');
         $profil = PengaturanSekolah::get();
 
-        $transaksis = TransaksiBku::with('rkasItem.program', 'rkasItem.kodeRekening.jenisBelanja')
+        $transaksis = TransaksiBku::with(
+            'rkasItem.program',
+            'rkasItem.kodeRekening.jenisBelanja',
+            'notaBku.kegiatan',
+            'notaBku.kodeRekening.jenisBelanja'
+        )
             ->where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
@@ -520,7 +525,12 @@ class LaporanController extends Controller
         $sumberDanaId = $request->input('sumber_dana_id');
         $profil = PengaturanSekolah::get();
 
-        $transaksis = TransaksiBku::with('rkasItem.program', 'rkasItem.kodeRekening.jenisBelanja')
+        $transaksis = TransaksiBku::with(
+            'rkasItem.program',
+            'rkasItem.kodeRekening.jenisBelanja',
+            'notaBku.kegiatan',
+            'notaBku.kodeRekening.jenisBelanja'
+        )
             ->where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
