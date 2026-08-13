@@ -1595,3 +1595,26 @@ Tanggapi laporan user: "setelah saya hapus BKU dan mau input lagi kok over?". Du
 - `deleteNotaWithTransaksis` reuse utk halaman Riwayat Nota (destroy) dan cascade dari BKU — satu sumber kebenaran.
 - Dev DB `transaksi=7 nota=2`; cookie jar `%TEMP%\opencode\cookies-dev.txt`; server dev 8026 berjalan. BELUM push — commit lokal sesuai instruksi user.
 
+---
+
+# Sesi 13 Agu 2026 — Rekonsiliasi Dashboard Total Realisasi vs BKU Total Pengeluaran
+
+## Temuan User
+"Dashboard total realisasi 1.175.000, di BKU total pengeluaran 675.000, tidak sama." Verifikasi thd dev DB: RealisasiQuery total = 1.175.000, BKU pengeluaran aktif = 675.000. Selisih persis **500.000** = rincian NOTA-0002 (bulan 2) tetap dihitung walau transaksi BPU-nya (BPU004/005/006) sudah dihapus (soft) dari BKU.
+
+## Root Cause
+`nota_bku_item` di `RealisasiQuery` hanya mengecek nota aktif (`nb.deleted_at null`), TIDAK mengecek apakah transaksi pencatatannya di BKU masih ada. Karena nota-nya masih aktif (stale state dari masa sebelum fitur cascade hapus nota), item-nya tetap dihitung → dashboard realisasi lebih besar dari BKU. (NOTA-0002: transaksi BPU004/005/006 trashed, nota aktif, item 500.000 tetap terhitung.)
+
+## Fix
+- `app/Support/RealisasiQuery.php` — cabang nota tambah `whereExists` subquery berkorelasi: minimal SATU `transaksi_bku` aktif (`nota_bku_id = nb.id` dan `deleted_at null`). Rincian nota hanya dihitung bila pembeliannya masih tercatat di kas (BKU); bila semua transaksi nota dihapus → pembelian dianggap batal → item tidak dihitung (selaras dgn cascade).
+- Verifikasi dev DB: RealisasiQuery total = **675.000 = BKU** (selisih 0). Item Antiseptic/Perban/Minyak Tawon realisasi 0 → sisa kembali penuh (juga menyelesaikan keluhan "over" sebelumnya untuk item itu). NOTA-0001 (BPU aktif) tetap dihitung 450.000.
+- Tests — `NotaBkuTest::test_realisasi_nota_tidak_dihitung_saat_semua_transaksi_dihapus` (transaksi nota dihapus langsung tanpa cascade → nota tetap aktif tapi realisasi = 0, sisa kembali 1000000, total RealisasiQuery = 0).
+
+## Catatan
+- Perbaikan struktur test: baris `}` penutup class yang nyasar di tengah (akibat edit sebelumnya) dirapikan; `App\Support\RealisasiQuery` di test butuh leading backslash (`\App\Support\...`) karena namespace `Tests\Feature\BKU`.
+- Stale data NOTA-0002 (nota aktif, transaksi trashed) tidak diubah di DB dev — kini otomatis tidak dihitung sebagai realisasi, tanpa perlu hapus nota.
+- Invarian desain: realisasi per item (via `RealisasiQuery`) selalu = total kas BKU (sum transaksi pengeluaran aktif), karena setiap nota aktif wajib punya transaksi aktif.
+
+## Test Status
+- PHPUnit `OK (364 tests, 1047 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
+

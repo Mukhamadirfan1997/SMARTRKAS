@@ -636,6 +636,34 @@ class NotaBkuTest extends TestCase
         $this->assertSame(500000.0, $item->refresh()->sisaKumulatifSd(1));
     }
 
+    public function test_realisasi_nota_tidak_dihitung_saat_semua_transaksi_dihapus(): void
+    {
+        $item = $this->makeItem(1000000);
+        $item->update(['no_urut' => 2]);
+
+        $this->postNota([
+            [
+                'rkas_item_id' => $item->id,
+                'qty' => '10',
+                'harga' => '50000',
+                'satuan' => 'paket',
+            ],
+        ]);
+
+        $nota = NotaBku::firstOrFail();
+        $transaksi = TransaksiBku::where('nota_bku_id', $nota->id)->firstOrFail();
+
+        $this->assertSame(500000.0, $item->refresh()->realisasiKumulatifSd(1));
+
+        $transaksi->delete();
+
+        $this->assertNull($nota->refresh()->deleted_at);
+        $this->assertSoftDeleted('transaksi_bku', ['id' => $transaksi->id]);
+        $this->assertSame(0.0, $item->refresh()->realisasiKumulatifSd(1));
+        $this->assertSame(1000000.0, $item->refresh()->sisaKumulatifSd(1));
+        $this->assertSame(0.0, (float) \App\Support\RealisasiQuery::base()->sum('rb.jumlah'));
+    }
+
     public function test_destroy_transaksi_nota_cascades_to_nota_dan_anggaran_kembali(): void
     {
         $item = $this->makeItem(1000000);
