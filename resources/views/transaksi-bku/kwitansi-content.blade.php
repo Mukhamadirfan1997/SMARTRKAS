@@ -31,31 +31,12 @@
     }
     $terbilang = ucfirst(trim(terbilang_num($transaksiBku->jumlah))).' Rupiah';
 
-    /* ===== PROGRAM HIERARKI ===== */
-    $namaKegiatan   = '-';
-    $namaProgram    = '-';
-    $namaSubProgram = '-';
-    $kodeRekening   = '-';
-    $namaRekening   = '-';
+    /* ===== KEGIATAN ===== */
+    $namaKegiatan = '-';
 
-    if ($transaksiBku->rkasItem) {
-        $item = $transaksiBku->rkasItem;
-
-        if ($item->kodeRekening) {
-            $kodeRekening = $item->kodeRekening->kode ?? '-';
-            $namaRekening = $item->kodeRekening->nama ?? '-';
-        }
-
-        if ($item->program) {
-            $prog = $item->program;
-            $kodeKegiatan = rtrim($prog->kode ?? '', '.');
-            $segments = explode('.', $kodeKegiatan);
-            $kodeSubProgram = isset($segments[0]) && isset($segments[1]) ? $segments[0] . '.' . $segments[1] . '.' : '-';
-            $kodeProgram    = isset($segments[0]) ? $segments[0] . '.' : '-';
-            $namaKegiatan   = $prog->kode . ' ' . $prog->nama;
-            $namaSubProgram = ($kodeSubProgram !== '-' ? $kodeSubProgram . ' ' : '') . ($prog->sub_program ?? '-');
-            $namaProgram    = ($kodeProgram !== '-' ? $kodeProgram . ' ' : '') . ($prog->program ?? '-');
-        }
+    if ($transaksiBku->rkasItem && $transaksiBku->rkasItem->program) {
+        $prog = $transaksiBku->rkasItem->program;
+        $namaKegiatan = $prog->kode . ' ' . $prog->nama;
     }
 
     /* Terima Dari: sesuai contoh PDF — selalu Kepala Sekolah institusi tersebut */
@@ -80,21 +61,9 @@
             <td class="val">{{ $namaKegiatan }}</td>
         </tr>
         <tr>
-            <td class="lbl">Program</td>
-            <td class="sep">:</td>
-            <td class="val">{{ $namaProgram }}</td>
-        </tr>
-        <tr>
-            <td class="lbl">Sub Program</td>
-            <td class="sep">:</td>
-            <td class="val">{{ $namaSubProgram }}</td>
-        </tr>
-        <tr>
             <td class="lbl">Uraian</td>
             <td class="sep">:</td>
-            <td class="val">
-                {{ $kodeRekening !== '-' ? $kodeRekening . ' ' . $namaRekening : ($transaksiBku->uraian ?? '-') }}
-            </td>
+            <td class="val">{{ $transaksiBku->uraian ?: ($transaksiBku->rkasItem->uraian ?? '-') }}</td>
         </tr>
         <tr>
             <td class="lbl">Terima Dari</td>
@@ -106,13 +75,6 @@
             <td class="lbl">No. Invoice SIPLah</td>
             <td class="sep">:</td>
             <td class="val">{{ $transaksiBku->no_invoice_siplah }}</td>
-        </tr>
-        @endif
-        @if($transaksiBku->notaBku)
-        <tr>
-            <td class="lbl">No. Nota</td>
-            <td class="sep">:</td>
-            <td class="val">{{ $transaksiBku->notaBku->no_nota }}</td>
         </tr>
         @endif
         <tr>

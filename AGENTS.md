@@ -1618,3 +1618,25 @@ Tanggapi laporan user: "setelah saya hapus BKU dan mau input lagi kok over?". Du
 ## Test Status
 - PHPUnit `OK (364 tests, 1047 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
 
+---
+
+# Sesi 13 Agu 2026 — Kwitansi PDF: Hapus Program/Sub Program/Kode Rekening & No. Nota (cukup No. Bukti + No. SIPLah)
+
+## Goal
+User: "output PDF kwitansi: kode program, sub program dan kode rekening jadi kosong; jangan tampilkan No. Nota; yang dilaporkan di lapangan hanya no bukti dan no siplah karena no nota sudah didapat dari toko."
+
+## Changes
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` (dipakai kwitansi single + batch):
+  - Baris **Program** dan **Sub Program** DIHAPUS dari tabel field.
+  - Baris **No. Nota** DIHAPUS (`@if($transaksiBku->notaBku)` dihapus).
+  - Baris **Uraian** kini hanya menampilkan `$transaksiBku->uraian` (fallback `rkasItem->uraian`, lalu `-`) — TIDAK lagi menampilkan kode rekening + nama rekening.
+  - Blok PHP "PROGRAM HIERARKI" disederhanakan hanya `$namaKegiatan` (hapus `$namaProgram`/`$namaSubProgram`/`$kodeRekening`/`$namaRekening`/kode segment).
+  - Field yang tersisa: **No (no_bukti)**, Kegiatan, Uraian, Terima Dari, No. Invoice SIPLah (saat siplah), Sebesar + terbilang, TTD.
+
+## Verifikasi
+- Render view thd DB dev BPU001: `No. Nota`/`Sub Program`/`Program` TIDAK ADA; `Kegiatan`/`Uraian`/`Sebesar`/`Terima Dari` ADA; Uraian = "Belanja Honor Pembina Ekstra Pramuka" (tanpa kode rekening). PDF render OK (`%PDF-`, 2258 bytes).
+- Test `NotaBkuTest` lama `test_cetak_kwitansi_flattened_transaksi_shows_no_nota` diubah → `test_cetak_kwitansi_flattened_transaksi_tidak_menampilkan_no_nota_program_dan_sub_program` (assert Not/Contains `No. Nota`, `NOTA-0001/...`, `Sub Program`; Contains `BPU001/...` + uraian item).
+
+## Test Status
+- PHPUnit `OK (364 tests, 1050 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
+

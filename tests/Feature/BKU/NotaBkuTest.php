@@ -474,7 +474,7 @@ class NotaBkuTest extends TestCase
         $response->assertSee('Cetak PDF');
     }
 
-    public function test_cetak_kwitansi_flattened_transaksi_shows_no_nota(): void
+    public function test_cetak_kwitansi_flattened_transaksi_tidak_menampilkan_no_nota_program_dan_sub_program(): void
     {
         $item = $this->makeItem(1000000);
         $nota = NotaBku::factory()->create([
@@ -506,8 +506,11 @@ class NotaBkuTest extends TestCase
             'profil' => PengaturanSekolah::get(),
         ])->render();
 
-        $this->assertStringContainsString('No. Nota', $html);
-        $this->assertStringContainsString('NOTA-0001/20519260/01/2026', $html);
+        $this->assertStringContainsString('BPU001/20519260/01/2026', $html);
+        $this->assertStringNotContainsString('No. Nota', $html);
+        $this->assertStringNotContainsString('NOTA-0001/20519260/01/2026', $html);
+        $this->assertStringNotContainsString('Sub Program', $html);
+        $this->assertStringContainsString('Belanja ATK Nota Test', $html);
     }
 
     public function test_cetak_returns_pdf(): void    {
