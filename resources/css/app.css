@@ -357,6 +357,14 @@
         @apply px-5 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider;
     }
 
+    .data-table thead th.text-center {
+        text-align: center;
+    }
+
+    .data-table thead th.text-right {
+        text-align: right;
+    }
+
     .dark .data-table thead th {
         @apply text-slate-400;
     }

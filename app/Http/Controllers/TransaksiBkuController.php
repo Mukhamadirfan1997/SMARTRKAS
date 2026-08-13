@@ -46,7 +46,7 @@ class TransaksiBkuController extends Controller
         $sumberDanas = SumberDana::orderBy('kode')->get();
         $sumberDanaId = $request->input('sumber_dana_id');
 
-        $query = TransaksiBku::with('rkasItem.program', 'rkasItem.kodeRekening.jenisBelanja')
+        $query = TransaksiBku::with('rkasItem.program', 'rkasItem.kodeRekening.jenisBelanja', 'notaBku.kegiatan', 'notaBku.kodeRekening.jenisBelanja', 'notaBku.items')
             ->where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->orderBy('tanggal')
             ->orderBy('id');

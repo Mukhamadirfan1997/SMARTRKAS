@@ -1752,3 +1752,28 @@ Tindak lanjut 4 temuan user (lapor → konfirmasi → implementasi). Keputusan u
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Probe render dev DB: 10/10 PASS. BELUM push — commit lokal sesuai instruksi user.
+
+---
+
+# Sesi 13 Agu 2026 — 4 Temuan User: Header Tabel Edit Sejajar + Dropdown Searchable + Tombol Riwayat Nota + Kolom Nota di Index BKU
+
+## Goal
+Perbaiki 4 temuan user (lapor → konfirmasi → implementasi): (1) tabel item di halaman edit BKU tidak lurus dengan header; (2) dropdown Kegiatan & Rekening di create BKU harus bisa dicari; (3) "Riwayat Nota" masih link teks kecil; (4) di index BKU kolom Kode Kegiatan/Kode Rekening/Jenis Belanja/Volume/Satuan kosong untuk transaksi nota.
+
+## Summary
+- CSS + 2 controller/view berubah; full suite tetap `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK, `npm run build` OK.
+- Probe render index thd dev DB (baris nota `BPU001/20519260/08/2026`): Kode Kegiatan=`03.05.02.`, Kode Rekening=`5.1.02.01.01.0037`, Jenis Belanja=`Belanja Barang Persediaan`, Volume=`16` (sum qty 6+6+4), Satuan=`-` (item campur botol/buah → benar sesuai keputusan user).
+
+## Changes
+- `resources/css/app.css` — tambah `.data-table thead th.text-center { text-align: center; }` + `.data-table thead th.text-right { text-align: right; }` (spesifisitas lebih tinggi dari `.data-table thead th { text-align:left }` agar header kolom angka rata kanan sejajar isi). **Jangan pakai `@apply text-center`** di rule yang selectornya mengandung `.text-center` sendiri → Tailwind error "circular dependency"; pakai CSS polos `text-align`.
+- `resources/views/transaksi-bku/index.blade.php` — link "Riwayat Nota" (`text-xs underline`) → tombol `btn btn-secondary btn-sm` + ikon dokumen; blok `@php` per-baris: `$kegiatanKode`/`$rekeningKode`/`$jenisBelanjaNama` = `rkasItem?->program/kodeRekening` dengan fallback `notaBku?->kegiatan/kodeRekening`; `$volumeTampil`/`$satuanTampil`: untuk nota → `items->sum('jumlah')` + satuan hanya bila semua item satu satuan (`strtolower(trim)` unik count 1), selain itu `-` (transaksi biasa tidak berubah).
+- `app/Http/Controllers/TransaksiBkuController.php` — `index()` eager-load `notaBku.kegiatan`, `notaBku.kodeRekening.jenisBelanja`, `notaBku.items` (tambahan dari eager-load rkasItem yang sudah ada).
+- `resources/views/transaksi-bku/create.blade.php` + `edit.blade.php` — input `kegiatan_search`/`kode_rekening_search` di atas select kegiatan & rekening (di edit hanya branch non-nota); JS `initSearchableSelect(selectId, inputId)` filter `opt.hidden` via `textContent` lowercased, placeholder (`value===''`) dan opsi `selected` selalu tampil; dipanggil di blok init DOMContentLoaded.
+
+## Catatan
+- Keputusan user (via question tool) utk kolom Volume/Satuan baris nota: Volume = total qty seluruh item; Satuan hanya ditampilkan bila semua item memakai satuan sama (selain itu `-`).
+- Header tabel edit (No/Jumlah/Harga Satuan/Subtotal) sudah berkelas `text-center`/`text-right` sejak sebelum sesi ini; akar "tidak lurus" = CSS bawaan `.data-table thead th` `text-align:left` mengalahkan utilitas → fix cukup di CSS, struktur HTML tidak diubah.
+- `npm run build` menghasilkan `public/build/assets/app-BBIO6Wtu.css` + manifest baru (`public/build/` tidak di-track).
+
+## Test Status
+- PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK, `npm run build` OK. Probe render dev DB: index (kolom nota terisi) + edit (tabel item utuh) PASS. Commit lokal; BELUM push.

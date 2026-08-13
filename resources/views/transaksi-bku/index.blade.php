@@ -116,7 +116,10 @@
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Tambah Transaksi
                 </a>
-                <a href="{{ route('nota-bku.index') }}" class="text-xs text-slate-500 hover:text-indigo-600 underline underline-offset-2">Riwayat Nota</a>
+                <a href="{{ route('nota-bku.index') }}" class="btn btn-secondary btn-sm">
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Riwayat Nota
+                </a>
             </div>
         </div>
 
@@ -158,6 +161,23 @@
                 </thead>
                 <tbody>
                     @forelse($transaksis as $no => $transaksi)
+                        @php
+                            $kegiatanKode = $transaksi->rkasItem?->program?->kode ?? $transaksi->notaBku?->kegiatan?->kode;
+                            $rekeningKode = $transaksi->rkasItem?->kodeRekening?->kode ?? $transaksi->notaBku?->kodeRekening?->kode;
+                            $jenisBelanjaNama = $transaksi->rkasItem?->kodeRekening?->jenisBelanja?->nama
+                                ?? $transaksi->notaBku?->kodeRekening?->jenisBelanja?->nama;
+                            $volumeTampil = $transaksi->volume;
+                            $satuanTampil = $transaksi->satuan;
+                            if ($transaksi->notaBku && $transaksi->notaBku->items->isNotEmpty()) {
+                                $volumeTampil = (float) $transaksi->notaBku->items->sum('jumlah');
+                                $satuansNota = $transaksi->notaBku->items
+                                    ->pluck('satuan')
+                                    ->filter(fn ($s) => $s !== null && trim($s) !== '');
+                                $satuanTampil = $satuansNota->map(fn ($s) => strtolower(trim($s)))->unique()->count() === 1
+                                    ? trim($satuansNota->first())
+                                    : null;
+                            }
+                        @endphp
                         <tr>
                             <td class="text-center">
                                 <input type="checkbox" name="ids[]" value="{{ $transaksi->id }}" class="check-item rounded border-slate-300" onchange="updateCetakTerpilih()">
@@ -168,25 +188,20 @@
                             </td>
                             <td class="font-mono text-xs text-slate-800 whitespace-nowrap">{{ $transaksi->no_bukti }}</td>
                             <td class="text-xs text-slate-600 whitespace-nowrap">
-                                {{ $transaksi->rkasItem && $transaksi->rkasItem->program ? $transaksi->rkasItem->program->kode : '-' }}
+                                {{ $kegiatanKode ?: '-' }}
                             </td>
                             <td class="text-xs font-mono text-slate-600 whitespace-nowrap">
-                                {{ $transaksi->rkasItem && $transaksi->rkasItem->kodeRekening ? $transaksi->rkasItem->kodeRekening->kode : '-' }}
+                                {{ $rekeningKode ?: '-' }}
                             </td>
                             <td class="whitespace-nowrap">
-                                @php
-                                    $jenisBelanja = $transaksi->rkasItem && $transaksi->rkasItem->kodeRekening
-                                        ? optional($transaksi->rkasItem->kodeRekening->jenisBelanja)->nama
-                                        : null;
-                                @endphp
-                                @if($jenisBelanja)
-                                    <span class="badge badge-blue">{{ $jenisBelanja }}</span>
+                                @if($jenisBelanjaNama)
+                                    <span class="badge badge-blue">{{ $jenisBelanjaNama }}</span>
                                 @else
                                     <span class="text-slate-400 text-xs">&mdash;</span>
                                 @endif
                             </td>
-                            <td class="text-right text-slate-700 font-medium whitespace-nowrap">{{ $transaksi->volume > 0 ? number_format($transaksi->volume, 0, ',', '.') : '-' }}</td>
-                            <td class="text-slate-600 text-xs">{{ $transaksi->satuan ?: '-' }}</td>
+                            <td class="text-right text-slate-700 font-medium whitespace-nowrap">{{ $volumeTampil > 0 ? number_format($volumeTampil, 0, ',', '.') : '-' }}</td>
+                            <td class="text-slate-600 text-xs">{{ $satuanTampil ?: '-' }}</td>
                             <td class="max-w-[200px]">
                                 <div class="truncate text-slate-700" title="{{ $transaksi->uraian }}">{{ $transaksi->uraian ?? '-' }}</div>
                                 @if($transaksi->rkasItem)

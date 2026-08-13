@@ -73,6 +73,7 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label for="kegiatan_id" class="form-label">Kegiatan <span class="text-red-500">*</span></label>
+                                <input type="text" id="kegiatan_search" class="form-input text-sm mb-1.5" placeholder="Ketik untuk mencari kegiatan..." autocomplete="off">
                                 <select name="kegiatan_id" id="kegiatan_id" class="form-select" required>
                                     <option value="">-- Pilih Kegiatan --</option>
                                     @foreach($kegiatans as $kegiatan)
@@ -85,6 +86,7 @@
                             </div>
                             <div>
                                 <label for="kode_rekening_id" class="form-label">Rekening Belanja <span class="text-red-500">*</span></label>
+                                <input type="text" id="kode_rekening_search" class="form-input text-sm mb-1.5" placeholder="Ketik untuk mencari rekening..." autocomplete="off">
                                 <select name="kode_rekening_id" id="kode_rekening_id" class="form-select" required>
                                     <option value="">-- Pilih Kode Rekening --</option>
                                     @foreach($kodeRekenings as $rekening)
@@ -269,6 +271,20 @@
             const formEl = document.getElementById('form-bku');
             var volumeTouched = false;
             var initializing = true;
+
+            function initSearchableSelect(selectId, inputId) {
+                var select = document.getElementById(selectId);
+                var input = document.getElementById(inputId);
+                if (!select || !input) return;
+                input.addEventListener('input', function () {
+                    var q = this.value.trim().toLowerCase();
+                    for (var i = 0; i < select.options.length; i++) {
+                        var opt = select.options[i];
+                        if (opt.value === '' || opt.selected) { opt.hidden = false; continue; }
+                        opt.hidden = opt.textContent.toLowerCase().indexOf(q) === -1;
+                    }
+                });
+            }
 
             let cache = [];
             let oldItems = @json(old('items', [])) || {};
@@ -622,6 +638,8 @@
 
             toggleVisibility();
             toggleNoInvoice();
+            initSearchableSelect('kegiatan_id', 'kegiatan_search');
+            initSearchableSelect('kode_rekening_id', 'kode_rekening_search');
             window.RkasPicker.init();
             generateNoBukti();
             if (kegiatanSelect.value && kodeRekeningSelect.value) {
