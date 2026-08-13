@@ -381,6 +381,24 @@ class NotaBkuController extends Controller
         }
 
         $noNota = $notaBku->no_nota;
+        $count = $this->deleteNotaWithTransaksis($notaBku);
+
+        return redirect()->route('nota-bku.index')->with('success', 'Nota ' . $noNota . ' beserta ' . $count . ' transaksi terkait dihapus.');
+    }
+
+    /**
+     * Hapus (soft) nota beserta semua transaksi terkait, lengkap dengan
+     * AuditLog + Outbox per transaksi dan nota. Dipakai oleh halaman Riwayat
+     * Nota (destroy) dan juga cascade dari penghapusan transaksi BKU yang
+     * merupakan bagian dari nota (TransaksiBkuController::destroy/destroyAll).
+     *
+     * @return int jumlah transaksi terkait yang ikut dihapus
+     */
+    public function deleteNotaWithTransaksis(NotaBku $notaBku): int
+    {
+        $user = auth()->user();
+
+        $noNota = $notaBku->no_nota;
         $transaksis = $notaBku->transaksiBkus()->get();
 
         foreach ($transaksis as $transaksi) {
@@ -394,16 +412,17 @@ class NotaBkuController extends Controller
 
         $notaBku->delete();
 
-        AuditLog::record('nota_bku', 'delete', [
-            'no_nota' => $noNota,
-            'jumlah_transaksi' => $transaksis->count(),
-        ], null, $user->id);
+        if ($user !== null) {
+            AuditLog::record('nota_bku', 'delete', [
+                'no_nota' => $noNota,
+                'jumlah_transaksi' => $transaksis->count(),
+            ], null, $user->id);
+            Cache::increment('dash_ver_' . $user->id);
+        }
 
         Outbox::record('NotaBku', $notaBku->id, 'delete', ['no_nota' => $noNota]);
 
-        Cache::increment('dash_ver_' . $user->id);
-
-        return redirect()->route('nota-bku.index')->with('success', 'Nota ' . $noNota . ' beserta ' . $transaksis->count() . ' transaksi terkait dihapus.');
+        return $transaksis->count();
     }
 
     public function cetak(NotaBku $notaBku): Response

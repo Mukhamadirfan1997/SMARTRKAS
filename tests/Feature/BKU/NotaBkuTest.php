@@ -598,4 +598,108 @@ class NotaBkuTest extends TestCase
         $this->assertSame(1, $noBuktis->unique()->count());
         $this->assertMatchesRegularExpression('/^BPU\d{3}\/20519260\/01\/2026$/', (string) $noBuktis->first());
     }
+
+    public function test_realisasi_nota_tidak_dobel_dengan_transaksi_legacy_nota(): void
+    {
+        $item = $this->makeItem(1000000);
+        $item->update(['no_urut' => 2]);
+
+        $this->postNota([
+            [
+                'rkas_item_id' => $item->id,
+                'qty' => '10',
+                'harga' => '50000',
+                'satuan' => 'paket',
+            ],
+        ]);
+
+        $nota = NotaBku::firstOrFail();
+
+        $transaksiBaru = TransaksiBku::where('nota_bku_id', $nota->id)->firstOrFail();
+        $this->assertNull($transaksiBaru->rkas_item_id);
+
+        TransaksiBku::create([
+            'no_bukti' => 'BPU999/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 500000,
+            'bulan' => 1,
+            'tanggal' => '2026-01-15',
+            'rkas_item_id' => $item->id,
+            'nota_bku_id' => $nota->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'tahun_anggaran_id' => $this->tahun->id,
+            'uraian' => 'Flatten legacy nota',
+            'created_by' => $this->user->id,
+        ]);
+
+        $this->assertSame(500000.0, $item->refresh()->realisasiKumulatifSd(1));
+        $this->assertSame(500000.0, $item->refresh()->sisaKumulatifSd(1));
+    }
+
+    public function test_destroy_transaksi_nota_cascades_to_nota_dan_anggaran_kembali(): void
+    {
+        $item = $this->makeItem(1000000);
+        $item->update(['no_urut' => 2]);
+
+        $this->postNota([
+            [
+                'rkas_item_id' => $item->id,
+                'qty' => '10',
+                'harga' => '50000',
+                'satuan' => 'paket',
+            ],
+        ]);
+
+        $nota = NotaBku::firstOrFail();
+        $transaksi = TransaksiBku::where('nota_bku_id', $nota->id)->firstOrFail();
+
+        $this->assertSame(500000.0, $item->refresh()->realisasiKumulatifSd(1));
+
+        $response = $this->actingAs($this->user)->delete('/transaksi-bku/' . $transaksi->id);
+
+        $response->assertSessionHas('success');
+        $this->assertSoftDeleted('nota_bku', ['id' => $nota->id]);
+        $this->assertSoftDeleted('transaksi_bku', ['id' => $transaksi->id]);
+        $this->assertSame(0.0, $item->refresh()->realisasiKumulatifSd(1));
+        $this->assertSame(1000000.0, $item->refresh()->sisaKumulatifSd(1));
+        $this->assertDatabaseHas('audit_log', [
+            'user_id' => $this->user->id,
+            'tabel' => 'nota_bku',
+            'aksi' => 'delete',
+        ]);
+    }
+
+    public function test_destroy_all_cascades_transaksi_nota(): void
+    {
+        $item1 = $this->makeItem(1000000);
+        $item2 = $this->makeItem(2000000);
+        $item1->update(['no_urut' => 1]);
+        $item2->update(['no_urut' => 2]);
+
+        $this->postNota([
+            ['rkas_item_id' => $item1->id, 'qty' => '10', 'harga' => '50000', 'satuan' => 'paket'],
+            ['rkas_item_id' => $item2->id, 'qty' => '2', 'harga' => '250000', 'satuan' => 'set'],
+        ]);
+
+        $nota = NotaBku::firstOrFail();
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku/hapus-semua', [
+            'tahun' => $this->tahun->tahun,
+            'bulan' => 1,
+            'alasan' => 'Reset uji cascade',
+        ]);
+
+        $response->assertSessionHas('success');
+        $this->assertSoftDeleted('nota_bku', ['id' => $nota->id]);
+        $this->assertDatabaseHas('audit_log', [
+            'user_id' => $this->user->id,
+            'tabel' => 'transaksi_bku',
+            'aksi' => 'delete_bulk',
+        ]);
+        $this->assertDatabaseHas('audit_log', [
+            'user_id' => $this->user->id,
+            'tabel' => 'nota_bku',
+            'aksi' => 'delete',
+        ]);
+    }
 }

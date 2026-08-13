@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Kwitansi;
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
+use App\Models\NotaBku;
 use App\Models\Outbox;
 use App\Models\PengaturanSekolah;
 use App\Models\RkasItem;
@@ -436,6 +437,17 @@ class TransaksiBkuController extends Controller
             abort(403);
         }
 
+        $notaId = $transaksiBku->nota_bku_id;
+
+        if ($notaId !== null) {
+            $nota = NotaBku::withTrashed()->find($notaId);
+            if ($nota !== null && !$nota->trashed()) {
+                $count = (new NotaBkuController)->deleteNotaWithTransaksis($nota);
+
+                return back()->with('success', 'Transaksi dihapus beserta nota ' . $nota->no_nota . ' (' . $count . ' transaksi terkait).');
+            }
+        }
+
         $noBukti = $transaksiBku->no_bukti;
         $jumlah = $transaksiBku->jumlah;
         $id = $transaksiBku->id;
@@ -508,7 +520,17 @@ class TransaksiBkuController extends Controller
         }
 
         $noBuktis = [];
+        $notaIds = $transaksis
+            ->filter(static fn (TransaksiBku $t): bool => $t->nota_bku_id !== null)
+            ->pluck('nota_bku_id')
+            ->unique()
+            ->values();
+        $notas = NotaBku::withTrashed()->whereIn('id', $notaIds)->whereNull('deleted_at')->get();
+
         foreach ($transaksis as $transaksi) {
+            if ($transaksi->nota_bku_id !== null) {
+                continue;
+            }
             $noBuktis[] = $transaksi->no_bukti;
             $transaksi->delete();
             Outbox::record('TransaksiBku', $transaksi->id, 'delete', [
@@ -518,15 +540,20 @@ class TransaksiBkuController extends Controller
             ]);
         }
 
+        foreach ($notas as $nota) {
+            (new NotaBkuController)->deleteNotaWithTransaksis($nota);
+        }
+
         AuditLog::record('transaksi_bku', 'delete_bulk', [
             'jumlah_transaksi' => $count,
+            'jumlah_nota' => $notas->count(),
             'no_bukti' => array_slice($noBuktis, 0, 50),
             'catatan' => $note !== '' ? $note : null,
         ], null, $user->id);
 
         Cache::increment('dash_ver_' . $user->id);
 
-        return back()->with('success', $count . ' transaksi dihapus.');
+        return back()->with('success', $count . ' transaksi dihapus' . ($notas->count() > 0 ? ' termasuk ' . $notas->count() . ' nota terkait.' : '.'));
     }
 
     public function cetakKwitansi(TransaksiBku $transaksiBku): Response|RedirectResponse

@@ -7,12 +7,16 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Sumber data realisasi per item RKAS yang menggabungkan dua jalur belanja:
- *  1. transaksi_bku jenis=pengeluaran (baris aktif, rkas_item_id tidak null) —
+ *  1. transaksi_bku jenis=pengeluaran (baris aktif, rkas_item_id tidak null,
+ *     dan BUKAN bagian dari nota — atribusi nota diambil dari nota_bku_item) —
  *     input BKU single-item;
  *  2. nota_bku_item (join nota_bku, hanya nota aktif) — rincian nota multi-item.
  *
- * Satu nota multi-item dibukukan sebagai SATU transaksi_bku (rkas_item_id = null),
- * sehingga realisasi per item dari nota diambil dari nota_bku_item, bukan transaksi.
+ * Satu nota multi-item dibukukan sebagai SATU transaksi_bku (rkas_item_id = null,
+ * nota_bku_id terisi), sehingga realisasi per item dari nota diambil dari
+ * nota_bku_item, bukan transaksi. Transaksi yang masih membawa nota_bku_id
+ * (data lama hasil flatten per-item) juga TIDAK dihitung di cabang transaksi
+ * agar tidak dobel dengan nota_bku_item.
  *
  * Kolom hasil union: id, rkas_item_id, bulan, jumlah.
  */
@@ -23,6 +27,7 @@ final class RealisasiQuery
         $transaksi = DB::table('transaksi_bku')
             ->where('jenis', 'pengeluaran')
             ->whereNull('deleted_at')
+            ->whereNull('nota_bku_id')
             ->whereNotNull('rkas_item_id')
             ->selectRaw('id, rkas_item_id, bulan, jumlah');
 

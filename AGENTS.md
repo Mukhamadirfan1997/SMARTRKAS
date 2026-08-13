@@ -1566,3 +1566,32 @@ Tutup 3 keputusan user dari evaluasi fitur nota multi-item yang belum tuntas: (4
 ## Test Status
 - PHPUnit `OK (360 tests, 1027 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK. BELUM commit — dikerjakan lanjut sesi ini; commit lokal sesuai instruksi user.
 
+---
+
+# Sesi 13 Agu 2026 — Fix Realisasi Nota Dobel + Cascade Hapus Nota dari BKU (commit lokal)
+
+## Goal
+Tanggapi laporan user: "setelah saya hapus BKU dan mau input lagi kok over?". Dua akar masalah ditemukan dan diselesaikan (keputusan user: cascade hapus nota): (1) realisasi item nota dihitung DOBEL untuk data transaksi flatten lama, (2) menghapus transaksi BKU milik nota tidak mengembalikan anggaran karena atribusi nota (nota_bku_item) tetap dihitung.
+
+## Summary
+- **Akar 1 (dobel hitung)**: transaksi flatten hasil nota versi LAMA membawa `rkas_item_id` + `nota_bku_id` → dihitung dua kali: cabang transaksi di `RealisasiQuery` (225.000) + `nota_bku_item` (225.000) → realisasi item tampil 450.000 padahal belanja asli 225.000 → sisa −225.000 (over tanpa input apa pun). **Fix**: cabang transaksi `RealisasiQuery::union()` kini `whereNull('nota_bku_id')` — atribusi realisasi nota hanya lewat `nota_bku_item`. Verifikasi dev DB: item Honor Al Banjari/Qiro'ah realisasi 450.000 → 225.000, sisa −225.000 → 0.
+- **Akar 2 (anggaran tidak kembali saat BPU nota dihapus)**: `nota_bku_item` terus dihitung selama nota aktif, jadi hapus BPU (termasuk "Hapus Semua") tidak membebaskan anggaran. **Keputusan user: CASCADE** — menghapus transaksi yang merupakan bagian dari nota kini ikut menghapus (soft) nota + semua transaksi terkaitnya → anggaran kembali.
+
+## Changes
+- `app/Support/RealisasiQuery.php` — cabang transaksi tambah `->whereNull('nota_bku_id')`; docblock diperbarui.
+- `app/Http/Controllers/NotaBkuController.php` — extract `deleteNotaWithTransaksis(NotaBku): int` (soft-delete nota + semua transaksi terkait + AuditLog/Outbox per transaksi & nota + `Cache::increment`); `destroy()` memanggilnya (perilaku sama).
+- `app/Http/Controllers/TransaksiBkuController.php`:
+  - `destroy()` — bila `nota_bku_id` terisi & nota aktif → `deleteNotaWithTransaksis($nota)` + flash "Transaksi dihapus beserta nota …"; selain itu jalur normal.
+  - `destroyAll()` — pisahkan transaksi nota vs normal: transaksi normal dihapus biasa; nota (dari id unik transaksi nota di set filter) di-cascade `deleteNotaWithTransaksis`; audit `delete_bulk` kini memuat `jumlah_nota`; flash "…termasuk N nota terkait."
+- Tests (`tests/Feature/BKU/NotaBkuTest.php`) — 3 baru: `test_realisasi_nota_tidak_dobel_dengan_transaksi_legacy_nota` (transaksi legacy rkas_item_id+nota_bku_id tidak dobel), `test_destroy_transaksi_nota_cascades_to_nota_dan_anggaran_kembali` (delete transaksi nota → nota & transaksi soft-deleted, realisasi 0, sisa kembali 1000000), `test_destroy_all_cascades_transaksi_nota`.
+
+## Verifikasi
+- Probe dev DB (item Honor): realisasi 450.000 → 225.000 (tidak dobel); sisa −225.000 → 0.
+- PHPUnit NotaBkuTest `OK (26, 122)` · full suite `OK (363 tests, 1041 assertions)` · PHPStan level 6 `[OK] No errors` · `view:cache` OK.
+- Catatan: item Honor di dev DB memang sudah terpakai penuh (sisa 0) — untuk input ulang setelah fix, user harus hapus nota-nya (kini otomatis saat BPU nota dihapus).
+
+## Catatan
+- Transaksi nota di `destroyAll` di-skip dari loop normal (ditangani cascade); nota hanya di-cascade bila ada transaksinya di set filter (tidak semua nota ikut terhapus).
+- `deleteNotaWithTransaksis` reuse utk halaman Riwayat Nota (destroy) dan cascade dari BKU — satu sumber kebenaran.
+- Dev DB `transaksi=7 nota=2`; cookie jar `%TEMP%\opencode\cookies-dev.txt`; server dev 8026 berjalan. BELUM push — commit lokal sesuai instruksi user.
+
