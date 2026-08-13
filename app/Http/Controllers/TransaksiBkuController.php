@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Kwitansi;
+use App\Models\MasterKodeRekening;
+use App\Models\MasterProgram;
 use App\Models\Outbox;
 use App\Models\PengaturanSekolah;
 use App\Models\RkasItem;
@@ -20,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -142,6 +145,9 @@ class TransaksiBkuController extends Controller
         $countPengeluaran = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranId)
             ->where('jenis', 'pengeluaran')->count() + 1;
 
+        $kegiatans = MasterProgram::orderBy('kode')->get();
+        $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
+
         $pickerInitial = null;
         $oldItemId = old('rkas_item_id');
         if (is_string($oldItemId) && $oldItemId !== '') {
@@ -161,10 +167,55 @@ class TransaksiBkuController extends Controller
             }
         }
 
-        return view('transaksi-bku.create', compact('npsn', 'countPenerimaan', 'countPengeluaran', 'pickerInitial'));
+        return view('transaksi-bku.create', compact(
+            'npsn', 'countPenerimaan', 'countPengeluaran', 'pickerInitial',
+            'kegiatans', 'kodeRekenings'
+        ));
     }
 
     public function store(Request $request): RedirectResponse
+    {
+        $rawItems = $request->input('items');
+
+        if (is_array($rawItems)) {
+            $checked = array_values(array_filter($rawItems, static fn (mixed $v): bool => is_array($v) && !empty($v['rkas_item_id'])));
+
+            if (count($checked) >= 2) {
+                // 2+ item: alur Nota multi-item (ALL-OR-NOTHING + flatten), tanpa override.
+                // Reuse penuh logika NotaBkuController::storeFromItems() — bukan reimplementasi.
+                return (new NotaBkuController)->storeFromItems($request);
+            }
+
+            if (count($checked) === 1) {
+                // Tepat 1 item: perilaku PERSIS form single-item lama — transaksi langsung
+                // (tanpa NotaBku), override & kunci kwitansi tetap berlaku.
+                $first = $checked[0];
+                $qty = NumberParser::decimal($first['qty'] ?? null);
+                $harga = NumberParser::rupiah($first['harga'] ?? null);
+
+                $request->merge([
+                    'rkas_item_id' => (string) $first['rkas_item_id'],
+                    'volume' => $qty,
+                    'jumlah' => (string) round(((float) $qty) * ((float) $harga), 2),
+                    'satuan' => isset($first['satuan']) && (string) $first['satuan'] !== ''
+                        ? (string) $first['satuan']
+                        : $request->input('satuan'),
+                    'jenis' => 'pengeluaran',
+                ]);
+            }
+        }
+
+        return $this->storeSingleItem($request);
+    }
+
+    /**
+     * Logika store() single-item (jalur lama), di-extract apa adanya tanpa perubahan
+     * perilaku: dipakai oleh form lama (rkas_item_id + jumlah + volume langsung)
+     * DAN form pengeluaran baru dengan tepat 1 item dicentang. Override anggaran,
+     * kunci kwitansi saat over-budget, auto no_bukti, audit & outbox semua tetap
+     * berjalan identik.
+     */
+    private function storeSingleItem(Request $request): RedirectResponse
     {
         $request->merge([
             'jumlah' => NumberParser::rupiah($request->input('jumlah')),
@@ -225,10 +276,7 @@ class TransaksiBkuController extends Controller
             $rkasItem = RkasItem::with('bulanRencana')->findOrFail($rkasItemId);
 
             $rencanaKumulatif = $rkasItem->bulanRencana->where('bulan', '<=', $validated['bulan'])->sum('rencana');
-            $realisasiKumulatif = $rkasItem->transaksiBkus()
-                                           ->where('jenis', 'pengeluaran')
-                                           ->where('bulan', '<=', $validated['bulan'])
-                                           ->sum('jumlah');
+            $realisasiKumulatif = $rkasItem->realisasiKumulatifSd((int) $validated['bulan']);
 
             $sisaBulanBerjalan = $rencanaKumulatif - $realisasiKumulatif;
 
@@ -312,7 +360,7 @@ class TransaksiBkuController extends Controller
         $validated = $request->validate([
             'rkas_item_id' => 'nullable|exists:rkas_item,id',
             'tanggal' => 'required|date',
-            'no_bukti' => 'required|unique:transaksi_bku,no_bukti,' . $transaksiBku->id,
+            'no_bukti' => ['required', Rule::unique('transaksi_bku', 'no_bukti')->ignore($transaksiBku->id)->whereNull('deleted_at')],
             'jenis' => 'required|in:penerimaan,pengeluaran',
             'jumlah' => 'required|numeric|gt:0',
             'toko_penerima' => 'nullable|string|max:255',
@@ -346,11 +394,7 @@ class TransaksiBkuController extends Controller
             $rkasItem = RkasItem::with('bulanRencana')->findOrFail($rkasItemId);
 
             $rencanaKumulatif = $rkasItem->bulanRencana->where('bulan', '<=', $validated['bulan'])->sum('rencana');
-            $realisasiKumulatif = $rkasItem->transaksiBkus()
-                                           ->where('id', '!=', $transaksiBku->id)
-                                           ->where('jenis', 'pengeluaran')
-                                           ->where('bulan', '<=', $validated['bulan'])
-                                           ->sum('jumlah');
+            $realisasiKumulatif = $rkasItem->realisasiKumulatifSd((int) $validated['bulan'], (string) $transaksiBku->id);
 
             $sisaBulanBerjalan = $rencanaKumulatif - $realisasiKumulatif;
 

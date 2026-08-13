@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\RealisasiQuery;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property float|null $tarif
  * @property float $jumlah
  * @property float $realisasi_sum
+ * @property float $nota_realisasi_sum
  * @property array<int, float> $realisasi_per_bulan
  * @property float $total_realisasi
  * @property float $total_rencana
@@ -103,25 +105,45 @@ class RkasItem extends Model
         return $this->hasMany(RkasItemBulan::class, 'rkas_item_id');
     }
 
+    /** @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\NotaBkuItem, $this> */
+    public function notaBkuItems(): HasMany
+    {
+        return $this->hasMany(NotaBkuItem::class, 'rkas_item_id');
+    }
+
+    /**
+     * Realisasi pengeluaran kumulatif s.d. bulan tertentu, mencakup transaksi
+     * BKU single-item (transaksi_bku) DAN rincian nota multi-item (nota_bku_item).
+     * $exceptTransaksiId dipakai saat meng-edit transaksi agar nilai transaksi itu
+     * sendiri tidak ikut terhitung.
+     */
+    public function realisasiKumulatifSd(int $bulan, ?string $exceptTransaksiId = null): float
+    {
+        $query = RealisasiQuery::base()
+            ->where('rb.rkas_item_id', $this->id)
+            ->where('rb.bulan', '<=', $bulan);
+
+        if ($exceptTransaksiId !== null) {
+            $query->where('rb.id', '!=', $exceptTransaksiId);
+        }
+
+        return (float) $query->sum('rb.jumlah');
+    }
+
     /**
      * Sisa anggaran kumulatif s.d. bulan tertentu: total rencana (rkas_item_bulan)
-     * dikurangi total realisasi pengeluaran (transaksi_bku) sampai bulan itu.
+     * dikurangi total realisasi pengeluaran (transaksi + rincian nota) sampai bulan itu.
      * Nilai inilah yang diperiksa oleh guard input BKU (store/update), jadi
      * tampilan picker/form harus memakai nilai yang sama agar tidak ambigu.
      */
-    public function sisaKumulatifSd(int $bulan): float
+    public function sisaKumulatifSd(int $bulan, ?string $exceptTransaksiId = null): float
     {
         $rencana = (float) RkasItemBulan::query()
             ->where('rkas_item_id', $this->id)
             ->where('bulan', '<=', $bulan)
             ->sum('rencana');
 
-        $realisasi = (float) $this->transaksiBkus()
-            ->where('jenis', 'pengeluaran')
-            ->where('bulan', '<=', $bulan)
-            ->sum('jumlah');
-
-        return $rencana - $realisasi;
+        return $rencana - $this->realisasiKumulatifSd($bulan, $exceptTransaksiId);
     }
 
     /**

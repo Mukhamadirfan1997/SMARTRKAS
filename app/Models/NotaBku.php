@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $tanggal
  * @property int|null $bulan
  * @property string $kegiatan_id
+ * @property string|null $kode_rekening_id
  * @property string $sumber_dana_id
  * @property string $tahun_anggaran_id
  * @property string|null $toko_penerima
@@ -39,6 +40,7 @@ class NotaBku extends Model
         'tanggal',
         'bulan',
         'kegiatan_id',
+        'kode_rekening_id',
         'sumber_dana_id',
         'tahun_anggaran_id',
         'toko_penerima',
@@ -59,6 +61,12 @@ class NotaBku extends Model
     public function kegiatan(): BelongsTo
     {
         return $this->belongsTo(MasterProgram::class, 'kegiatan_id');
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\MasterKodeRekening, $this> */
+    public function kodeRekening(): BelongsTo
+    {
+        return $this->belongsTo(MasterKodeRekening::class, 'kode_rekening_id');
     }
 
     /** @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\SumberDana, $this> */

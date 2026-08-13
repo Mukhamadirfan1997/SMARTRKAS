@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
+use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
 use App\Models\NotaBku;
 use App\Models\Outbox;
@@ -39,8 +40,9 @@ class NotaBkuController extends Controller
     public function create(): View
     {
         $kegiatans = MasterProgram::orderBy('kode')->get();
+        $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
 
-        return view('nota-bku.create', compact('kegiatans'));
+        return view('nota-bku.create', compact('kegiatans', 'kodeRekenings'));
     }
 
     /**
@@ -50,6 +52,7 @@ class NotaBkuController extends Controller
     public function items(Request $request): JsonResponse
     {
         $kegiatanId = $request->input('kegiatan_id');
+        $kodeRekeningId = $request->input('kode_rekening_id');
         $bulanRaw = $request->input('bulan');
         $bulan = is_numeric($bulanRaw) ? (int) $bulanRaw : null;
 
@@ -58,6 +61,9 @@ class NotaBkuController extends Controller
         $query = RkasItem::with('sumberDana')->orderBy('no_urut');
         if (is_string($kegiatanId) && $kegiatanId !== '') {
             $query->where('program_id', $kegiatanId);
+        }
+        if (is_string($kodeRekeningId) && $kodeRekeningId !== '') {
+            $query->where('kode_rekening_id', $kodeRekeningId);
         }
         if ($taRec !== null) {
             $query->where('tahun_anggaran_id', $taRec->id);
@@ -70,6 +76,7 @@ class NotaBkuController extends Controller
                 'uraian' => $item->uraian,
                 'tarif' => (float) $item->tarif,
                 'satuan' => (string) ($item->satuan ?? ''),
+                'kode_rekening_id' => (string) ($item->kode_rekening_id ?? ''),
                 'sumber_dana' => $item->sumberDana
                     ? $item->sumberDana->kode . ' ' . $item->sumberDana->nama
                     : '',
@@ -80,12 +87,19 @@ class NotaBkuController extends Controller
         return response()->json(['results' => $results]);
     }
 
+    public function store(Request $request): RedirectResponse
+    {
+        return $this->storeFromItems($request);
+    }
+
     /**
      * Simpan nota multi-item: validasi (kegiatan & sumber dana seragam),
      * guard anggaran ALL-OR-NOTHING, lalu flatten menjadi 1 TransaksiBku per item
      * di dalam satu transaksi database.
+     * Method reusable — dipanggil langsung dari TransaksiBkuController::store()
+     * saat form pengeluaran dicentang 2+ item (reuse, bukan reimplementasi).
      */
-    public function store(Request $request): RedirectResponse
+    public function storeFromItems(Request $request): RedirectResponse
     {
         $items = $request->input('items', []);
         $normalized = [];
@@ -107,6 +121,7 @@ class NotaBkuController extends Controller
         $validated = $request->validate([
             'tanggal' => 'required|date',
             'kegiatan_id' => 'required|exists:master_program,id',
+            'kode_rekening_id' => 'required|exists:master_kode_rekening,id',
             'toko_penerima' => 'nullable|string|max:255',
             'metode_pengadaan' => 'nullable|string|in:siplah,non_siplah',
             'no_invoice_siplah' => 'nullable|required_if:metode_pengadaan,siplah|string|max:255',
@@ -128,6 +143,7 @@ class NotaBkuController extends Controller
         $tanggal = (string) $validated['tanggal'];
         $bulan = (int) Carbon::parse($tanggal)->month;
         $kegiatanId = (string) $validated['kegiatan_id'];
+        $kodeRekeningId = (string) $validated['kode_rekening_id'];
         $tokoPenerima = isset($validated['toko_penerima']) ? trim((string) $validated['toko_penerima']) : null;
         $metodePengadaan = $validated['metode_pengadaan'] ?? null;
         $noInvoice = isset($validated['no_invoice_siplah']) ? trim((string) $validated['no_invoice_siplah']) : null;
@@ -164,6 +180,11 @@ class NotaBkuController extends Controller
             if ($item !== null && $item->tahun_anggaran_id !== $tahunAnggaranId) {
                 throw ValidationException::withMessages([
                     'items' => 'Item "' . $item->uraian . '" bukan bagian dari tahun anggaran aktif. Hanya item tahun anggaran aktif yang boleh dibuatkan nota.',
+                ]);
+            }
+            if ($item !== null && $item->kode_rekening_id !== $kodeRekeningId) {
+                throw ValidationException::withMessages([
+                    'items' => 'Item "' . $item->uraian . '" bukan bagian dari kode rekening yang dipilih. Pilih kode rekening yang sesuai dengan item belanja.',
                 ]);
             }
         }
@@ -243,6 +264,7 @@ class NotaBkuController extends Controller
             $prepared,
             $bulan,
             $kegiatanId,
+            $kodeRekeningId,
             $sumberDanaId,
             $tahunAnggaranId,
             $tanggal,
@@ -250,6 +272,7 @@ class NotaBkuController extends Controller
             $metodePengadaan,
             $noInvoice,
             $uraian,
+            $total,
             $user,
         ) {
             $noNota = NomorDokumen::noNota($tanggal);
@@ -259,6 +282,7 @@ class NotaBkuController extends Controller
                 'tanggal' => $tanggal,
                 'bulan' => $bulan,
                 'kegiatan_id' => $kegiatanId,
+                'kode_rekening_id' => $kodeRekeningId,
                 'sumber_dana_id' => $sumberDanaId,
                 'tahun_anggaran_id' => $tahunAnggaranId,
                 'toko_penerima' => $tokoPenerima,
@@ -270,7 +294,6 @@ class NotaBkuController extends Controller
 
             foreach ($prepared as $i => $entry) {
                 $item = $entry['item'];
-                $notaId = (string) $nota->id;
 
                 $nota->items()->create([
                     'rkas_item_id' => $item->id,
@@ -280,28 +303,33 @@ class NotaBkuController extends Controller
                     'harga_satuan' => $entry['harga'],
                     'subtotal' => $entry['subtotal'],
                 ]);
-
-                $noBukti = NomorDokumen::noBukti('pengeluaran', $tanggal);
-
-                TransaksiBku::create([
-                    'nota_bku_id' => $notaId,
-                    'rkas_item_id' => $item->id,
-                    'tahun_anggaran_id' => $tahunAnggaranId,
-                    'sumber_dana_id' => $sumberDanaId,
-                    'tanggal' => $tanggal,
-                    'bulan' => $bulan,
-                    'no_bukti' => $noBukti,
-                    'jenis' => 'pengeluaran',
-                    'jumlah' => $entry['subtotal'],
-                    'volume' => $entry['qty'],
-                    'satuan' => $entry['satuan'],
-                    'toko_penerima' => $tokoPenerima,
-                    'metode_pengadaan' => $metodePengadaan,
-                    'no_invoice_siplah' => $noInvoice,
-                    'uraian' => $item->uraian,
-                    'created_by' => $user->id,
-                ]);
             }
+
+            // Satu nota = satu transaksi pengeluaran (total nota), bukan satu
+            // transaksi per item. Rincian item tetap tersimpan di nota_bku_item
+            // dan dipakai sebagai sumber realisasi per item (lihat RealisasiQuery).
+            $uraianTransaksi = $uraian !== null && $uraian !== ''
+                ? $uraian
+                : 'Nota belanja ' . $noNota;
+
+            TransaksiBku::create([
+                'nota_bku_id' => $nota->id,
+                'rkas_item_id' => null,
+                'tahun_anggaran_id' => $tahunAnggaranId,
+                'sumber_dana_id' => $sumberDanaId,
+                'tanggal' => $tanggal,
+                'bulan' => $bulan,
+                'no_bukti' => NomorDokumen::noBukti('pengeluaran', $tanggal),
+                'jenis' => 'pengeluaran',
+                'jumlah' => round($total, 2),
+                'volume' => null,
+                'satuan' => null,
+                'toko_penerima' => $tokoPenerima,
+                'metode_pengadaan' => $metodePengadaan,
+                'no_invoice_siplah' => $noInvoice,
+                'uraian' => $uraianTransaksi,
+                'created_by' => $user->id,
+            ]);
 
             return $nota;
         });
@@ -333,7 +361,7 @@ class NotaBkuController extends Controller
 
         Cache::increment('dash_ver_' . $user->id);
 
-        return redirect()->route('nota-bku.show', $nota)->with('success', 'Nota ' . $nota->no_nota . ' berhasil disimpan. ' . count($prepared) . ' item dibukukan sebagai ' . $nota->transaksiBkus->count() . ' transaksi pengeluaran.');
+        return redirect()->route('nota-bku.show', $nota)->with('success', 'Nota ' . $nota->no_nota . ' berhasil disimpan. ' . count($prepared) . ' item dibukukan sebagai 1 transaksi pengeluaran.');
     }
 
     public function show(NotaBku $notaBku): View

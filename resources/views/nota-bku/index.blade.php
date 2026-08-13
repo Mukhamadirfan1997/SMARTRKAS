@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="page-title">Nota Multi-Item</div>
+        <div class="page-title">Riwayat Nota Belanja</div>
     </x-slot>
 
     @if(session('success'))

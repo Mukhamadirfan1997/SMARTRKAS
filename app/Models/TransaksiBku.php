@@ -148,10 +148,7 @@ class TransaksiBku extends Model
             ->where('bulan', '<=', $bulan)
             ->sum('rencana');
 
-        $realisasi = (float) $item->transaksiBkus
-            ->where('jenis', 'pengeluaran')
-            ->where('bulan', '<=', $bulan)
-            ->sum('jumlah');
+        $realisasi = $item->realisasiKumulatifSd($bulan);
 
         return $this->masihOverBudgetCache = $realisasi > $rencana;
     }

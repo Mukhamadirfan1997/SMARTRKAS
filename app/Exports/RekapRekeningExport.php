@@ -5,7 +5,7 @@ namespace App\Exports;
 use App\Models\RkasItem;
 use App\Models\RkasItemBulan;
 use App\Models\TahunAnggaran;
-use App\Models\TransaksiBku;
+use App\Support\RealisasiQuery;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -50,14 +50,14 @@ class RekapRekeningExport implements FromCollection, WithHeadings, WithTitle, Wi
             ->when($this->programId, fn ($q) => $q->where('ri_sub.program_id', $this->programId))
             ->groupBy('rkas_item_bulan.rkas_item_id');
 
-        $realisasiSub = TransaksiBku::selectRaw('transaksi_bku.rkas_item_id, SUM(transaksi_bku.jumlah) as total')
-            ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'transaksi_bku.rkas_item_id')
-            ->where('transaksi_bku.jenis', 'pengeluaran')
-            ->where('transaksi_bku.bulan', $this->bulan)
+        $realisasiSub = RealisasiQuery::base()
+            ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+            ->selectRaw('rb.rkas_item_id, SUM(rb.jumlah) as total')
+            ->where('rb.bulan', $this->bulan)
             ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
             ->when($this->sumberDanaId, fn ($q) => $q->where('ri_sub.sumber_dana_id', $this->sumberDanaId))
             ->when($this->programId, fn ($q) => $q->where('ri_sub.program_id', $this->programId))
-            ->groupBy('transaksi_bku.rkas_item_id');
+            ->groupBy('rb.rkas_item_id');
 
         $query = RkasItem::with(['kodeRekening.jenisBelanja', 'program'])
             ->select('rkas_item.*')

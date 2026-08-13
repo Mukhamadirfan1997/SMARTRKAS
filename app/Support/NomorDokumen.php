@@ -15,7 +15,11 @@ final class NomorDokumen
 {
     /**
      * No bukti transaksi BKU (BBU penerimaan / BPU pengeluaran),
-     * format: {PREFIX}{seq:3} / {NPSN} / {MM} / {YYYY}, unik di tabel.
+     * format: {PREFIX}{seq:3} / {NPSN} / {MM} / {YYYY}.
+     *
+     * Hanya memeriksa baris AKTIF (deleted_at IS NULL) — nomor pada transaksi
+     * soft-deleted boleh dipakai ulang (partial unique index no_bukti). Selalu
+     * memakai nomor terkecil yang masih bebas agar urutan tidak meloncat.
      */
     public static function noBukti(string $jenis, string $tanggal): string
     {
@@ -24,12 +28,12 @@ final class NomorDokumen
         $year = Carbon::parse($tanggal)->format('Y');
         $npsn = PengaturanSekolah::get()->npsn ?? '00000000';
 
-        $seq = TransaksiBku::where('jenis', $jenis)->count();
+        $seq = 1;
 
         do {
-            $seq++;
             $candidate = $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT)
                 . '/' . $npsn . '/' . $month . '/' . $year;
+            $seq++;
         } while (TransaksiBku::where('no_bukti', $candidate)->exists());
 
         return $candidate;

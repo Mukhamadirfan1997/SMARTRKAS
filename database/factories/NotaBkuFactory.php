@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
 use App\Models\NotaBku;
 use App\Models\SumberDana;
@@ -21,6 +22,7 @@ class NotaBkuFactory extends Factory
             'tanggal' => fake()->date(),
             'bulan' => fake()->numberBetween(1, 12),
             'kegiatan_id' => MasterProgram::factory(),
+            'kode_rekening_id' => MasterKodeRekening::factory(),
             'sumber_dana_id' => SumberDana::factory(),
             'tahun_anggaran_id' => TahunAnggaran::factory(),
             'toko_penerima' => fake()->company(),

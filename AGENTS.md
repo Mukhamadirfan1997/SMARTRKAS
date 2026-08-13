@@ -1424,3 +1424,145 @@ Eksekusi rencana "Nota/Kwitansi Multi-Item" yang telah disetujui user (session s
 
 ## Test Status
 - PHPUnit `OK (349 tests, 974 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM push; commit lokal sesuai instruksi.
+
+---
+
+# Sesi 12 Agu 2026 — Revisi Besar: Penyatuan Form BKU Pengeluaran + Nota Multi-Item — TAHAP 1 (Migrasi kode_rekening_id + Model/Relasi)
+
+## Keputusan Final User (acuan seluruh revisi)
+- Form Pengeluaran & Penerimaan TETAP terpisah; Penerimaan TIDAK berubah.
+- Form Pengeluaran jadi SATU form tunggal: pilih Kegiatan → pilih Kode Rekening (terfilter dari Kegiatan) → centang item RKAS cocok (1 atau banyak) → isi qty+harga per item yang dicentang.
+- **Tepat 1 item dicentang** → perilaku PERSIS form single-item lama: opsi "Override Sisa Anggaran" muncul, transaksi tersimpan langsung sebagai 1 `TransaksiBku` (TIDAK membuat NotaBku).
+- **2+ item dicentang** → opsi override otomatis hilang, guard all-or-nothing (pola `NotaBkuController::store` yang sudah dibangun), tersimpan sebagai `NotaBku` + N `TransaksiBku` hasil flatten.
+- Hapus menu sidebar "Nota Multi-Item" terpisah dan route `/nota-bku/create` — SEMUA masuk lewat `/transaksi-bku/create` yang direvisi.
+- Halaman Detail Nota, PDF cetak nota, referensi "No. Nota" di kwitansi TETAP dipertahankan (hanya terpakai saat hasilnya NotaBku, 2+ item).
+- Pengerjaan bertahap: (1) migrasi `kode_rekening_id` + model/relasi, (2) controller penggabungan (reuse, bukan rewrite), (3) view form gabungan + JS toggle override, (4) test lengkap + hapus rute/menu lama. Setiap tahap dilaporkan di AGENTS.md sesuai SOP.
+
+## Status TAHAP 1 (SELESAI & TERVERIFIKASI)
+Migrasi kolom `kode_rekening_id` pada `nota_bku` + update model/relasi sudah ada di working tree (sisa pekerjaan tahap 2–4 dari upaya sebelumnya) dan TERVERIFIKASI:
+
+## Changes
+- `database/migrations/2026_08_12_000024_add_kode_rekening_id_to_nota_bku_table.php` (BARU, untracked) — `nota_bku.kode_rekening_id` foreignUuid nullable `after('kegiatan_id')` `constrained('master_kode_rekening')` `onDelete('set null')` + index `[kode_rekening_id, bulan]`. `down()` drop index + dropConstrainedForeignId.
+- `app/Models/NotaBku.php` — tambah `@property string|null $kode_rekening_id`, `$fillable` + `kode_rekening_id`, relasi `kodeRekening(): BelongsTo` (FK `kode_rekening_id` → `MasterKodeRekening`).
+- `database/factories/NotaBkuFactory.php` — tambah `'kode_rekening_id' => MasterKodeRekening::factory()`.
+- (Tahap 2 yang sudah sempat ter-bangun di working tree, TIDAK diverifikasi sebagai tahap 2 di sesi ini): `NotaBkuController` — `create()` muat `$kodeRekenings`; `items()` filter `kode_rekening_id`; `store()` validasi `kode_rekening_id` required|exists + cek item milik kode rekening terpilih + simpan di `NotaBku::create`. `TransaksiBkuController` — `create()` muat `$kegiatans`/`$kodeRekenings`; `store()` sudah memilah `items` 1 vs 2+ (reuse NotaBkuController::store). `NotaBkuTest` + `TransaksiBkuTest` sudah berisi test kode rekening & jalur 1/2 item.
+
+## Verifikasi
+- `vendor\bin\phpunit --filter NotaBkuTest` → `OK (23 tests, 107 assertions)` — termasuk `test_items_endpoint_filters_by_kode_rekening`, `test_store_rejected_when_kode_rekening_missing`, `test_store_rejected_when_item_from_other_kode_rekening`, `test_store_saves_kode_rekening_nota_relation_via_transaksi`. RefreshDatabase menjalankan migrasi 000024 pada sqlite :memory: → kolom + FK + index terbukti valid.
+- `vendor\bin\phpunit --filter TransaksiBkuTest` → `OK (41 tests, 163 assertions)` — termasuk jalur 1 item (transaksi langsung, override, guard) & 2+ item (nota flatten, all-or-nothing).
+
+## Catatan PENTING (rekon sisa working tree vs keputusan final — perlu dibereskan di tahap 3–4)
+- Working tree saat ini berisi sisa perubahan tahap 2–4 dari upaya SEBELUMNYA yang SEBAGIAN BERTENTANGAN dengan keputusan final:
+  - `resources/views/transaksi-bku/index.blade.php` masih menambahkan tombol "Tambah Pembelanjaan" → `route('nota-bku.create')` + tombol "Tambah Transaksi" → `route('transaksi-bku.create')` + link "Riwayat Nota". Sesuai keputusan final, route `/nota-bku/create` HARUS DIHAPUS dan SEMUA entri lewat `/transaksi-bku/create` (tombol tunggal) — bagian ini akan disesuaikan di tahap 3–4.
+  - `resources/views/layouts/navigation.blade.php` — menu sidebar "Nota Multi-Item" sudah DIHAPUS (benar sesuai keputusan final).
+  - `resources/views/nota-bku/create.blade.php` (rewrite besar, 448 baris) — bakal jadi bahan blok Kegiatan+KodeRekening+checklist untuk form gabungan `/transaksi-bku/create`, tapi route `/nota-bku/create` tetap akan dihapus.
+  - `resources/views/nota-bku/index.blade.php` — judul diubah jadi "Riwayat Nota Belanja" (tetap dipertahankan sbg halaman riwayat/Detail Nota).
+- Route `/nota-bku` index/show/destroy/cetak/items TETAP dipertahankan (Detail Nota, PDF, riwayat, AJAX items dipakai form gabungan). Hanya `/nota-bku/create` yang dihapus.
+- Belum ada commit baru di sesi ini — seluruh pekerjaan tahap 1 masih di working tree (termasuk perubahan tahap 2–4 lama yang belum final).
+
+## Test Status
+- NotaBkuTest `OK (23, 107)` · TransaksiBkuTest `OK (41, 163)`. Belum full suite / PHPStan (menunggu tahap 2–4 selesai dari kondisi final).
+
+---
+
+# Sesi 12 Agu 2026 — Revisi Besar: Penyatuan Form BKU Pengeluaran + Nota Multi-Item — TAHAP 2 (Controller Reuse)
+
+## Goal
+Pemilahan 1-item vs 2+ item di `TransaksiBkuController::store()` murni REUSE, bukan reimplementasi: logika single-item lama di-extract apa adanya menjadi private `storeSingleItem()`; jalur 2+ item memanggil `NotaBkuController::storeFromItems()` yang reusable. Rapikan tombol index (hapus "Tambah Pembelanjaan"), TANPA menghapus route `/nota-bku/create` + `NotaBkuController::create()` + view-nya sampai Tahap 3 siap (urutan aman: bangun view gabungan dulu, baru hapus yang lama).
+
+## Changes
+- `app/Http/Controllers/NotaBkuController.php` — method `store(Request)` lama di-rename jadi **`storeFromItems(Request)`** (public, reusable, berisi seluruh logika nota: validasi kegiatan+kode rekening, sumber dana seragam, guard all-or-nothing, flatten). Tambah wrapper `store(Request)` yang hanya `return $this->storeFromItems($request);` — route `/nota-bku` POST tetap berfungsi sampai Tahap 3–4.
+- `app/Http/Controllers/TransaksiBkuController.php` — `store()` kini hanya DISPATCH: baca `items`, filter baris ber-`rkas_item_id`, `count >= 2` → `(new NotaBkuController)->storeFromItems($request)` (REUSE penuh); `count === 1` → merge `rkas_item_id/volume/jumlah(round qty×harga)/satuan/jenis=pengeluaran` ke request lalu lanjut ke `storeSingleItem()`. Logika single-item lama (validasi, auto no_bukti, guard anggaran + override, kunci kwitansi, audit/outbox, cache) di-extract APA ADANYA ke `private function storeSingleItem(Request $request)` — tidak ada baris logika yang ditulis ulang dari ingatan.
+- `resources/views/transaksi-bku/index.blade.php` — tombol "Tambah Pembelanjaan" (→ `nota-bku.create`) DIHAPUS; tombol "Tambah Transaksi" kembali jadi tombol tunggal `btn-primary` → `route('transaksi-bku.create')`; link "Riwayat Nota" → `nota-bku.index` tetap dipertahankan.
+- TIDAK dihapus pada tahap ini (sesuai instruksi urutan aman): route `GET /nota-bku/create`, `NotaBkuController::create()`, `resources/views/nota-bku/create.blade.php`.
+
+## Verifikasi
+- `vendor\bin\phpunit --filter TransaksiBkuTest` → `OK (42 tests, 171 assertions)` — test LAMA (override, kwitansi terkunci over-budget, guard, normalisasi angka, no_bukti auto, siplah) TIDAK ada assertion yang diubah, semuanya tetap hijau lewat `storeSingleItem()`. Tambah 1 test baru: `test_store_single_checked_item_override_blocks_kwitansi_until_resolved` (jalur `items[]` 1-item + override → `masihOverBudget()` true → cetak kwitansi diblokir → setelah rencana dinaikkan → PDF OK + kwitansi tersimpan) — membuktikan jalur form baru mempertahankan kunci kwitansi PERSIS form lama.
+- `vendor\bin\phpunit --filter NotaBkuTest` → `OK (23 tests, 107 assertions)` — route `/nota-bku` POST via wrapper `store()` → `storeFromItems()` tetap hijau.
+- Full suite → `OK (359 tests, 1020 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+
+## Catatan
+- Jalur 2+ item murni meneruskan `$request` asli ke `storeFromItems()` (payload `items[]` + header kegiatan/kode rekening/toko/metode/siplah) — tidak ada normalisasi ulang duplikat di TransaksiBkuController.
+- Jalur 1 item: `jumlah` dihitung server-side `round(qty*harga, 2)` lalu masuk `storeSingleItem()` yang tetap melakukan `NumberParser::rupiah/decimal` seperti biasa — konsisten dengan jalur form lama.
+- Jalur form LAMA (tanpa `items`, langsung `rkas_item_id`+`jumlah`+`volume`) tetap masuk `storeSingleItem()` karena `$rawItems` bukan array → dispatch tidak aktif. Penerimaan tidak tersentuh.
+
+## Test Status
+- PHPUnit `OK (359 tests, 1020 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM commit — menunggu kelanjutan Tahap 3 (view gabungan + JS toggle) & Tahap 4 (hapus route/menu lama + test final).
+
+
+
+---
+
+# Sesi 12 Agu 2026 - Revisi Besar: Penyatuan Form BKU Pengeluaran + Nota Multi-Item - TAHAP 3 (View Gabungan + JS Toggle)
+
+## Goal
+Bentuk form pengeluaran menjadi SATU form tunggal di `transaksi-bku/create.blade.php`: field header + nominal/rincian dari form single-item lama, blok Kegiatan -> Kode Rekening -> checklist item diadaptasi dari `nota-bku/create.blade.php` (yang sudah berfungsi), toggle override reaktif dua arah, kalkulator per-item, tanpa menghapus route/controller/view nota lama (itu Tahap 4).
+
+## Summary
+- View `transaksi-bku/create.blade.php` ditulis ulang penuh (623 baris); `view:cache` OK; full suite `OK (359 tests, 1020 assertions)`, PHPStan level 6 `[OK] No errors`.
+- 1 bug kecil ditemukan & diperbaiki saat review: urutan `renderItems()` lalu `clearSelection()` di `loadItems()` menghapus wrap hidden hasil restore `old('items')` saat validasi gagal -> selection hilang. Fix: `clearSelection()` dipindah SEBELUM `renderItems()`.
+
+## Changes
+- `resources/views/transaksi-bku/create.blade.php` (ditulis ulang):
+  - Section 1 Informasi Transaksi: `tanggal`, `jenis` (dropdown penerimaan/pengeluaran TETAP dipertahankan di satu halaman; Penerimaan tidak berubah), `#row_no_bukti` + hint `#no_bukti_hint_nota` ("Nomor bukti (BPU) dibuat otomatis saat menyimpan nota multi-item.").
+  - Include `_rkas-picker` (`#row_rkas_item`) - hanya untuk Penerimaan.
+  - `#row_item_checklist` (hidden, untuk Pengeluaran): `kegiatan_id` + `kode_rekening_id` (dari `$kegiatans`/`$kodeRekenings`), info box "1 item dicentang" vs "2+ item dicentang" (Nota Multi-Item all-or-nothing tanpa override), `#item-list` (rows: `item-check`, `item-qty`, `item-harga`, `row-subtotal`), `#manual-rows` (baris "+ Tambah Item" dipertahankan dari form nota), `#total-belanja`, `#items-hidden` (wrap `items[{id}][rkas_item_id|qty|harga|satuan]`), checkbox `penyelesaian`.
+  - `#row_kalkulator` (hidden, Penerimaan saja), `#row_jumlah` (hidden untuk Pengeluaran - jumlah dihitung server-side `round(qty*harga,2)`), `toko_penerima`, `row_metode_pengadaan` + `row_no_invoice_siplah` (toggle JS), `uraian`, `#row_override` (`override_anggaran` + `row_override_note` min 10 karakter, restore `old()`).
+  - JS: `generateNoBukti()` (BBU/BPU + count + npsn + MM/YYYY), `loadItems()` fetch `/nota-bku/items?kegiatan_id&kode_rekening_id&bulan` (bulan dari input tanggal via `parseBulan`), `renderItems()` (restore `old('items')` sekali via flag `oldRestored`), `hiddenWrap/addHidden/updHidden/rmHidden`, `bindRow`, `bindManualRow`, `addManualRow`, `selectedCount()` (= jumlah wrap `#items-hidden div[id^="items-"]`), `recalcOverrideAndBukti()` (reaktif dua arah), `toggleVisibility()`, `updateHarga()`, `onPickerSelect`, `toggleNoInvoice`, `kalkulasiJumlah`, submit guard (pengeluaran tanpa item -> preventDefault + alert "Centang minimal satu item belanja terlebih dahulu.").
+- **Keputusan desain** (penting untuk Tahap 4): `row_override` tampil hanya jika jenis=pengeluaran DAN `selectedCount() === 1`; `row_no_bukti` disembunyikan saat `>= 2` item (nilai diabaikan `storeFromItems`); checkbox `penyelesaian` TIDAK dipaksakan saat submit (hindari friksi 1-item; server tetap validasi `items`); `row_rkas_item`/`row_kalkulator`/`row_jumlah` hanya untuk Penerimaan.
+
+## Verifikasi
+- `php artisan view:cache` OK; `php artisan view:clear` tidak diperlukan.
+- `vendor\bin\phpunit --filter TransaksiBkuTest` -> `OK (42 tests, 171 assertions)`.
+- `vendor\bin\phpunit --filter NotaBkuTest` -> `OK (23 tests, 107 assertions)`.
+- Full suite -> `OK (359 tests, 1020 assertions)`; PHPStan level 6 `[OK] No errors`.
+- Konsistensi dicocokkan: `TransaksiBkuController::create()` mengirim `npsn`, `countPenerimaan`, `countPengeluaran`, `pickerInitial`, `kegiatans`, `kodeRekenings` - semuanya dipakai view; `_rkas-picker` menerima `['pickerInitial' => $pickerInitial]`; endpoint `items()` mengembalikan `{results:[{id,no_urut,uraian,tarif,satuan,kode_rekening_id,sumber_dana,sisa}]}` sesuai pemakaian view.
+- `store()` dispatch (Tahap 2) konsisten: `count===1` merge volume/jumlah/satuan/jenis -> `storeSingleItem()`; `count>=2` -> `NotaBkuController::storeFromItems()`.
+
+## Catatan
+- BELUM menghapus route `/nota-bku/create`, `NotaBkuController::create()`, atau `resources/views/nota-bku/create.blade.php` - menunggu persetujuan Tahap 4.
+- BELUM diuji manual di browser (belum ada langkah browser sesi ini); verifikasi terbatas pada view:cache + suite + review konsistensi.
+
+## Test Status
+- PHPUnit `OK (359 tests, 1020 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM commit - menunggu persetujuan lanjut Tahap 4.
+
+---
+
+# Sesi 13 Agu 2026 — BKU Final: 1 Nota = 1 BPU (Poin 5), Partial Unique no_bukti (Poin 6), Verifikasi Restore (Poin 4)
+
+## Goal
+Tutup 3 keputusan user dari evaluasi fitur nota multi-item yang belum tuntas: (4) form kembali terisi saat nota/gabungan ditolak, (5) **1 nota = 1 `TransaksiBku` (total)** — realisasi per item ditelusuri via `nota_bku_item` (atribusi), (6) **reuse `no_bukti` soft-deleted** via partial unique index. Semua + verifikasi HTTP live + commit lokal.
+
+## Summary
+- **Poin 6 (reuse no_bukti)**: migrasi `2026_08_13_000025` ganti unique `no_bukti` → **partial unique index** `transaksi_bku_no_bukti_aktif_unique` `WHERE deleted_at IS NULL` (sqlite) / `unique([no_bukti, deleted_at])` (non-sqlite). `NomorDokumen::noBukti()` di-rewrite: aktif-only + **nomor terkecil yang bebas (seq dari 1)** → nomor soft-deleted dipakai ulang; `TransaksiBkuController:259` revert ke aktif-only `->exists()`; `update()` `no_bukti` rule → `Rule::unique(...)->ignore($id)->whereNull('deleted_at')`. Terverifikasi di dev DB: migrasi DONE, test `test_store_reuses_soft_deleted_no_bukti_when_autogenerating` (nama baru, harap `BBU001/00000000/01/2026`).
+- **Poin 5 (1 nota = 1 BPU + atribusi)**: `NotaBkuController::storeFromItems()` kini membuat **satu** `TransaksiBku` (total nota, `rkas_item_id => null`, `nota_bku_id`, satu `no_bukti` BPU, `volume/satuan => null`, uraian fallback `'Nota belanja ' . $noNota`), flash "…N item dibukukan sebagai 1 transaksi pengeluaran." Rincian item tetap di `nota_bku_item`. **RealisasiQuery** (`app/Support/RealisasiQuery.php`, BARU) — UNION `transaksi_bku` (pengeluaran, `whereNotNull rkas_item_id`) + `nota_bku_item` (join `nota_bku` non-deleted, `nbi.id, nbi.rkas_item_id, nb.bulan, nbi.subtotal as jumlah`), `base($alias='rb')` = derived table. Union membawa kolom `id` → pengecualian transaksi-saat-edit = `where('rb.id','!=',$except)` (id transaksi tak pernah sama dgn id nota_bku_item), TANPA perlu pengurangan.
+- **Konsumen RealisasiQuery** (semua realisasi item kini = transaksi + nota):
+  - `RkasItem`: `notaBkuItems()` HasMany; `realisasiKumulatifSd(int $bulan, ?string $exceptTransaksiId = null)` (sum `rb.jumlah` via base, `rb.rkas_item_id`, `rb.bulan <=`, optional `rb.id !=`); `sisaKumulatifSd(...)` sekarang delegasi (rencana − realisasiKumulatifSd). Tambah `@property float $nota_realisasi_sum`.
+  - Guard `TransaksiBkuController::store` (~278) = `realisasiKumulatifSd($bulan)`; `update` (~399) = `realisasiKumulatifSd($bulan, $transaksiBku->id)`. `TransaksiBku::masihOverBudget()` pakai `realisasiKumulatifSd($bulan)`.
+  - `LaporanController` `loadRekapRekeningItems`/`loadKuartalItems` (+2 call site `$realisasiSub` di `rekapRekening`/`rekapKuartal` yang sebelumnya masih TransaksiBku) → `RealisasiQuery::base()` dgn `rb.bulan`/`rb.jumlah`; **bonus bug**: kasus kuartal masih `SUM(CASE WHEN transaksi_bku.bulan...)` (referensi kolom hilang → 500) → diganti `rb.bulan`/`rb.jumlah`. `RekapRekeningExport`/`RekapKuartalExport` sama (import `TransaksiBku` → `RealisasiQuery`).
+  - `RkasItemController::select2`: bulan path eager-load `notaBkuItems` (whereHas nota bulan <=), realisasi = transaksi + subtotal nota; non-bulan path `withSum` `nota_realisasi_sum` (nota non-deleted). DashboardController `totalRealisasi`/`chartData`/`realisasiPerBulan` → `RealisasiQuery::base()` (whereIn `rb.rkas_item_id` + bulan); per-item `dynamic_realisasi` = `transaksiBkus->sum('jumlah') + notaBkuItems->sum('subtotal')` dengan eager-load `notaBkuItems` (filter bulan bila `$bulan`).
+- **Poin 4 (restore form)**: view `transaksi-bku/create.blade.php` (Tahap 3) sudah punya jalur restore `oldItems` → `loadItems()` saat init (kegiatan+kode rekening ter-restore via `old()` selected) → `renderItems()` → `oldRestored` → centang + isi ulang qty/harga/satuan + `addHidden`. **Terverifikasi HTTP live** (server dev 8026): POST over-budget `qty=100×30000` pada item sisa Rp1.350.000 → 302 ke `/transaksi-bku/create`, `old('kegiatan_id')`/`old('kode_rekening_id')` ter-`selected`, `oldItems` JSON memuat `{uuid:{rkas_item_id,qty:100,harga:30000,satuan}}`, pesan guard "Nominal Rp 3.000.000 melebihi sisa anggaran s.d. bulan 1…" dirender. Restore checklist/qty/harga = sisi klien (kode sudah benar; data tersedia).
+
+## Changes (working tree)
+- `database/migrations/2026_08_13_000025_replace_no_bukti_unique_with_partial_unique_index.php` (BARU) — up: dropUnique(`no_bukti`) → partial unique (sqlite) / `unique([no_bukti,deleted_at])`; down: drop partial + re-add `transaksi_bku_no_bukti_unique`. Sudah di-apply ke dev DB.
+- `app/Support/NomorDokumen.php` — `noBukti()` seq dari 1 (aktif-only terkecil bebas); `noNota()` tetap `withTrashed()`.
+- `app/Support/RealisasiQuery.php` (BARU) — union transaksi + nota, `base($alias='rb')` derived table (`id, rkas_item_id, bulan, jumlah`).
+- `app/Models/RkasItem.php` — `notaBkuItems()`, `realisasiKumulatifSd()`, `sisaKumulatifSd(?string $exceptTransaksiId=null)` delegasi, `@property nota_realisasi_sum`.
+- `app/Http/Controllers/TransaksiBkuController.php` — :259 aktif-only; store/update guard via `realisasiKumulatifSd`; `update()` Rule unique partial.
+- `app/Http/Controllers/NotaBkuController.php` — `storeFromItems()` 1 TransaksiBku total, closure `use (... $total)`.
+- `app/Http/Controllers/LaporanController.php` — 2 call site realisasiSub + helper → RealisasiQuery::base(); fix kasus kuartal `rb.bulan`/`rb.jumlah`.
+- `app/Exports/RekapRekeningExport.php`, `app/Exports/RekapKuartalExport.php` — realisasiSub via RealisasiQuery.
+- `app/Http/Controllers/RkasItemController.php` — select2 nota consumption (bulan + non-bulan).
+- `app/Http/Controllers/DashboardController.php` — totalRealisasi/chartData/realisasiPerBulan via base; per-item dynamic_realisasi + eager `notaBkuItems`.
+- Tests — `NotaBkuTest`: `test_store_creates_nota_items_and_transaksi` (1 transaksi, rkas_item_id null, jumlah=total, Outbox 2), `test_duplicate_no_bukti_from_nota_is_unique` (1 BPU), `test_store_saves_kode_rekening_nota_relation_via_transaksi` (assert `transaksi->notaBku->kode_rekening_id`, karena `rkasItem` kini null); `TransaksiBkuTest`: `test_store_two_checked_items_create_nota_and_flattened_transaksi` (1 transaksi), rename+ubah `test_store_skips_soft_deleted_no_bukti_when_autogenerating` → `..._reuses_...` (`BBU001/00000000/01/2026`).
+
+## Catatan Teknis
+- Union membawa `id`: update-guard pengecualian `where('rb.id','!=',$except)`; id transaksi (uuid) vs id nota_bku_item (uuid) tidak pernah sama.
+- `RealisasiQuery::base()` = `DB::query()->fromSub(self::union(), $alias)` → Query\Builder, jadi aman utk `leftJoinSub` & PHPStan `@param \Illuminate\Database\Query\Builder|null`.
+- JS restore: hidden inputs `items[{uuid}][...]` (key = UUID rkas_item_id), jadi `old('items')` punya key UUID → `Object.keys(oldItems)` cocok dgn `[data-id="{uuid}"]`.
+- Poin 6 risiko kecil: nomor soft-deleted yang dipakai ulang akan "bentrok" bila baris lama di-restore (accept). `DatabaseIndexTest` tidak mengecek unique `no_bukti` (renama index aman).
+- Dev DB: `transaksi=7 nota=2` (data dev, bukan produksi); POST uji ditolak (0 insert). Cookie jar `%TEMP%\opencode\cookies-dev.txt`; server dev `artisan serve` 8026 tetap berjalan.
+
+## Test Status
+- PHPUnit `OK (360 tests, 1027 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK. BELUM commit — dikerjakan lanjut sesi ini; commit lokal sesuai instruksi user.
+

@@ -4,7 +4,7 @@ namespace App\Exports;
 
 use App\Models\RkasItem;
 use App\Models\TahunAnggaran;
-use App\Models\TransaksiBku;
+use App\Support\RealisasiQuery;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -55,18 +55,18 @@ class RekapKuartalExport implements FromArray, WithHeadings, WithTitle, ShouldAu
 
         $cases = [];
         foreach ($months as $i => $b) {
-            $cases[] = "SUM(CASE WHEN transaksi_bku.bulan = {$b} THEN transaksi_bku.jumlah ELSE 0 END) as m{$i}";
+            $cases[] = "SUM(CASE WHEN rb.bulan = {$b} THEN rb.jumlah ELSE 0 END) as m{$i}";
         }
         $casesSql = implode(', ', $cases);
 
-        $realisasiSub = TransaksiBku::selectRaw("transaksi_bku.rkas_item_id, {$casesSql}, SUM(transaksi_bku.jumlah) as total_all")
-            ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'transaksi_bku.rkas_item_id')
-            ->where('transaksi_bku.jenis', 'pengeluaran')
-            ->whereIn('transaksi_bku.bulan', $months)
+        $realisasiSub = RealisasiQuery::base()
+            ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+            ->selectRaw("rb.rkas_item_id, {$casesSql}, SUM(rb.jumlah) as total_all")
+            ->whereIn('rb.bulan', $months)
             ->where('ri_sub.tahun_anggaran_id', $tahunAnggaran->id)
             ->when($this->sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $this->sumberDanaId))
             ->when($this->programId, fn($q) => $q->where('ri_sub.program_id', $this->programId))
-            ->groupBy('transaksi_bku.rkas_item_id');
+            ->groupBy('rb.rkas_item_id');
 
         $query = RkasItem::with(['kodeRekening.jenisBelanja', 'program'])
             ->select('rkas_item.*')

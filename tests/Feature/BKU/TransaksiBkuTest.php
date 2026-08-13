@@ -275,6 +275,205 @@ class TransaksiBkuTest extends TestCase
         $this->assertDatabaseMissing('transaksi_bku', ['no_bukti' => 'BPU001/20519260/01/2026']);
     }
 
+    public function test_store_single_checked_item_creates_transaksi_not_nota(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 5000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'toko_penerima' => 'Toko Sumber Rejeki',
+            'metode_pengadaan' => 'non_siplah',
+            'items' => [
+                ['rkas_item_id' => $item->id, 'qty' => '10', 'harga' => '50000', 'satuan' => 'paket'],
+            ],
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $this->assertDatabaseCount('nota_bku', 0);
+        $this->assertDatabaseHas('transaksi_bku', [
+            'rkas_item_id' => $item->id,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 500000.0,
+            'volume' => 10,
+            'satuan' => 'paket',
+        ]);
+    }
+
+    public function test_store_two_checked_items_create_nota_and_flattened_transaksi(): void
+    {
+        $item1 = $this->makeItem();
+        $item2 = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja ATK Kedua',
+            'jumlah' => 5000000,
+        ]);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $item1->id, 'bulan' => 1, 'rencana' => 5000000]);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $item2->id, 'bulan' => 1, 'rencana' => 5000000]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'toko_penerima' => 'Toko Sumber Rejeki',
+            'metode_pengadaan' => 'non_siplah',
+            'items' => [
+                ['rkas_item_id' => $item1->id, 'qty' => '10', 'harga' => '50000'],
+                ['rkas_item_id' => $item2->id, 'qty' => '2', 'harga' => '250000'],
+            ],
+        ]);
+
+        $response->assertRedirect();
+        $nota = \App\Models\NotaBku::firstOrFail();
+
+        $this->assertSame(2, $nota->items()->count());
+        $this->assertDatabaseCount('transaksi_bku', 1);
+        $this->assertTrue(TransaksiBku::where('nota_bku_id', $nota->id)->count() === 1);
+        $this->assertSame($this->rekening->id, $nota->kode_rekening_id);
+    }
+
+    public function test_store_single_item_over_budget_without_override_rejected(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'metode_pengadaan' => 'non_siplah',
+            'items' => [
+                ['rkas_item_id' => $item->id, 'qty' => '10', 'harga' => '100000'],
+            ],
+        ]);
+
+        $response->assertSessionHasErrors('jumlah');
+        $this->assertDatabaseCount('nota_bku', 0);
+        $this->assertDatabaseCount('transaksi_bku', 0);
+    }
+
+    public function test_store_two_items_over_budget_rejects_entire_nota(): void
+    {
+        $cukup = $this->makeItem();
+        $kurang = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja ATK Kurang',
+            'jumlah' => 50000,
+        ]);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $cukup->id, 'bulan' => 1, 'rencana' => 1000000]);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $kurang->id, 'bulan' => 1, 'rencana' => 50000]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'metode_pengadaan' => 'non_siplah',
+            'items' => [
+                ['rkas_item_id' => $cukup->id, 'qty' => '1', 'harga' => '50000'],
+                ['rkas_item_id' => $kurang->id, 'qty' => '10', 'harga' => '10000'],
+            ],
+        ]);
+
+        $response->assertSessionHasErrors('items');
+        $this->assertDatabaseCount('nota_bku', 0);
+        $this->assertDatabaseCount('nota_bku_item', 0);
+        $this->assertDatabaseCount('transaksi_bku', 0);
+    }
+
+    public function test_store_single_checked_item_with_override_saves_override_note(): void
+    {
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'metode_pengadaan' => 'non_siplah',
+            'override_anggaran' => '1',
+            'override_note' => 'Harga barang naik karena penyesuaian pasar',
+            'items' => [
+                ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '100000'],
+            ],
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $response->assertSessionHas('success');
+        $this->assertDatabaseCount('nota_bku', 0);
+        $this->assertDatabaseHas('transaksi_bku', [
+            'rkas_item_id' => $item->id,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000.0,
+            'override_note' => 'Harga barang naik karena penyesuaian pasar',
+        ]);
+    }
+
+    public function test_store_single_checked_item_override_blocks_kwitansi_until_resolved(): void
+    {
+        Storage::fake('public');
+
+        $item = $this->makeItem();
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+
+        $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'metode_pengadaan' => 'non_siplah',
+            'override_anggaran' => '1',
+            'override_note' => 'Harga barang naik karena penyesuaian pasar',
+            'items' => [
+                ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '100000'],
+            ],
+        ]);
+
+        $transaksi = TransaksiBku::where('rkas_item_id', $item->id)->where('jenis', 'pengeluaran')->firstOrFail();
+        $transaksi->load('rkasItem.bulanRencana', 'rkasItem.transaksiBkus');
+        $this->assertTrue($transaksi->masihOverBudget());
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/' . $transaksi->id . '/cetak-kwitansi');
+        $response->assertRedirect(route('transaksi-bku.index'));
+        $response->assertSessionHas('error');
+        $this->assertDatabaseCount('kwitansi', 0);
+
+        RkasItemBulan::where('rkas_item_id', $item->id)
+            ->where('bulan', 1)
+            ->update(['rencana' => 110000]);
+
+        $transaksi = TransaksiBku::with('rkasItem.bulanRencana', 'rkasItem.transaksiBkus')->findOrFail($transaksi->id);
+        $this->assertFalse($transaksi->masihOverBudget());
+
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/' . $transaksi->id . '/cetak-kwitansi');
+        $response->assertOk();
+        $this->assertDatabaseCount('kwitansi', 1);
+    }
+
     public function test_store_normalizes_indonesian_number_format(): void
     {
         $item = $this->makeItem(10000000);
@@ -907,6 +1106,36 @@ class TransaksiBkuTest extends TestCase
             $saved->pluck('no_bukti')->unique()->count(),
             'Kedua transaksi tersimpan dengan no_bukti unik'
         );
+    }
+
+    public function test_store_reuses_soft_deleted_no_bukti_when_autogenerating(): void
+    {
+        $deleted = $this->makeTransaksi([
+            'tanggal' => '2026-01-10',
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'no_bukti' => 'BBU001/20519260/01/2026',
+            'jumlah' => 100000,
+        ]);
+        $deleted->delete();
+        $this->assertNotNull($deleted->deleted_at);
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'no_bukti' => '',
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+        ]);
+
+        $response->assertRedirect(route('transaksi-bku.index'));
+
+        $new = TransaksiBku::where('jenis', 'penerimaan')
+            ->whereNull('deleted_at')
+            ->orderByDesc('created_at')
+            ->first();
+        $this->assertNotNull($new);
+        $this->assertSame('BBU001/00000000/01/2026', $new->no_bukti);
+        $this->assertSame(2, TransaksiBku::withTrashed()->where('no_bukti', 'like', 'BBU%/01/2026')->count());
     }
 
     public function test_create_page_shows_monthly_cumulative_sisa_matching_guard(): void

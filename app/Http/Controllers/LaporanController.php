@@ -14,6 +14,7 @@ use App\Models\RkasItemBulan;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
+use App\Support\RealisasiQuery;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -556,7 +557,7 @@ class LaporanController extends Controller
 
     /**
      * @param \Illuminate\Database\Eloquent\Builder<\App\Models\RkasItemBulan>|null $rencanaSub
-     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\TransaksiBku>|null $realisasiSub
+     * @param \Illuminate\Database\Query\Builder|null $realisasiSub
      * @return \Illuminate\Support\Collection<int, \App\Models\RkasItem>|\Illuminate\Contracts\Pagination\LengthAwarePaginator<int, \App\Models\RkasItem>
      */
     private function loadRekapRekeningItems(?TahunAnggaran $tahunAnggaranAktif, int $bulan, ?int $perPage = null, $rencanaSub = null, $realisasiSub = null): \Illuminate\Support\Collection|\Illuminate\Contracts\Pagination\LengthAwarePaginator
@@ -575,15 +576,14 @@ class LaporanController extends Controller
         }
 
         if ($realisasiSub === null) {
-            $realisasiSub = TransaksiBku::query()
-                ->selectRaw('transaksi_bku.rkas_item_id, SUM(transaksi_bku.jumlah) as total')
-                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'transaksi_bku.rkas_item_id')
-                ->where('transaksi_bku.jenis', 'pengeluaran')
-                ->where('transaksi_bku.bulan', $bulan)
+            $realisasiSub = RealisasiQuery::base()
+                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+                ->selectRaw('rb.rkas_item_id, SUM(rb.jumlah) as total')
+                ->where('rb.bulan', $bulan)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
                 ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
-                ->groupBy('transaksi_bku.rkas_item_id');
+                ->groupBy('rb.rkas_item_id');
         }
 
         $query = RkasItem::with('kodeRekening.jenisBelanja', 'program')
@@ -620,14 +620,14 @@ class LaporanController extends Controller
 
     /**
      * @param int[] $bulanMonths
-     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\TransaksiBku>|null $realisasiSub
+     * @param \Illuminate\Database\Query\Builder|null $realisasiSub
      * @return \Illuminate\Support\Collection<int, \App\Models\RkasItem>|\Illuminate\Contracts\Pagination\LengthAwarePaginator<int, \App\Models\RkasItem>
      */
     private function loadKuartalItems(?TahunAnggaran $tahunAnggaranAktif, array $bulanMonths, ?int $perPage = null, $realisasiSub = null): \Illuminate\Support\Collection|\Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
         $cases = [];
         foreach ($bulanMonths as $i => $b) {
-            $cases[] = "SUM(CASE WHEN transaksi_bku.bulan = {$b} THEN transaksi_bku.jumlah ELSE 0 END) as m{$i}";
+            $cases[] = "SUM(CASE WHEN rb.bulan = {$b} THEN rb.jumlah ELSE 0 END) as m{$i}";
         }
         $casesSql = implode(', ', $cases);
 
@@ -635,15 +635,14 @@ class LaporanController extends Controller
         $programId = request('program_id');
 
         if ($realisasiSub === null) {
-            $realisasiSub = TransaksiBku::query()
-                ->selectRaw("transaksi_bku.rkas_item_id, {$casesSql}, SUM(transaksi_bku.jumlah) as total_all")
-                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'transaksi_bku.rkas_item_id')
-                ->where('transaksi_bku.jenis', 'pengeluaran')
-                ->whereIn('transaksi_bku.bulan', $bulanMonths)
+            $realisasiSub = RealisasiQuery::base()
+                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+                ->selectRaw("rb.rkas_item_id, {$casesSql}, SUM(rb.jumlah) as total_all")
+                ->whereIn('rb.bulan', $bulanMonths)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
                 ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
-                ->groupBy('transaksi_bku.rkas_item_id');
+                ->groupBy('rb.rkas_item_id');
         }
 
         $query = RkasItem::with('kodeRekening.jenisBelanja', 'program')
@@ -707,15 +706,14 @@ class LaporanController extends Controller
             : null;
 
         $realisasiSub = $tahunAnggaranAktif
-            ? TransaksiBku::query()
-                ->selectRaw('transaksi_bku.rkas_item_id, SUM(transaksi_bku.jumlah) as total')
-                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'transaksi_bku.rkas_item_id')
-                ->where('transaksi_bku.jenis', 'pengeluaran')
-                ->where('transaksi_bku.bulan', $bulan)
+            ? RealisasiQuery::base()
+                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+                ->selectRaw('rb.rkas_item_id, SUM(rb.jumlah) as total')
+                ->where('rb.bulan', $bulan)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
                 ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
-                ->groupBy('transaksi_bku.rkas_item_id')
+                ->groupBy('rb.rkas_item_id')
             : null;
 
         $rkasItems = $tahunAnggaranAktif
@@ -797,20 +795,19 @@ class LaporanController extends Controller
 
         $cases = [];
         foreach ($bulanMonths as $i => $b) {
-            $cases[] = "SUM(CASE WHEN transaksi_bku.bulan = {$b} THEN transaksi_bku.jumlah ELSE 0 END) as m{$i}";
+            $cases[] = "SUM(CASE WHEN rb.bulan = {$b} THEN rb.jumlah ELSE 0 END) as m{$i}";
         }
         $casesSql = implode(', ', $cases);
 
         $realisasiSub = $tahunAnggaranAktif
-            ? TransaksiBku::query()
-                ->selectRaw("transaksi_bku.rkas_item_id, {$casesSql}, SUM(transaksi_bku.jumlah) as total_all")
-                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'transaksi_bku.rkas_item_id')
-                ->where('transaksi_bku.jenis', 'pengeluaran')
-                ->whereIn('transaksi_bku.bulan', $bulanMonths)
+            ? RealisasiQuery::base()
+                ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+                ->selectRaw("rb.rkas_item_id, {$casesSql}, SUM(rb.jumlah) as total_all")
+                ->whereIn('rb.bulan', $bulanMonths)
                 ->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id)
                 ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId))
                 ->when($programId, fn($q) => $q->where('ri_sub.program_id', $programId))
-                ->groupBy('transaksi_bku.rkas_item_id')
+                ->groupBy('rb.rkas_item_id')
             : null;
 
         $quarterlyItems = $tahunAnggaranAktif && $realisasiSub

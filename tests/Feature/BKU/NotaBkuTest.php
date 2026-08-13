@@ -73,6 +73,7 @@ class NotaBkuTest extends TestCase
         return $this->actingAs($this->user)->post('/nota-bku', array_merge([
             'tanggal' => '2026-01-15',
             'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
             'toko_penerima' => 'Toko Sumber Rejeki',
             'metode_pengadaan' => 'non_siplah',
             'items' => $items,
@@ -100,7 +101,7 @@ class NotaBkuTest extends TestCase
         $response = $this->actingAs($this->user)->get('/nota-bku');
 
         $response->assertOk();
-        $response->assertSee('Nota Multi-Item');
+        $response->assertSee('Riwayat Nota Belanja');
         $response->assertSee($nota->no_nota);
     }
 
@@ -109,8 +110,9 @@ class NotaBkuTest extends TestCase
         $response = $this->actingAs($this->user)->get('/nota-bku/create');
 
         $response->assertOk();
-        $response->assertSee('Tambah Nota Multi-Item');
+        $response->assertSee('Tambah Nota Belanja');
         $response->assertSee('id="kegiatan_id"', false);
+        $response->assertSee('id="kode_rekening_id"', false);
         $response->assertSee('id="item-list"', false);
         $response->assertSee('id="btn-tambah-item"', false);
     }
@@ -147,6 +149,83 @@ class NotaBkuTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonCount(0, 'results');
+    }
+
+    public function test_items_endpoint_filters_by_kode_rekening(): void
+    {
+        $rekeningLain = MasterKodeRekening::factory()->create();
+        $item = $this->makeItem(2000000);
+        RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekeningLain->id,
+            'no_urut' => 2,
+            'uraian' => 'Item rekening lain',
+        ]);
+
+        $response = $this->actingAs($this->user)
+            ->get('/nota-bku/items?kegiatan_id=' . $this->program->id
+                . '&kode_rekening_id=' . $this->rekening->id . '&bulan=1');
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'results');
+        $response->assertJsonPath('results.0.id', $item->id);
+
+        // Tanpa filter kode rekening, kedua item muncul.
+        $all = $this->actingAs($this->user)
+            ->get('/nota-bku/items?kegiatan_id=' . $this->program->id . '&bulan=1');
+        $all->assertOk();
+        $all->assertJsonCount(2, 'results');
+    }
+
+    public function test_store_rejected_when_item_from_other_kode_rekening(): void
+    {
+        $rekeningLain = MasterKodeRekening::factory()->create();
+        $item = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekeningLain->id,
+            'no_urut' => 1,
+            'uraian' => 'Item rekening lain',
+        ]);
+        RkasItemBulan::factory()->create(['rkas_item_id' => $item->id, 'bulan' => 1, 'rencana' => 1000000]);
+
+        $response = $this->postNota([
+            ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000'],
+        ]);
+
+        $response->assertSessionHasErrors('items');
+        $this->assertDatabaseCount('nota_bku', 0);
+        $this->assertDatabaseCount('transaksi_bku', 0);
+    }
+
+    public function test_store_rejected_when_kode_rekening_missing(): void
+    {
+        $item = $this->makeItem(1000000);
+
+        $response = $this->postNota(
+            [['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000']],
+            ['kode_rekening_id' => '']
+        );
+
+        $response->assertSessionHasErrors('kode_rekening_id');
+        $this->assertDatabaseCount('nota_bku', 0);
+    }
+
+    public function test_store_saves_kode_rekening_nota_relation_via_transaksi(): void
+    {
+        $item = $this->makeItem(5000000);
+
+        $response = $this->postNota([
+            ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '100000'],
+        ]);
+
+        $response->assertRedirect();
+
+        $transaksi = TransaksiBku::firstOrFail();
+        $this->assertSame($this->rekening->id, (string) $transaksi->notaBku->kode_rekening_id);
     }
 
     public function test_store_rejected_when_item_from_other_tahun_anggaran(): void
@@ -208,13 +287,13 @@ class NotaBkuTest extends TestCase
         $this->assertSame(500000.0, (float) $nota->items()->orderBy('urutan')->first()->subtotal);
 
         $transaksis = TransaksiBku::where('nota_bku_id', $nota->id)->orderBy('no_bukti')->get();
-        $this->assertCount(2, $transaksis);
-        $this->assertSame('pengeluaran', $transaksis->first()->jenis);
-        $this->assertSame($nota->id, $transaksis->first()->nota_bku_id);
-        foreach ($transaksis as $transaksi) {
-            $this->assertMatchesRegularExpression('/^BPU\d{3}\/20519260\/01\/2026$/', (string) $transaksi->no_bukti);
-        }
-        $this->assertTrue($transaksis->pluck('no_bukti')->unique()->count() === 2, 'no_bukti harus unik');
+        $this->assertCount(1, $transaksis);
+        $transaksi = $transaksis->first();
+        $this->assertSame('pengeluaran', $transaksi->jenis);
+        $this->assertSame($nota->id, $transaksi->nota_bku_id);
+        $this->assertNull($transaksi->rkas_item_id);
+        $this->assertSame(1000000.0, (float) $transaksi->jumlah);
+        $this->assertMatchesRegularExpression('/^BPU\d{3}\/20519260\/01\/2026$/', (string) $transaksi->no_bukti);
 
         $this->assertDatabaseHas('audit_log', [
             'user_id' => $this->user->id,
@@ -226,7 +305,7 @@ class NotaBkuTest extends TestCase
             'model_id' => $nota->id,
             'aksi' => 'create',
         ]);
-        $this->assertSame(3, Outbox::count()); // 1 nota + 2 transaksi
+        $this->assertSame(2, Outbox::count()); // 1 nota + 1 transaksi
     }
 
     public function test_store_rejected_without_items(): void
@@ -515,7 +594,8 @@ class NotaBkuTest extends TestCase
         $nota = NotaBku::firstOrFail();
         $noBuktis = TransaksiBku::where('nota_bku_id', $nota->id)->pluck('no_bukti');
 
-        $this->assertCount(2, $noBuktis);
-        $this->assertSame(2, $noBuktis->unique()->count());
+        $this->assertCount(1, $noBuktis);
+        $this->assertSame(1, $noBuktis->unique()->count());
+        $this->assertMatchesRegularExpression('/^BPU\d{3}\/20519260\/01\/2026$/', (string) $noBuktis->first());
     }
 }

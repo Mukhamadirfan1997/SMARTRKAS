@@ -12,6 +12,7 @@ use App\Models\RkasItemBulan;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
+use App\Support\RealisasiQuery;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -80,41 +81,38 @@ class DashboardController extends Controller
                     $totalRencana = (float) RkasItemBulan::whereIn('rkas_item_id', $filteredIds)
                         ->where('bulan', $bulan)
                         ->sum('rencana');
-                    $totalRealisasi = (float) TransaksiBku::whereIn('rkas_item_id', $filteredIds)
-                        ->where('jenis', 'pengeluaran')
-                        ->where('bulan', $bulan)
-                        ->sum('jumlah');
+                    $totalRealisasi = (float) RealisasiQuery::base()
+                        ->whereIn('rb.rkas_item_id', $filteredIds)
+                        ->where('rb.bulan', $bulan)
+                        ->sum('rb.jumlah');
                 } else {
                     $totalRencana = (float) RkasItem::whereIn('id', $filteredIds)->sum('jumlah');
-                    $totalRealisasi = (float) TransaksiBku::whereIn('rkas_item_id', $filteredIds)
-                        ->where('jenis', 'pengeluaran')
-                        ->sum('jumlah');
+                    $totalRealisasi = (float) RealisasiQuery::base()
+                        ->whereIn('rb.rkas_item_id', $filteredIds)
+                        ->sum('rb.jumlah');
                 }
 
-                $chartData = TransaksiBku::query()
-                    ->whereIn('rkas_item_id', $filteredIds)
-                    ->where('transaksi_bku.jenis', 'pengeluaran')
-                    ->join('rkas_item', 'transaksi_bku.rkas_item_id', '=', 'rkas_item.id')
+                $chartData = RealisasiQuery::base()
+                    ->whereIn('rb.rkas_item_id', $filteredIds)
+                    ->join('rkas_item', 'rkas_item.id', '=', 'rb.rkas_item_id')
                     ->join('master_kode_rekening', 'rkas_item.kode_rekening_id', '=', 'master_kode_rekening.id')
                     ->join('jenis_belanja', 'master_kode_rekening.jenis_belanja_id', '=', 'jenis_belanja.id')
-                    ->selectRaw('jenis_belanja.nama as label, sum(transaksi_bku.jumlah) as total')
+                    ->selectRaw('jenis_belanja.nama as label, sum(rb.jumlah) as total')
                     ->groupBy('jenis_belanja.nama')
                     ->orderByDesc('total')
-                    ->get()
-                    ->toArray();
+                    ->get();
 
                 foreach ($chartData as $d) {
-                    $chartLabels[] = (string) ($d['label'] ?? '');
-                    $chartValues[] = (float) ($d['total'] ?? 0);
+                    $chartLabels[] = (string) ($d->label ?? '');
+                    $chartValues[] = (float) ($d->total ?? 0);
                 }
 
                 $realisasiPerBulan = array_fill(1, 12, 0);
-                $byBulan = TransaksiBku::query()
-                    ->whereIn('rkas_item_id', $filteredIds)
-                    ->where('jenis', 'pengeluaran')
-                    ->selectRaw('bulan, sum(jumlah) as total')
-                    ->whereNotNull('bulan')
-                    ->groupBy('bulan')
+                $byBulan = RealisasiQuery::base()
+                    ->whereIn('rb.rkas_item_id', $filteredIds)
+                    ->selectRaw('rb.bulan, sum(rb.jumlah) as total')
+                    ->whereNotNull('rb.bulan')
+                    ->groupBy('rb.bulan')
                     ->pluck('total', 'bulan');
 
                 foreach ($byBulan as $b => $t) {
@@ -183,6 +181,14 @@ class DashboardController extends Controller
                             $q->where('bulan', $bulan);
                         }
                     },
+                    'notaBkuItems' => function (Relation $q) use ($bulan): void {
+                        $q->whereHas('notaBku', function ($q2) use ($bulan): void {
+                            $q2->whereNull('deleted_at');
+                            if ($bulan) {
+                                $q2->where('bulan', $bulan);
+                            }
+                        });
+                    },
                     'bulanRencana' => function (Relation $q) use ($bulan): void {
                         if ($bulan) {
                             $q->where('bulan', $bulan);
@@ -194,7 +200,7 @@ class DashboardController extends Controller
                 ->withQueryString();
 
             foreach ($rkasItems as $item) {
-                $_sum = $item->transaksiBkus->sum('jumlah');
+                $_sum = $item->transaksiBkus->sum('jumlah') + $item->notaBkuItems->sum('subtotal');
                 $item->dynamic_realisasi = is_numeric($_sum) ? (float) $_sum : 0.0;
 
                 if ($bulan) {

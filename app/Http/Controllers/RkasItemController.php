@@ -21,9 +21,11 @@ class RkasItemController extends Controller
             $query->with([
                 'bulanRencana' => fn (\Illuminate\Database\Eloquent\Relations\Relation $q) => $q->where('bulan', '<=', $bulan),
                 'transaksiBkus' => fn (\Illuminate\Database\Eloquent\Relations\Relation $q) => $q->where('jenis', 'pengeluaran')->where('bulan', '<=', $bulan),
+                'notaBkuItems' => fn (\Illuminate\Database\Eloquent\Relations\Relation $q) => $q->whereHas('notaBku', fn (\Illuminate\Database\Eloquent\Builder $q2) => $q2->where('bulan', '<=', $bulan)),
             ]);
         } else {
-            $query->withSum(['transaksiBkus as realisasi_sum' => fn (\Illuminate\Database\Eloquent\Builder $q) => $q->where('jenis', 'pengeluaran')], 'jumlah');
+            $query->withSum(['transaksiBkus as realisasi_sum' => fn (\Illuminate\Database\Eloquent\Builder $q) => $q->where('jenis', 'pengeluaran')], 'jumlah')
+                ->withSum(['notaBkuItems as nota_realisasi_sum' => fn (\Illuminate\Database\Eloquent\Builder $q) => $q->whereHas('notaBku', fn (\Illuminate\Database\Eloquent\Builder $q2) => $q2->whereNull('deleted_at'))], 'subtotal');
         }
 
         $query->orderBy('no_urut');
@@ -44,11 +46,13 @@ class RkasItemController extends Controller
         $results = $items->map(function (RkasItem $item) use ($bulan): array {
             if ($bulan !== null) {
                 $rencana = (float) $item->bulanRencana->sum('rencana');
-                $realisasi = (float) $item->transaksiBkus->sum('jumlah');
+                $realisasi = (float) $item->transaksiBkus->sum('jumlah')
+                    + (float) $item->notaBkuItems->sum('subtotal');
                 $sisa = $rencana - $realisasi;
                 $labelSisa = 'Sisa s.d. bulan ' . $bulan . ': Rp ' . number_format($sisa, 0, ',', '.');
             } else {
-                $sisa = (float) $item->jumlah - (float) $item->realisasi_sum;
+                $sisa = (float) $item->jumlah
+                    - ((float) $item->realisasi_sum + (float) $item->nota_realisasi_sum);
                 $labelSisa = 'Sisa: Rp ' . number_format($sisa, 0, ',', '.');
             }
 
