@@ -151,6 +151,25 @@
         $namaKegiatan  = ($notaBku->kegiatan->kode ?? '') . ' ' . ($notaBku->kegiatan->nama ?? '-');
         $namaSumber    = ($notaBku->sumberDana->kode ?? '') . ' - ' . ($notaBku->sumberDana->nama ?? '-');
 
+        $prog         = $notaBku->kegiatan;
+        $rekening     = $notaBku->kodeRekening;
+        $namaProgram    = '-';
+        $namaSubProgram = '-';
+        $namaRekening   = '-';
+        $kodeRekening   = '-';
+        if ($rekening) {
+            $kodeRekening = $rekening->kode ?? '-';
+            $namaRekening = $rekening->nama ?? '-';
+        }
+        if ($prog) {
+            $kodeKegiatan = rtrim($prog->kode ?? '', '.');
+            $segments = explode('.', $kodeKegiatan);
+            $kodeSubProgram = isset($segments[0]) && isset($segments[1]) ? $segments[0] . '.' . $segments[1] . '.' : '-';
+            $kodeProgram    = isset($segments[0]) ? $segments[0] . '.' : '-';
+            $namaSubProgram = ($kodeSubProgram !== '-' ? $kodeSubProgram . ' ' : '') . ($prog->sub_program ?? '-');
+            $namaProgram    = ($kodeProgram !== '-' ? $kodeProgram . ' ' : '') . ($prog->program ?? '-');
+        }
+
         if (!function_exists('nota_terbilang')) {
         function nota_terbilang($n) {
             $n = (int) abs($n);
@@ -192,6 +211,21 @@
             <td class="lbl">Kegiatan</td>
             <td class="sep">:</td>
             <td>{{ $namaKegiatan }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Program</td>
+            <td class="sep">:</td>
+            <td>{{ $namaProgram }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Sub Program</td>
+            <td class="sep">:</td>
+            <td>{{ $namaSubProgram }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Kode Rekening</td>
+            <td class="sep">:</td>
+            <td>@if($kodeRekening !== '-' && $kodeRekening !== ''){{ $kodeRekening }} - {{ $namaRekening }}@else-@endif</td>
         </tr>
         <tr>
             <td class="lbl">Sumber Dana</td>

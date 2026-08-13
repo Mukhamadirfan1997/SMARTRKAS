@@ -104,11 +104,6 @@
             </td>
         </tr>
         <tr>
-            <td class="lbl">Uraian</td>
-            <td class="sep">:</td>
-            <td class="val">{{ $transaksiBku->uraian ?: ($transaksiBku->rkasItem->uraian ?? '-') }}</td>
-        </tr>
-        <tr>
             <td class="lbl">Terima Dari</td>
             <td class="sep">:</td>
             <td class="val">{{ $terimaDari }}</td>

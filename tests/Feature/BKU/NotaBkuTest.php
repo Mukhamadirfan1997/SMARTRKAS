@@ -549,12 +549,15 @@ class NotaBkuTest extends TestCase
 
     public function test_cetak_menampilkan_rincian_belanja_dan_no_bpu_tanpa_no_nota(): void
     {
+        $this->program->update(['program' => 'Program Sarana', 'sub_program' => 'Sub Program Belanja']);
+        $this->rekening->update(['kode' => '5.1.2.01.0001', 'nama' => 'Belanja Alat Tulis Kantor']);
         $item = $this->makeItem(1000000);
         $nota = NotaBku::factory()->create([
             'no_nota' => 'NOTA-0001/20519260/01/2026',
             'tanggal' => '2026-01-15',
             'bulan' => 1,
             'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
             'sumber_dana_id' => $this->sumber->id,
             'tahun_anggaran_id' => $this->tahun->id,
             'created_by' => $this->user->id,
@@ -585,6 +588,12 @@ class NotaBkuTest extends TestCase
         $this->assertStringContainsString('Rincian Belanja', $html);
         $this->assertStringContainsString('No. BPU', $html);
         $this->assertStringContainsString('BPU001/20519260/01/2026', $html);
+        $this->assertStringContainsString('Program', $html);
+        $this->assertStringContainsString('Program Sarana', $html);
+        $this->assertStringContainsString('Sub Program', $html);
+        $this->assertStringContainsString('Sub Program Belanja', $html);
+        $this->assertStringContainsString('Kode Rekening', $html);
+        $this->assertStringContainsString('5.1.2.01.0001', $html);
         $this->assertStringNotContainsString('No. Nota', $html);
         $this->assertStringNotContainsString('NOTA-0001/20519260/01/2026', $html);
     }

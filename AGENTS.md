@@ -1653,11 +1653,12 @@ Klarifikasi user atas temuan sebelumnya ("kode program, sub program dan kode rek
 ## Changes
 - `resources/views/transaksi-bku/kwitansi-content.blade.php` (single + batch) — blok PHP PROGRAM HIERARKI dipulihkan: `$prog`/`$rekening` diambil dari `rkasItem->program`/`->kodeRekening`, dan bila `rkasItem` null (transaksi nota) **fallback ke `notaBku->kegiatan`/`notaBku->kodeRekening`**. Baris tabel menampilkan lagi: **Kegiatan**, **Program**, **Sub Program**, **Kode Rekening** (`kode - nama`), lalu **Uraian** (`uraian ?: rkasItem->uraian ?: '-'`). Kegiatan = `kode + nama`; Program = `segment[0]. + program`; Sub Program = `segment[0].segment[1]. + sub_program` (kode di-`rtrim('.')` → explode). "No. Nota" tetap TIDAK dirender.
 - `resources/views/nota-bku/cetak.blade.php` — `<title>` + `.judul` → "Rincian Belanja"; field `No. Nota` → **`No. BPU`** (`$noBpu = $notaBku->transaksiBkus->first()?->no_bukti ?? $notaBku->no_nota` — fallback no_nota bila belum ada transaksi); blok "Dibukukan sebagai transaksi BKU" DIHAPUS (info no_bukti kini di field utama); footer note "Nomor nota" → "Nomor BPU".
-- `tests/Feature/BKU/NotaBkuTest.php` — test kwitansi lama (yang assert NOT Sub Program) **diubah jadi** `test_cetak_kwitansi_flattened_transaksi_menampilkan_program_subprogram_rekening_tanpa_no_nota` (set `program`/`sub_program` + `kode`/`nama` rekening via `update()` agar deterministik; Contains Program/Sub Program/Kode Rekening + nilai; Not/Contains `No. Nota`, `NOTA-0001/...`). Tambah `test_cetak_menampilkan_rincian_belanja_dan_no_bpu_tanpa_no_nota` (render `nota-bku.cetak`, transaksi nota rkas_item null → Contains `Rincian Belanja`, `No. BPU`, `BPU001/20519260/01/2026`; Not/Contains `No. Nota`, `NOTA-0001/...`).
+- `resources/views/nota-bku/cetak.blade.php` (lanjutan) — tambah baris **Program**, **Sub Program**, **Kode Rekening** (logika hierarki sama dengan kwitansi, dari `notaBku->kegiatan` + `notaBku->kodeRekening`) agar identik dgn pdf kwitansi. Field kini: No. BPU, Tanggal, Kegiatan, Program, Sub Program, Kode Rekening, Sumber Dana, Toko/Penerima, No. Invoice SIPLah, Uraian.
+- `tests/Feature/BKU/NotaBkuTest.php` — test kwitansi lama (yang assert NOT Sub Program) **diubah jadi** `test_cetak_kwitansi_flattened_transaksi_menampilkan_program_subprogram_rekening_tanpa_no_nota` (set `program`/`sub_program` + `kode`/`nama` rekening via `update()` agar deterministik; Contains Program/Sub Program/Kode Rekening + nilai; Not/Contains `No. Nota`, `NOTA-0001/...`). Tambah `test_cetak_menampilkan_rincian_belanja_dan_no_bpu_tanpa_no_nota` (render `nota-bku.cetak`, transaksi nota rkas_item null → Contains `Rincian Belanja`, `No. BPU`, `BPU001/20519260/01/2026`, Program/Sub Program/Kode Rekening + nilai via `update()`; Not/Contains `No. Nota`, `NOTA-0001/...`).
 
 ## Verifikasi (render nyata thd DB dev `database/database.sqlite`)
 - Kwitansi transaksi nota (BPU001/.../08/2026, rkas_item null): `No. Nota` ABSENT; Program/Sub Program/Kode Rekening PRESENT TERISI dari nota — `03. Pengembangan Standar Proses`, `03.05. Pelaksanaan Administrasi Kegiatan Sekolah`, `5.1.02.01.01.0037 - Belanja Obat-Obat-Obatan`.
-- Nota PDF: `Rincian Belanja` PRESENT; `No. BPU` = `BPU001/20519260/08/2026`; `No. Nota` + `NOTA-0001` ABSENT.
+- Nota PDF (NOTA-0003/.../08/2026): `Rincian Belanja` PRESENT; `No. BPU` = `BPU001/20519260/08/2026`; Program/Sub Program/Kode Rekening PRESENT TERISI (`03. Pengembangan Standar Proses` / `03.05. Pelaksanaan Administrasi Kegiatan Sekolah` / `5.1.02.01.01.0037 - Belanja Obat-Obat-Obatan`); `No. Nota` + `NOTA-0001` ABSENT — identik dgn pdf kwitansi.
 - BPU001/002 (item biasa): Program/Sub Program/Kode Rekening tetap terisi dari rkasItem. BBU001 (tarik tunai, tanpa item & tanpa kegiatan nota) → `-` wajar.
 - DB Roaming produksi (`%APPDATA%\id.smartrkas.desktop`) belum punya tabel `nota_bku` → probe nota PDF memakai dev DB.
 
@@ -1667,3 +1668,20 @@ Klarifikasi user atas temuan sebelumnya ("kode program, sub program dan kode rek
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1060 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
+
+---
+
+# Sesi 13 Agu 2026 — Kwitansi PDF: Hapus Field Uraian (dobel dgn kotak "Untuk")
+
+## Goal
+User: "di pdf kwitansi ada yang dobel di uraian dan untuk tolong perbaiki / hapus salah satu." Kedua field menampilkan uraian yang sama. Jawaban user (pertanyaan): **hapus "Uraian"**, pertahankan kotak "Untuk" (sudah punya logika dedup uraian item vs transaksi).
+
+## Changes
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` — baris `<td class="lbl">Uraian</td>` DIHAPUS dari tabel field utama. Field atas kini: No, Kegiatan, Program, Sub Program, Kode Rekening, Terima Dari, No. Invoice SIPLah (saat siplah), Sebesar + terbilang. Uraian hanya ditampilkan sekali di kotak **"Untuk"** (utk semua transaksi: item biasa maupun nota).
+- Tidak ada perubahan test (assert uraian via kotak "Untuk" tetap berlaku — teks uraian item hanya 1 kemunculan di HTML).
+
+## Verifikasi (render nyata thd DB Roaming produksi)
+- BPU001/.../01/2026 (item biasa): `Uraian field` ABSENT; `Untuk box` PRESENT; teks uraian item "Honor  Pembina Ekstra Al Banjari" muncul **1×** (hanya di kotak Untuk).
+
+## Test Status
+- PHPUnit `OK (365 tests, 1066 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
