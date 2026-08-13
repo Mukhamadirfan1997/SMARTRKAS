@@ -105,6 +105,10 @@
                     <div class="font-mono font-semibold text-slate-800">{{ $notaBku->no_nota }}</div>
                 </div>
                 <div>
+                    <div class="text-xs text-slate-400">No. Bukti (BPU)</div>
+                    <div class="font-mono font-semibold text-slate-800">{{ $notaBku->transaksiBkus->pluck('no_bukti')->filter()->unique()->values()->isNotEmpty() ? $notaBku->transaksiBkus->pluck('no_bukti')->filter()->unique()->values()->implode(', ') : '-' }}</div>
+                </div>
+                <div>
                     <div class="text-xs text-slate-400">Tanggal</div>
                     <div class="font-medium text-slate-800">{{ \Carbon\Carbon::parse($notaBku->tanggal)->translatedFormat('d F Y') }}</div>
                 </div>
@@ -214,30 +218,4 @@
         </div>
     </div>
 
-    {{-- Transaksi Terkait --}}
-    @if($notaBku->transaksiBkus->isNotEmpty())
-        <div class="card mb-6">
-            <div class="card-header">
-                <span class="card-title">Transaksi BKU Terkait</span>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>No. Bukti</th>
-                            <th class="text-right">Jumlah</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($notaBku->transaksiBkus as $transaksi)
-                            <tr>
-                                <td class="font-mono text-xs">{{ $transaksi->no_bukti }}</td>
-                                <td class="text-right">Rp {{ number_format((float) $transaksi->jumlah, 0, ',', '.') }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    @endif
 </x-app-layout>

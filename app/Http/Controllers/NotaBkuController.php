@@ -25,7 +25,7 @@ class NotaBkuController extends Controller
 {
     public function index(): View
     {
-        $notas = NotaBku::with('kegiatan', 'sumberDana')
+        $notas = NotaBku::with('kegiatan', 'sumberDana', 'transaksiBkus')
             ->withCount('items')
             ->withSum('items as total_item', 'subtotal')
             ->latest('tanggal')
@@ -356,7 +356,7 @@ class NotaBkuController extends Controller
 
     public function show(NotaBku $notaBku): View
     {
-        $notaBku->load('items.rkasItem', 'kegiatan', 'sumberDana', 'tahunAnggaran', 'createdBy');
+        $notaBku->load('items.rkasItem', 'kegiatan', 'sumberDana', 'tahunAnggaran', 'createdBy', 'transaksiBkus');
 
         $total = (float) $notaBku->items->sum('subtotal');
 

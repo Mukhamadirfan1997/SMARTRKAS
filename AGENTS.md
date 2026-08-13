@@ -1723,3 +1723,32 @@ Redesain halaman Detail Nota (`nota-bku/show.blade.php`) yang layoutnya berantak
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM push — commit lokal sesuai instruksi user.
+
+---
+
+# Sesi 13 Agu 2026 — 4 Temuan User: Form Penerimaan Sederhana + Riwayat/Detail Nota No. Bukti + Daftar Item di Edit Nota
+
+## Goal
+Tindak lanjut 4 temuan user (lapor → konfirmasi → implementasi). Keputusan user via pertanyaan: (1) Penerimaan di halaman Tambah Transaksi → **sembunyikan picker item RKAS + kalkulator otomatis** (form sederhana, isi nominal langsung); (3) Detail Nota → **No. Bukti dipindah ke card Informasi Nota, card "Transaksi BKU Terkait" di bawah dihapus**. Temuan (2) Riwayat Nota (tombol Kembali + kolom No. Bukti) dan (4) Edit BKU nota (daftar item) disetujui apa adanya.
+
+## Summary
+- 5 file diubah (2 controller + 3 view + 1 partial), full suite tetap `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+- Probe render nyata thd DB dev (NOTA-0003/20519260/08/2026 → BPU001/20519260/08/2026): 10 cek PASS (SHOW No. Bukti label+nilai, card bawah dihapus, KPI Transaksi BKU tetap; INDEX tombol Kembali + kolom No. Bukti + nilai; EDIT panel nota + tabel item + uraian item).
+
+## Changes
+- `resources/views/transaksi-bku/_rkas-picker.blade.php` — wrapper `<div id="row_rkas_item" class="hidden">` (picker item RKAS TIDAK pernah tampil lagi di create/edit; mencegah flash sebelum JS).
+- `resources/views/transaksi-bku/create.blade.php` — `toggleVisibility()` penerimaan: `rowRkas.style.display='none'` + `rowKalkulator.style.display='none'` (sebelumnya `'block'`). Penerimaan kini: isi Jumlah Nominal langsung (row_jumlah), tanpa pilih item & tanpa kalkulator.
+- `resources/views/transaksi-bku/edit.blade.php` — sama (konsisten dgn create); PLUS panel nota read-only kini menampilkan **tabel rincian item nota** (urutan, uraian item `no_urut. uraian`, jumlah, satuan, harga satuan, subtotal) saat `notaBku->items` tidak kosong — pengguna bisa melihat item apa saja yang terlibat.
+- `app/Http/Controllers/TransaksiBkuController.php` — `edit()` eager-load `notaBku.items.rkasItem`.
+- `app/Http/Controllers/NotaBkuController.php` — `index()` eager-load `transaksiBkus` (utk kolom No. Bukti); `show()` eager-load `transaksiBkus`.
+- `resources/views/nota-bku/index.blade.php` — card-header: tambah tombol **"Kembali"** (`btn-secondary btn-sm` → `route('transaksi-bku.index')`) di samping "Tambah Transaksi"; tabel tambah kolom **"No. Bukti"** setelah No. Nota (nilai `transaksiBkus.pluck('no_bukti')` filter/unique/implode, `-` bila kosong).
+- `resources/views/nota-bku/show.blade.php` — card "Informasi Nota" tambah field **"No. Bukti (BPU)"** (setelah No. Nota); **card "Transaksi BKU Terkait" dihapus** (karena 1 nota = 1 BPU; No. Bukti kini tampil di header). KPI "Transaksi BKU" di atas tetap dipertahankan.
+
+## Catatan Teknis
+- Nilai No. Bukti memakai `pluck('no_bukti')->filter()->unique()->values()` — aman utk nota legacy ber-transaksi ganda (dijoin koma).
+- Blok kalkulator (`row_kalkulator`) & JS-nya (`kalkulasiJumlah`/`updateHarga`/`onPickerSelect`) TIDAK dihapus dari DOM — hanya disembunyikan; `window.RkasPicker` tetap ter-init karena partial masih di-include (menghindari JS error).
+- `rkas_item_id` hidden pada picker tetap membawa nilai lama saat edit penerimaan → update tidak kehilangan relasi item (data aman).
+- Test tidak ada assertion yang diubah; assertSee hanya cek kehadiran HTML (kalkulator/picker masih ada di source, hidden oleh class/style) sehingga suite tetap hijau.
+
+## Test Status
+- PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Probe render dev DB: 10/10 PASS. BELUM push — commit lokal sesuai instruksi user.

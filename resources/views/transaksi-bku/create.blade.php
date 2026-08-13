@@ -517,9 +517,9 @@
 
             function toggleVisibility() {
                 if (jenisSelect.value === 'penerimaan') {
-                    rowRkas.style.display = 'block';
+                    rowRkas.style.display = 'none';
                     rowChecklist.classList.add('hidden');
-                    rowKalkulator.style.display = 'block';
+                    rowKalkulator.style.display = 'none';
                     rowJumlah.classList.remove('hidden');
                     rowMetodePengadaan.style.display = 'none';
                     volumeInput.value = '';

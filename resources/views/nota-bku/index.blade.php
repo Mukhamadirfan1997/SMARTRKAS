@@ -22,10 +22,16 @@
                 <span class="card-title">Riwayat Nota Belanja</span>
                 <p class="text-xs text-slate-500 mt-0.5">1 Nota = 1 Kegiatan, boleh banyak item belanja</p>
             </div>
-            <a href="{{ route('transaksi-bku.create') }}" class="btn-primary">
-                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                Tambah Transaksi
-            </a>
+            <div class="flex items-center gap-2">
+                <a href="{{ route('transaksi-bku.index') }}" class="btn btn-secondary btn-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    Kembali
+                </a>
+                <a href="{{ route('transaksi-bku.create') }}" class="btn-primary">
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Tambah Transaksi
+                </a>
+            </div>
         </div>
 
         @if($notas->isEmpty())
@@ -40,6 +46,7 @@
                     <thead>
                         <tr>
                             <th>No. Nota</th>
+                            <th>No. Bukti</th>
                             <th>Tanggal</th>
                             <th>Kegiatan</th>
                             <th>Sumber Dana</th>
@@ -52,6 +59,7 @@
                         @foreach($notas as $nota)
                             <tr>
                                 <td class="font-mono text-xs">{{ $nota->no_nota }}</td>
+                                <td class="font-mono text-xs">{{ $nota->transaksiBkus->pluck('no_bukti')->filter()->unique()->values()->isNotEmpty() ? $nota->transaksiBkus->pluck('no_bukti')->filter()->unique()->values()->implode(', ') : '-' }}</td>
                                 <td>{{ \Carbon\Carbon::parse($nota->tanggal)->translatedFormat('d M Y') }}</td>
                                 <td>{{ optional($nota->kegiatan)->kode }} {{ optional($nota->kegiatan)->nama }}</td>
                                 <td>{{ optional($nota->sumberDana)->kode }} - {{ optional($nota->sumberDana)->nama }}</td>

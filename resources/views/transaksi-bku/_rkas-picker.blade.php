@@ -1,5 +1,5 @@
 {{-- Picker item RKAS berbasis vanilla JS (fetch endpoint rkas-items.select2). --}}
-<div id="row_rkas_item">
+<div id="row_rkas_item" class="hidden">
     <div class="mb-2">
         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Item RKAS</h3>
     </div>

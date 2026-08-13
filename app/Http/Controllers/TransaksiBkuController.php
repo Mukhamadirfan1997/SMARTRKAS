@@ -331,7 +331,7 @@ class TransaksiBkuController extends Controller
      */
     public function edit(TransaksiBku $transaksiBku): View
     {
-        $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening', 'notaBku.kegiatan', 'notaBku.kodeRekening');
+        $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening', 'notaBku.kegiatan', 'notaBku.kodeRekening', 'notaBku.items.rkasItem');
         $selectedRkas = null;
         if ($transaksiBku->rkasItem) {
             $item = $transaksiBku->rkasItem;

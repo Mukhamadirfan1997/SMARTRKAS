@@ -117,6 +117,35 @@
                                         <p class="text-slate-800">{{ $notaRekening ? ($notaRekening->kode . ' - ' . $notaRekening->nama) : '-' }}</p>
                                     </div>
                                 </div>
+
+                                @if(($transaksiBku->notaBku?->items ?? collect())->isNotEmpty())
+                                    <div class="mt-4 overflow-x-auto">
+                                        <table class="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="w-10 text-center">No</th>
+                                                    <th>Uraian Item</th>
+                                                    <th class="text-right">Jumlah</th>
+                                                    <th>Satuan</th>
+                                                    <th class="text-right">Harga Satuan</th>
+                                                    <th class="text-right">Subtotal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($transaksiBku->notaBku->items as $notaItem)
+                                                    <tr>
+                                                        <td class="text-center">{{ $notaItem->urutan }}</td>
+                                                        <td>{{ $notaItem->rkasItem->no_urut ?? '' }}. {{ $notaItem->rkasItem->uraian ?? '-' }}</td>
+                                                        <td class="text-right">{{ number_format((float) $notaItem->jumlah, 0, ',', '.') }}</td>
+                                                        <td>{{ $notaItem->satuan ?? '-' }}</td>
+                                                        <td class="text-right">Rp {{ number_format((float) $notaItem->harga_satuan, 0, ',', '.') }}</td>
+                                                        <td class="text-right font-medium">Rp {{ number_format((float) $notaItem->subtotal, 0, ',', '.') }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @endif
                             </div>
                         @else
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -456,9 +485,9 @@
 
             function toggleVisibility() {
                 if (jenisSelect.value === 'penerimaan') {
-                    rowRkas.style.display = 'block';
+                    rowRkas.style.display = 'none';
                     rowChecklist.classList.add('hidden');
-                    rowKalkulator.style.display = 'block';
+                    rowKalkulator.style.display = 'none';
                     rowJumlah.classList.remove('hidden');
                     rowMetodePengadaan.style.display = 'none';
                     volumeInput.value = '';
