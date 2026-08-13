@@ -1981,3 +1981,24 @@ Jadikan mapping kode rekening `5.1.02.01.01.0026` (Bahan Cetak & Penggandaan) �
 
 ## Test Status
 - PHPUnit `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK. Commit lokal menyusul setelah verifikasi build (migrasi + AGENTS).
+
+---
+
+# Sesi 13 Agu 2026 — Reinstall v0.5.2 Terverifikasi + Push & Release GitHub
+
+## Reinstall v0.5.2 (verifikasi penuh)
+- Kill v0.5.1 bersih (0 proses tersisa) → uninstall `/S` exit 0 (sisa cache view runtime `storage/framework/views` dihapus manual) → **DB Roaming utuh** (1.63MB) → install v0.5.2 `/S` exit 0.
+- Verifikasi: exe ProductVersion **0.5.2**; `php.exe` + `php\extras\ssl\cacert.pem` terbundle; **migrasi `2026_08_13_000026` terbundle** di instalasi.
+- App jalan → server `php -S 127.0.0.1:59772` (semua arg `-d opcache.enable=0 log_errors=1 error_log=... curl.cainfo=... openssl.cafile=...` terpasang; router TANPA prefix `\\?\`) → `/login` = **200**.
+- **Auto-migrate DB produksi berjalan**: `000026` → **batch 5 (Ran)**; mapping `5.1.02.01.01.0026` = "Belanja Cetak" (nama rekening tetap).
+- `php-server-error.log` = 4 baris (semua fatal lama era `\\?\` 08-Agu), tidak ada error baru.
+
+## Release
+- Commit lokal `d88ded0` (migrasi 000026 + bump v0.5.2 + AGENTS) → push `master` (`1579849..d88ded0`).
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.5.2 — 2 asset state `uploaded` (NSIS 61.2MB + MSI 93.0MB), bukan draft. Notes via `--notes-file` temp (hindari globbing PowerShell).
+
+## Catatan
+- v0.5.2 merangkum SEMUA pekerjaan sejak v0.4.2 (16 commit): Nota Multi-Item + RealisasiQuery (1 nota = 1 BPU, atribusi), form BKU pengeluaran terpadu, Riwayat/Detail Nota + PDF Rincian Belanja (No. BPU), fix kwitansi UNIQUE nomor saat no_bukti di-reuse, partial unique index no_bukti, laporan BKU isi kegiatan/rekening/jenis dari nota (PDF+web+export), migrasi universal "Belanja Cetak" (hanya jenis, nama rekening tetap).
+
+## Test Status
+- Tidak ada perubahan logika PHP pada sesi rilis → suite tetap `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`.
