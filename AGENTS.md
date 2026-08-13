@@ -1869,3 +1869,48 @@ Jawaban permintaan user: "sekarang cek ke semua apakah ada dampak dari perubahan
 
 ## Test Status
 - Tidak ada perubahan logika PHP pada sesi ini (hanya bump versi + AGENTS.md) → suite tetap `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`. Next: uji manual user → bila OK, commit bump + AGENTS + push + `gh release create v0.5.0`.
+
+---
+
+# Sesi 13 Agu 2026 — Kwitansi 500 "tidak bisa dicetak": UNIQUE kwitansi.nomor saat no_bukti di-reuse (commit d409d23)
+
+## Gejala (user, app v0.5.0)
+"Kwitansi tidak bisa dicetak" — klik Cetak PDF → toast gagal. `laravel.log` instalasi: `SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: kwitansi.nomor` (3× pada 20:55–20:56, transaksi `019ffb66-fffd-7287-9062-5db01fdf6c12` = BPU001/20519260/02/2026).
+
+## Root Cause (bukti keras dari DB produksi)
+- Ada **2 transaksi** dgn `no_bukti = BPU001/20519260/02/2026`: yang lama (`019ffb36…`) **soft-deleted 20:51** TAPI baris `kwitansi`-nya tetap (nomor unik `BPU001/20519260/02/2026`, dicetak 20:07); yang baru (`019ffb66…`) dibuat 20:54 (reuse nomor terpilih bebas per bulan).
+- `cetakKwitansi()` pakai `$transaksiBku->kwitansi()->firstOrNew([])` → query by `transaksi_bku_id` tidak ketemu (baris kwitansi milik tx lama) → insert baris baru → **tabrakan `kwitansi_nomor_unique`** → 500 → toast "Gagal mengunduh".
+
+## Fix
+- `app/Http/Controllers/TransaksiBkuController.php` — `cetakKwitansi()` & `cetakKwitansiBatch()`: `firstOrNew([])+save()` → **`Kwitansi::updateOrCreate(['nomor' => $noBukti], [...])`** — saat `no_bukti` di-reuse setelah soft-delete, baris kwitansi lama untuk nomor tsb **direassign** ke transaksi baru (transaksi_bku_id + dicetak_pada + file_pdf_path diperbarui), bukan insert baru.
+- `tests/Feature/BKU/KwitansiTest.php` — test baru `test_cetak_kwitansi_reuses_nomor_when_no_bukti_reused_after_soft_delete` (print → delete tx lama → tx baru no_bukti sama → print OK, kwitansi 1 baris milik tx baru).
+
+## Verifikasi
+- Probe terhadap **salinan DB produksi** (repo code): PDF OK, kwitansi 9→9 baris, baris `BPU001/20519260/02/2026` direassign ke `019ffb66`.
+- Full suite `OK (372 tests, 1078 assertions)`, PHPStan level 6 clean, `view:cache` OK.
+- Commit lokal `d409d23` (14 file, +304/−40) — merangkum: fix no_bukti (NomorDokumen), fix kwitansi, PDF kwitansi/nota (dobel REJOSO/uppercase/margin/footer), bump v0.5.0. **BELUM push/rilis.**
+
+## Perilaku no_nota vs no_bukti (klarifikasi user)
+- **`no_nota` (NotaBku) TIDAK pernah di-reuse** (`NomorDokumen.php:107,113`): `withTrashed()->count()` + cek bentrok `withTrashed()` → selalu meneruskan dari nomor tertinggi pernah ada; nota dibatalkan tetap tidak muncul lagi (dokumen fisik, nomor tidak boleh dobel). Karena itu UNIQUE kwitansi tidak akan kena nomor nota.
+- **`no_bukti` (BPU/BBU) reuse nomor teratas** bila soft-deleted (`NomorDokumen.php:94`); gap yang tidak pernah ada tidak diisi.
+
+---
+
+# Sesi 13 Agu 2026 — v0.5.1: Fix kwitansi masuk installer + reinstall & verifikasi (RILIS DITUNDAK keputusan user)
+
+## Goal
+Bawa fix "kwitansi tidak bisa dicetak" (yang selama ini hanya di repo) ke app terpasang: build installer v0.5.1, reinstall, verifikasi sesuai SOP. User menguji manual sendiri; bila lolos → user putuskan release atau belum.
+
+## Build v0.5.1
+- Bump **0.5.0 → 0.5.1** (5 file: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name="smartrkas"` saja) — diff 5 file, 5+/5−.
+- `npm run build` OK (60 modules, app-BKekO2tT.css/app-CA7a7cYK.js). `tauri build --bundles nsis,msi` (background `%TEMP%\opencode\build-v051.log`): compile crate smartrkas 9m16s (version bump → recompile penuh) → NSIS `SmartRKAS_0.5.1_x64-setup.exe` (58.4MB) + MSI `SmartRKAS_0.5.1_x64_en-US.msi` (88.5MB).
+
+## Reinstall & Verifikasi Instalasi Nyata
+- Close app v0.5.0 (kill paksa; job object mematikan anak php). Uninstall `/S` exit 0 → folder `%LOCALAPPDATA%\SmartRKAS` hilang, **data Roaming SELAMAT**. Install v0.5.1 `/S` exit 0 → exe ProductVersion **0.5.1**, `php\php.exe` + `php\extras\ssl\cacert.pem` terbundle.
+- **Fix aktif di instalasi**: `TransaksiBkuController.php` terpasang berisi `updateOrCreate` (TRUE), `firstOrNew` (FALSE).
+- `Start-Process` app → `php -S 127.0.0.1:56953` (router TANPA `\\?\`, semua `-d` TLS + opcache off + error_log terpasang). `/login` = **200/200/200** (len 11614). `php-server-error.log` = 4 baris (semua fatal lama era `\\?\` 08-Agu), TIDAK ada error baru.
+- **Kasus 500 nyata terverifikasi pasca-instal**: boot Laravel TERPASANG (v0.5.1) terhadap salinan DB produksi → `cetakKwitansi('019ffb66')` = **PDF OK**, kwitansi 9→9 baris, `BPU001/20519260/02/2026` direassign ke transaksi baru. Artefak probe (pdf storage instalasi + copy DB + script) dibersihkan.
+
+## Status
+- Commit lokal bump v0.5.1 + AGENTS.md. **BELUM push, BELUM rilis GitHub** — menunggu uji manual user + keputusan release.
+- App v0.5.1 dibiarkan berjalan untuk uji manual user (user: "saya akan cek juga jadi kita sama sama cek").
