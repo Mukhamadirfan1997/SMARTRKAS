@@ -149,32 +149,24 @@
                             </div>
                         @else
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label for="kegiatan_id" class="form-label">Kegiatan <span class="text-red-500">*</span></label>
-                                    <input type="text" id="kegiatan_search" class="form-input text-sm mb-1.5" placeholder="Ketik untuk mencari kegiatan..." autocomplete="off">
-                                    <select name="kegiatan_id" id="kegiatan_id" class="form-select" required>
-                                        <option value="">-- Pilih Kegiatan --</option>
-                                        @foreach($kegiatans as $kegiatan)
-                                            <option value="{{ $kegiatan->id }}" {{ (string) old('kegiatan_id', $initialKegiatanId) == (string) $kegiatan->id ? 'selected' : '' }}>{{ $kegiatan->kode }} - {{ $kegiatan->nama }}</option>
-                                        @endforeach
-                                    </select>
-                                    @error('kegiatan_id')
-                                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                                <div>
-                                    <label for="kode_rekening_id" class="form-label">Rekening Belanja <span class="text-red-500">*</span></label>
-                                    <input type="text" id="kode_rekening_search" class="form-input text-sm mb-1.5" placeholder="Ketik untuk mencari rekening..." autocomplete="off">
-                                    <select name="kode_rekening_id" id="kode_rekening_id" class="form-select" required>
-                                        <option value="">-- Pilih Kode Rekening --</option>
-                                        @foreach($kodeRekenings as $rekening)
-                                            <option value="{{ $rekening->id }}" {{ (string) old('kode_rekening_id', $initialKodeRekeningId) == (string) $rekening->id ? 'selected' : '' }}>{{ $rekening->kode }} - {{ $rekening->nama }}</option>
-                                        @endforeach
-                                    </select>
-                                    @error('kode_rekening_id')
-                                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                @include('transaksi-bku._search-picker', [
+                                    'spPrefix' => 'kegiatan',
+                                    'spLabel' => 'Kegiatan',
+                                    'spLabelLower' => 'kegiatan',
+                                    'spPlaceholder' => 'Cari kegiatan (kode / nama)...',
+                                    'spInitial' => (string) old('kegiatan_id', $initialKegiatanId ?? ''),
+                                    'spError' => 'kegiatan_id',
+                                    'spOptions' => $kegiatans->map(fn ($k) => ['id' => (string) $k->id, 'text' => $k->kode . ' - ' . $k->nama])->values()->all(),
+                                ])
+                                @include('transaksi-bku._search-picker', [
+                                    'spPrefix' => 'kode_rekening',
+                                    'spLabel' => 'Rekening Belanja',
+                                    'spLabelLower' => 'rekening belanja',
+                                    'spPlaceholder' => 'Cari rekening (kode / nama)...',
+                                    'spInitial' => (string) old('kode_rekening_id', $initialKodeRekeningId ?? ''),
+                                    'spError' => 'kode_rekening_id',
+                                    'spOptions' => $kodeRekenings->map(fn ($r) => ['id' => (string) $r->id, 'text' => $r->kode . ' - ' . $r->nama])->values()->all(),
+                                ])
                             </div>
 
                             <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4 text-sm text-blue-700">
@@ -314,20 +306,6 @@
 
             var volumeTouched = false;
             var initializing = true;
-
-            function initSearchableSelect(selectId, inputId) {
-                var select = document.getElementById(selectId);
-                var input = document.getElementById(inputId);
-                if (!select || !input) return;
-                input.addEventListener('input', function () {
-                    var q = this.value.trim().toLowerCase();
-                    for (var i = 0; i < select.options.length; i++) {
-                        var opt = select.options[i];
-                        if (opt.value === '' || opt.selected) { opt.hidden = false; continue; }
-                        opt.hidden = opt.textContent.toLowerCase().indexOf(q) === -1;
-                    }
-                });
-            }
 
             let cache = [];
 
@@ -570,8 +548,11 @@
 
             if (!isNota) {
                 tanggalInput.addEventListener('change', loadItems);
-                kegiatanSelect.addEventListener('change', loadItems);
-                kodeRekeningSelect.addEventListener('change', loadItems);
+                document.addEventListener('entitypicker:change', function(e) {
+                    if (e.detail && (e.detail.id === 'kegiatan_id' || e.detail.id === 'kode_rekening_id')) {
+                        loadItems();
+                    }
+                });
             }
 
             formEl.addEventListener('submit', function(event) {
@@ -593,8 +574,6 @@
 
             toggleVisibility();
             toggleNoInvoice();
-            initSearchableSelect('kegiatan_id', 'kegiatan_search');
-            initSearchableSelect('kode_rekening_id', 'kode_rekening_search');
             window.RkasPicker.init();
             if (!isNota && kegiatanSelect.value && kodeRekeningSelect.value) {
                 loadItems();

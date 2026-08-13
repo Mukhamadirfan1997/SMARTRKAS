@@ -1777,3 +1777,29 @@ Perbaiki 4 temuan user (lapor → konfirmasi → implementasi): (1) tabel item d
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK, `npm run build` OK. Probe render dev DB: index (kolom nota terisi) + edit (tabel item utuh) PASS. Commit lokal; BELUM push.
+
+---
+
+# Sesi 13 Agu 2026 - Redesain Pencarian Kegiatan & Rekening ala Picker Item RKAS (commit lokal)
+
+## Goal
+User: "sistem pencarian kegiatan dan rekening kok gak kayak sistem pencarian di item rkas dulu, enak begitu gampang". Pendekatan filter <select> yang sudah di-commit (`initSearchableSelect`) DIGANTI total dengan UX picker ala `_rkas-picker.blade.php` (input teks + dropdown hasil + hidden input).
+
+## Changes
+- `resources/views/transaksi-bku/_search-picker.blade.php` (BARU) - partial reusable: label + search input (`{prefix}_search`) + hidden input tetap bernama `{prefix}_id` (id & name sama, agar binding `old()`/error/submit tetap jalan) + dropdown hasil `{prefix}_results` (z-20, max-h-60) + status hint + tombol "Bersihkan". JS generik `window.initEntityPicker(cfg)` (guard `window.__entityPickerInit`, 1 definisi per halaman) + instance init per include. Fitur: filter client-side 150ms debounce (data di-embed `@json`), klik hasil select, Enter memilih item pertama (preventDefault agar tak submit form), klik luar menutup dropdown, tombol clear, restore nilai awal dari hidden input. Emits CustomEvent `entitypicker:change {id, value}`.
+- `resources/views/transaksi-bku/create.blade.php` - blok select kegiatan/rekening diganti 2 include partial (opsi dari `\`/`\`: `['id'=>(string)id,'text'=>kode.' - '.nama]`). JS: hapus `initSearchableSelect` + 2 pemanggilan; listener `change` select diganti listener global `entitypicker:change` -> `loadItems()` (guard id kegiatan_id/kode_rekening_id). Submit guard baru: pengeluaran wajib kegiatan+rekening terpilih (sebelumnya ditegakkan browser via `required` pada select; hidden input tidak di-validate browser).
+- `resources/views/transaksi-bku/edit.blade.php` - sama (include partial, hapus initSearchableSelect, listener global `entitypicker:change` DI DALAM blok `if (!isNota)`). Nilai awal pakai `old('kegiatan_id', \ ?? '')`.
+- TIDAK ada perubahan controller/test. `kegiatanSelect`/`kodeRekeningSelect` kini = hidden input; semua pembacaan `.value` dan kondisi init (`if (kegiatanSelect.value && kodeRekeningSelect.value) loadItems();`) tetap berfungsi.
+
+## Catatan Teknis
+- hidden input tetap `name=` {prefix}_id sehingga POST/validasi/old()/error tidak berubah (test POST langsung ke server tidak terdampak).
+- initEntityPicker TIDAK men-dispatch entitypicker:change saat init (hanya set teks/status) - menghindari fetch ganda; loadItems init tetap lewat blok `if (value && value)`.
+- Edit untuk transaksi nota: pickers & script berada di cabang `@else` (non-nota), jadi tidak dirender - tidak ada referensi null (kegiatanSelect null untuk nota sudah kondisi pra-ada).
+- Partial include script di dalam `<form>` - valid; guard definisi mencegah fungsi terdefinisi ganda saat 2 include.
+
+## Verifikasi
+- `php artisan view:cache` OK; PHPUnit full suite `OK (365 tests, 1059 assertions)`; PHPStan level 6 `[OK] No errors`.
+- Probe render dev DB (`probe-picker.php`): create - kegiatan_search/hidden kegiatan_id/kegiatan_results/kode_rekening_results/initEntityPicker/entitypicker:change/placeholder FOUND; `<select name=kegiatan_id` & `initSearchableSelect` ABSENT. edit (BPU001/20519260/01/2026, item tunggal) - sama + hidden value preset = rkas_item_id FOUND. Opsi JSON ter-embed benar (139 program/276 rekening di dev DB); regex "options count = 0" pada probe pertama adalah regex yang salah tangkap, output asli diverifikasi berisi 139 item.
+
+## Test Status
+- PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
