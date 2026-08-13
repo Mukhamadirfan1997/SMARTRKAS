@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
-use App\Models\MasterKodeRekening;
-use App\Models\MasterProgram;
 use App\Models\NotaBku;
 use App\Models\Outbox;
 use App\Models\RkasItem;
@@ -35,14 +33,6 @@ class NotaBkuController extends Controller
             ->withQueryString();
 
         return view('nota-bku.index', compact('notas'));
-    }
-
-    public function create(): View
-    {
-        $kegiatans = MasterProgram::orderBy('kode')->get();
-        $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
-
-        return view('nota-bku.create', compact('kegiatans', 'kodeRekenings'));
     }
 
     /**

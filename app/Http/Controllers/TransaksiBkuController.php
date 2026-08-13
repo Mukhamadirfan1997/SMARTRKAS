@@ -331,7 +331,7 @@ class TransaksiBkuController extends Controller
      */
     public function edit(TransaksiBku $transaksiBku): View
     {
-        $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening');
+        $transaksiBku->load('rkasItem.program', 'rkasItem.kodeRekening', 'notaBku.kegiatan', 'notaBku.kodeRekening');
         $selectedRkas = null;
         if ($transaksiBku->rkasItem) {
             $item = $transaksiBku->rkasItem;
@@ -348,11 +348,47 @@ class TransaksiBkuController extends Controller
             ];
         }
 
-        return view('transaksi-bku.edit', compact('transaksiBku', 'selectedRkas'));
+        $kegiatans = MasterProgram::orderBy('kode')->get();
+        $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
+
+        return view('transaksi-bku.edit', compact(
+            'transaksiBku', 'selectedRkas', 'kegiatans', 'kodeRekenings'
+        ));
     }
 
     public function update(Request $request, TransaksiBku $transaksiBku): RedirectResponse
     {
+        // Form pengeluaran baru (pola create): tepat 1 item dicentang → hitung
+        // ulang jumlah = qty × harga persis seperti store(). 2+ item tidak
+        // mungkin untuk edit transaksi tunggal (itu domain Nota multi-item).
+        $rawItems = $request->input('items');
+
+        if (is_array($rawItems)) {
+            $checked = array_values(array_filter($rawItems, static fn (mixed $v): bool => is_array($v) && !empty($v['rkas_item_id'])));
+
+            if (count($checked) >= 2) {
+                throw ValidationException::withMessages([
+                    'items' => 'Transaksi gabungan (2+ item) tidak dapat diubah lewat form ini. Hapus dan buat nota baru dari menu Tambah Transaksi.',
+                ]);
+            }
+
+            if (count($checked) === 1) {
+                $first = $checked[0];
+                $qty = NumberParser::decimal($first['qty'] ?? null);
+                $harga = NumberParser::rupiah($first['harga'] ?? null);
+
+                $request->merge([
+                    'rkas_item_id' => (string) $first['rkas_item_id'],
+                    'volume' => $qty,
+                    'jumlah' => (string) round(((float) $qty) * ((float) $harga), 2),
+                    'satuan' => isset($first['satuan']) && (string) $first['satuan'] !== ''
+                        ? (string) $first['satuan']
+                        : $request->input('satuan'),
+                    'jenis' => 'pengeluaran',
+                ]);
+            }
+        }
+
         $request->merge([
             'jumlah' => NumberParser::rupiah($request->input('jumlah')),
             'volume' => NumberParser::decimal($request->input('volume')),

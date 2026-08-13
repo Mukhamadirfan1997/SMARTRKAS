@@ -83,7 +83,6 @@ class NotaBkuTest extends TestCase
     public function test_guest_is_redirected_to_login(): void
     {
         $this->get('/nota-bku')->assertRedirect('/login');
-        $this->get('/nota-bku/create')->assertRedirect('/login');
     }
 
     public function test_index_page_renders_nota_list(): void
@@ -105,16 +104,11 @@ class NotaBkuTest extends TestCase
         $response->assertSee($nota->no_nota);
     }
 
-    public function test_create_page_renders(): void
+    public function test_create_route_removed_returns_404(): void
     {
         $response = $this->actingAs($this->user)->get('/nota-bku/create');
 
-        $response->assertOk();
-        $response->assertSee('Tambah Nota Belanja');
-        $response->assertSee('id="kegiatan_id"', false);
-        $response->assertSee('id="kode_rekening_id"', false);
-        $response->assertSee('id="item-list"', false);
-        $response->assertSee('id="btn-tambah-item"', false);
+        $response->assertNotFound();
     }
 
     public function test_items_endpoint_returns_items_for_kegiatan_with_sisa(): void

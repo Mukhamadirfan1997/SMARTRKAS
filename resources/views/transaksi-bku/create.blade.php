@@ -133,7 +133,12 @@
                         </label>
                     </div>
 
-                    {{-- Section 3: Kalkulator (untuk Jenis Penerimaan) --}}
+                    {{-- Section 4: Nominal & Rincian --}}
+                    <div class="mb-2">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Nominal & Rincian</h3>
+                    </div>
+
+                    {{-- Kalkulator (untuk Jenis Penerimaan) --}}
                     <div class="my-5 p-4 bg-blue-50 border border-blue-200 rounded-xl hidden" id="row_kalkulator">
                         <label class="block text-sm font-semibold text-blue-800 mb-3">Kalkulator Otomatis</label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,11 +152,6 @@
                             </div>
                         </div>
                         <p class="text-xs text-blue-600 mt-2">Isi <strong>Jumlah Barang</strong> untuk menghitung otomatis nominal <strong>Jumlah</strong> di bawah.</p>
-                    </div>
-
-                    {{-- Section 4: Nominal & Rincian --}}
-                    <div class="mb-2">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Nominal & Rincian</h3>
                     </div>
                     <input type="hidden" name="volume" id="volume" value="{{ old('volume') }}">
                     <input type="hidden" name="satuan" id="satuan" value="{{ old('satuan') }}">
@@ -603,6 +603,11 @@
                     if (selectedCount() === 0) {
                         event.preventDefault();
                         alert('Centang minimal satu item belanja terlebih dahulu.');
+                        return;
+                    }
+                    if (!document.getElementById('penyelesaian').checked) {
+                        event.preventDefault();
+                        alert('Centang konfirmasi bahwa semua item dalam transaksi sudah dimasukkan.');
                         return;
                     }
                 } else if (!jumlahInput.value.trim()) {

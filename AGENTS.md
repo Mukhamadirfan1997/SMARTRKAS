@@ -1685,3 +1685,41 @@ User: "di pdf kwitansi ada yang dobel di uraian dan untuk tolong perbaiki / hapu
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1066 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
+
+---
+
+# Sesi 13 Agu 2026 — Redesain Detail Nota + Form Edit BKU (pola create) + Hapus Route/View Nota Create (Tahap 4 selesai)
+
+## Goal
+Redesain halaman Detail Nota (`nota-bku/show.blade.php`) yang layoutnya berantakan, rapikan halaman Tambah BKU (`transaksi-bku/create.blade.php`), samakan halaman Edit BKU (`transaksi-bku/edit.blade.php`) dengan pola create baru, dan hapus tampilan tak terpakai (route `/nota-bku/create` + `NotaBkuController::create()` + view `nota-bku/create.blade.php` + tombol "Tambah Nota"). User minta lapor dulu sebelum ubah kode — 3 keputusan scope disetujui (edit disamakan dgn create; route create dihapus; create dirapikan).
+
+## Summary
+- `nota-bku/show.blade.php` ditulis ulang penuh: KPI stat-card + card Informasi Nota (Program/Sub Program/Kode Rekening diisi) + rincian item + transaksi terkait.
+- `transaksi-bku/create.blade.php` dirapikan: kalkulator dipindah ke dalam section "Nominal & Rincian" (tidak ada blok Section 3 terpisah); checkbox `penyelesaian` kini wajib dicentang saat submit pengeluaran (client-side).
+- `transaksi-bku/edit.blade.php` ditulis ulang mengikuti pola create: blok Kegiatan→Rekening→checklist item untuk pengeluaran (item lama auto-tercentang, jumlah = qty × harga); transaksi nota (`rkas_item_id` null) menampilkan panel read-only dari nota; penerimaan kini konsisten (picker + kalkulator tampil).
+- `update()` menerima pola `items[]` (1 item → jumlah dihitung ulang qty × harga); 2+ item ditolak (domain Nota multi-item).
+- Tahap 4 selesai: route `GET /nota-bku/create`, `NotaBkuController::create()`, view `nota-bku/create.blade.php`, tombol "Tambah Nota" dihapus; test diupdate (route create → 404).
+
+## Changes
+- `resources/views/nota-bku/show.blade.php` — tulis ulang: header aksi (Kembali / Cetak PDF / Hapus), KPI 3 stat-card (Total Belanja green, Jumlah Item blue, Transaksi BKU indigo via `$notaBku->transaksiBkus->count()`), card "Informasi Nota" grid 2 kolom (No. Nota, Tanggal, Bulan, Kegiatan, Program, Sub Program, Kode Rekening `kode - nama`, Sumber Dana, Toko/Penerima, Metode Pengadaan badge, No. Invoice SIPLah saat siplah, Dibuat Oleh, Uraian col-span-2 bila ada), card "Rincian Item Belanja" (data-table + tfoot Total), card "Transaksi BKU Terkait" (full-width, conditional `isNotEmpty()`). Hierarki Program/Sub Program dari segmen `kegiatan->kode`.
+- `resources/views/transaksi-bku/create.blade.php` — `row_kalkulator` dipindah ke dalam section "Nominal & Rincian"; submit pengeluaran wajib centang `penyelesaian` (alert "Centang konfirmasi bahwa semua item dalam transaksi sudah dimasukkan.").
+- `resources/views/transaksi-bku/edit.blade.php` — ditulis ulang penuh: Section 1 (tanggal / jenis / no_bukti), Section 2b checklist (`kegiatan_id` + `kode_rekening_id` dari `$initialKegiatanId`/`$initialKodeRekeningId` = `program_id`/`kode_rekening_id` item lama; item auto-tercentang via JS `initialItemId`/`initialQty`/`initialHarga` + flag `autoChecked`), panel read-only utk transaksi nota (No. Nota / Kegiatan / Jumlah Item / Program / Sub Program / Kode Rekening dari `notaBku`), kalkulator + `row_jumlah` (penerimaan), toko / metode / invoice / uraian, submit guard (pengeluaran wajib ≥1 item dicentang kecuali nota). Tanpa manual-rows / override / penyelesaian.
+- `app/Http/Controllers/TransaksiBkuController.php` — `edit()`: load `rkasItem.program`/`rkasItem.kodeRekening` + `notaBku.kegiatan`/`notaBku.kodeRekening`, kirim `$kegiatans`/`$kodeRekenings`. `update()`: blok dispatch `items[]` — 1 item → merge `rkas_item_id`/`volume`/`jumlah`(=qty×harga)/`satuan`/`jenis`; 2+ → `ValidationException` "Transaksi gabungan ... Hapus dan buat nota baru dari menu Tambah Transaksi". Guard sisa anggaran tetap (dilewati hanya utk nota transaksi `rkas_item_id` null).
+- `routes/web.php` — hapus `GET /nota-bku/create`.
+- `app/Http/Controllers/NotaBkuController.php` — hapus `create()` + import `MasterProgram`/`MasterKodeRekening` (tidak terpakai lagi setelah create() hilang).
+- `resources/views/nota-bku/index.blade.php` — tombol "Tambah Nota" → "Tambah Transaksi" (`route('transaksi-bku.create')`); empty-state diarahkan ke Tambah Transaksi.
+- `resources/views/nota-bku/create.blade.php` — DIHAPUS (tampilan tak terpakai).
+- `tests/Feature/BKU/NotaBkuTest.php` — `test_guest_is_redirected_to_login` hapus assert `/nota-bku/create`; `test_create_page_renders` → `test_create_route_removed_returns_404` (assertNotFound).
+
+## Verifikasi
+- `php artisan view:cache` OK; full suite `OK (365 tests, 1059 assertions)`; PHPStan level 6 `[OK] No errors`.
+- Probe render nyata thd dev DB `database/database.sqlite` (nota=3, transaksi=9): SHOW nota NOTA-0003 → len 26965, memuat no_nota / Program / KPI "Total Belanja"; EDIT BPU001/.../08 (nota transaksi) → panel read-only "Nota Multi-Item"; EDIT BPU001/.../01 (single-item, pakai `withTrashed()` karena semua single-item dev soft-deleted) → selects kegiatan/rekening + items-hidden + initialItemId + tanpa panel nota.
+
+## Catatan
+- Transaksi dev yang single-item semuanya soft-deleted → render single-item dicek via `withTrashed()` (view statis valid; alur JS sama dgn create yang sudah teruji).
+- Submit guard `penyelesaian` hanya client-side (server tetap validasi `items`); test POST langsung ke server tidak terdampak.
+- `update()` jalur nota transaksi: `rkasItemId` null → guard dilewati, `jumlah` tetap editable (jumlah total nota), tidak mengubah `nota_bku_item`.
+- Route `/nota-bku` index/show/destroy/cetak/items TETAP dipertahankan (Detail Nota, PDF, riwayat, AJAX items dipakai form gabungan).
+
+## Test Status
+- PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. BELUM push — commit lokal sesuai instruksi user.
