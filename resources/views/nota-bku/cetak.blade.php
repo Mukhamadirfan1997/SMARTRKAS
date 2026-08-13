@@ -1,9 +1,10 @@
+@php $noBpu = $notaBku->transaksiBkus->first()?->no_bukti ?? $notaBku->no_nota; @endphp
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <title>Nota Belanja {{ $notaBku->no_nota }}</title>
+    <title>Rincian Belanja {{ $noBpu }}</title>
     <style>
         @page {
             margin: 20mm 25mm 15mm 25mm;
@@ -174,13 +175,13 @@
         <div class="alamat">{{ $alamatSekolah }}{{ $npsn !== '' ? ' · NPSN: ' . $npsn : '' }}</div>
     </div>
 
-    <div class="judul">Nota Belanja</div>
+    <div class="judul">Rincian Belanja</div>
 
     <table class="field-table">
         <tr>
-            <td class="lbl">No. Nota</td>
+            <td class="lbl">No. BPU</td>
             <td class="sep">:</td>
-            <td><strong>{{ $notaBku->no_nota }}</strong></td>
+            <td><strong>{{ $noBpu }}</strong></td>
         </tr>
         <tr>
             <td class="lbl">Tanggal</td>
@@ -248,13 +249,6 @@
     <div class="total-line">Total : Rp {{ number_format($total, 0, ',', '.') }},-</div>
     <div class="terbilang">({{ $terbilang }})</div>
 
-    @if($notaBku->transaksiBkus->isNotEmpty())
-        <div style="font-size: 9px; margin-bottom: 4px;">
-            <strong>Dibukukan sebagai transaksi BKU:</strong>
-            {{ $notaBku->transaksiBkus->pluck('no_bukti')->join(', ') }}
-        </div>
-    @endif
-
     <table class="ttd-table">
         <tr>
             <td>
@@ -272,6 +266,6 @@
         </tr>
     </table>
 
-    <div class="footer-note">Dokumen ini dibuat otomatis oleh SmartRKAS. Nomor nota dan transaksi terkait bersifat permanen.</div>
+    <div class="footer-note">Dokumen ini dibuat otomatis oleh SmartRKAS. Nomor BPU dan transaksi terkait bersifat permanen.</div>
 </body>
 </html>

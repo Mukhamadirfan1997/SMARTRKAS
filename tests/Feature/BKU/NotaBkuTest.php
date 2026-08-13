@@ -474,8 +474,10 @@ class NotaBkuTest extends TestCase
         $response->assertSee('Cetak PDF');
     }
 
-    public function test_cetak_kwitansi_flattened_transaksi_tidak_menampilkan_no_nota_program_dan_sub_program(): void
+    public function test_cetak_kwitansi_flattened_transaksi_menampilkan_program_subprogram_rekening_tanpa_no_nota(): void
     {
+        $this->program->update(['program' => 'Program Sarana', 'sub_program' => 'Sub Program Belanja']);
+        $this->rekening->update(['kode' => '5.1.2.01.0001', 'nama' => 'Belanja Alat Tulis Kantor']);
         $item = $this->makeItem(1000000);
         $nota = NotaBku::factory()->create([
             'no_nota' => 'NOTA-0001/20519260/01/2026',
@@ -507,10 +509,15 @@ class NotaBkuTest extends TestCase
         ])->render();
 
         $this->assertStringContainsString('BPU001/20519260/01/2026', $html);
+        $this->assertStringContainsString('Belanja ATK Nota Test', $html);
+        $this->assertStringContainsString('Program', $html);
+        $this->assertStringContainsString('Program Sarana', $html);
+        $this->assertStringContainsString('Sub Program', $html);
+        $this->assertStringContainsString('Sub Program Belanja', $html);
+        $this->assertStringContainsString('Kode Rekening', $html);
+        $this->assertStringContainsString('5.1.2.01.0001', $html);
         $this->assertStringNotContainsString('No. Nota', $html);
         $this->assertStringNotContainsString('NOTA-0001/20519260/01/2026', $html);
-        $this->assertStringNotContainsString('Sub Program', $html);
-        $this->assertStringContainsString('Belanja ATK Nota Test', $html);
     }
 
     public function test_cetak_returns_pdf(): void    {
@@ -538,6 +545,48 @@ class NotaBkuTest extends TestCase
         $response->assertOk();
         $this->assertSame('application/pdf', $response->headers->get('content-type'));
         $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_cetak_menampilkan_rincian_belanja_dan_no_bpu_tanpa_no_nota(): void
+    {
+        $item = $this->makeItem(1000000);
+        $nota = NotaBku::factory()->create([
+            'no_nota' => 'NOTA-0001/20519260/01/2026',
+            'tanggal' => '2026-01-15',
+            'bulan' => 1,
+            'kegiatan_id' => $this->program->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'tahun_anggaran_id' => $this->tahun->id,
+            'created_by' => $this->user->id,
+        ]);
+        $nota->items()->create([
+            'rkas_item_id' => $item->id,
+            'urutan' => 1,
+            'jumlah' => 10,
+            'satuan' => 'paket',
+            'harga_satuan' => 50000,
+            'subtotal' => 500000,
+        ]);
+        TransaksiBku::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => null,
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'tanggal' => '2026-01-15',
+            'bulan' => 1,
+            'no_bukti' => 'BPU001/20519260/01/2026',
+            'jenis' => 'pengeluaran',
+            'jumlah' => 500000,
+            'created_by' => $this->user->id,
+        ]);
+
+        $html = view('nota-bku.cetak', ['notaBku' => $nota, 'total' => 500000])->render();
+
+        $this->assertStringContainsString('Rincian Belanja', $html);
+        $this->assertStringContainsString('No. BPU', $html);
+        $this->assertStringContainsString('BPU001/20519260/01/2026', $html);
+        $this->assertStringNotContainsString('No. Nota', $html);
+        $this->assertStringNotContainsString('NOTA-0001/20519260/01/2026', $html);
     }
 
     public function test_destroy_soft_deletes_nota_and_transaksi(): void

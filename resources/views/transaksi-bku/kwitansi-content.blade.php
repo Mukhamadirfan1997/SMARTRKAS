@@ -31,12 +31,34 @@
     }
     $terbilang = ucfirst(trim(terbilang_num($transaksiBku->jumlah))).' Rupiah';
 
-    /* ===== KEGIATAN ===== */
-    $namaKegiatan = '-';
+    /* ===== PROGRAM HIERARKI ===== */
+    $namaKegiatan   = '-';
+    $namaProgram    = '-';
+    $namaSubProgram = '-';
+    $kodeRekening   = '-';
+    $namaRekening   = '-';
 
-    if ($transaksiBku->rkasItem && $transaksiBku->rkasItem->program) {
-        $prog = $transaksiBku->rkasItem->program;
-        $namaKegiatan = $prog->kode . ' ' . $prog->nama;
+    $prog     = $transaksiBku->rkasItem ? $transaksiBku->rkasItem->program : null;
+    $rekening = $transaksiBku->rkasItem ? $transaksiBku->rkasItem->kodeRekening : null;
+
+    if ($prog === null && $transaksiBku->notaBku) {
+        $prog     = $transaksiBku->notaBku->kegiatan;
+        $rekening = $transaksiBku->notaBku->kodeRekening;
+    }
+
+    if ($rekening) {
+        $kodeRekening = $rekening->kode ?? '-';
+        $namaRekening = $rekening->nama ?? '-';
+    }
+
+    if ($prog) {
+        $kodeKegiatan = rtrim($prog->kode ?? '', '.');
+        $segments = explode('.', $kodeKegiatan);
+        $kodeSubProgram = isset($segments[0]) && isset($segments[1]) ? $segments[0] . '.' . $segments[1] . '.' : '-';
+        $kodeProgram    = isset($segments[0]) ? $segments[0] . '.' : '-';
+        $namaKegiatan   = $prog->kode . ' ' . $prog->nama;
+        $namaSubProgram = ($kodeSubProgram !== '-' ? $kodeSubProgram . ' ' : '') . ($prog->sub_program ?? '-');
+        $namaProgram    = ($kodeProgram !== '-' ? $kodeProgram . ' ' : '') . ($prog->program ?? '-');
     }
 
     /* Terima Dari: sesuai contoh PDF — selalu Kepala Sekolah institusi tersebut */
@@ -59,6 +81,27 @@
             <td class="lbl">Kegiatan</td>
             <td class="sep">:</td>
             <td class="val">{{ $namaKegiatan }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Program</td>
+            <td class="sep">:</td>
+            <td class="val">{{ $namaProgram }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Sub Program</td>
+            <td class="sep">:</td>
+            <td class="val">{{ $namaSubProgram }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Kode Rekening</td>
+            <td class="sep">:</td>
+            <td class="val">
+                @if($kodeRekening !== '-' && $kodeRekening !== '')
+                    {{ $kodeRekening }} - {{ $namaRekening }}
+                @else
+                    -
+                @endif
+            </td>
         </tr>
         <tr>
             <td class="lbl">Uraian</td>

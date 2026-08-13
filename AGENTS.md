@@ -1640,3 +1640,30 @@ User: "output PDF kwitansi: kode program, sub program dan kode rekening jadi kos
 ## Test Status
 - PHPUnit `OK (364 tests, 1050 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
 
+---
+
+# Sesi 13 Agu 2026 — Kwitansi PDF: Isi Program/Sub Program/Kode Rekening (dari nota) + Nota PDF "No. BPU"/"Rincian Belanja" (KOREKSI arah v0.3.x)
+
+## Goal
+Klarifikasi user atas temuan sebelumnya ("kode program, sub program dan kode rekening jadi kosong"): kolom tsb harus **DIISI data**, bukan dihapus. Jawaban user utk 2 pertanyaan: (1) Kode Rekening kwitansi → "Isi juga dari nota (Recommended)"; (2) Nota PDF → "Ya, cetak No. BPU saja (Recommended)" — No. BPU = `no_bukti` transaksi; nomor nota internal TIDAK dicetak; judul "Nota Belanja" → "Rincian Belanja".
+
+## Root Cause (mengapa "awalnya kosong")
+- Transaksi hasil nota (1 nota = 1 transaksi total) punya `rkas_item_id = NULL` → `rkasItem->program`/`rkasItem->kodeRekening` null → kolom Kegiatan/Program/Sub Program/Kode Rekening tampak kosong. Data sebenarnya TERSEDIA via `$transaksiBku->notaBku->kegiatan` (MasterProgram) + `$transaksiBku->notaBku->kodeRekening`.
+
+## Changes
+- `resources/views/transaksi-bku/kwitansi-content.blade.php` (single + batch) — blok PHP PROGRAM HIERARKI dipulihkan: `$prog`/`$rekening` diambil dari `rkasItem->program`/`->kodeRekening`, dan bila `rkasItem` null (transaksi nota) **fallback ke `notaBku->kegiatan`/`notaBku->kodeRekening`**. Baris tabel menampilkan lagi: **Kegiatan**, **Program**, **Sub Program**, **Kode Rekening** (`kode - nama`), lalu **Uraian** (`uraian ?: rkasItem->uraian ?: '-'`). Kegiatan = `kode + nama`; Program = `segment[0]. + program`; Sub Program = `segment[0].segment[1]. + sub_program` (kode di-`rtrim('.')` → explode). "No. Nota" tetap TIDAK dirender.
+- `resources/views/nota-bku/cetak.blade.php` — `<title>` + `.judul` → "Rincian Belanja"; field `No. Nota` → **`No. BPU`** (`$noBpu = $notaBku->transaksiBkus->first()?->no_bukti ?? $notaBku->no_nota` — fallback no_nota bila belum ada transaksi); blok "Dibukukan sebagai transaksi BKU" DIHAPUS (info no_bukti kini di field utama); footer note "Nomor nota" → "Nomor BPU".
+- `tests/Feature/BKU/NotaBkuTest.php` — test kwitansi lama (yang assert NOT Sub Program) **diubah jadi** `test_cetak_kwitansi_flattened_transaksi_menampilkan_program_subprogram_rekening_tanpa_no_nota` (set `program`/`sub_program` + `kode`/`nama` rekening via `update()` agar deterministik; Contains Program/Sub Program/Kode Rekening + nilai; Not/Contains `No. Nota`, `NOTA-0001/...`). Tambah `test_cetak_menampilkan_rincian_belanja_dan_no_bpu_tanpa_no_nota` (render `nota-bku.cetak`, transaksi nota rkas_item null → Contains `Rincian Belanja`, `No. BPU`, `BPU001/20519260/01/2026`; Not/Contains `No. Nota`, `NOTA-0001/...`).
+
+## Verifikasi (render nyata thd DB dev `database/database.sqlite`)
+- Kwitansi transaksi nota (BPU001/.../08/2026, rkas_item null): `No. Nota` ABSENT; Program/Sub Program/Kode Rekening PRESENT TERISI dari nota — `03. Pengembangan Standar Proses`, `03.05. Pelaksanaan Administrasi Kegiatan Sekolah`, `5.1.02.01.01.0037 - Belanja Obat-Obat-Obatan`.
+- Nota PDF: `Rincian Belanja` PRESENT; `No. BPU` = `BPU001/20519260/08/2026`; `No. Nota` + `NOTA-0001` ABSENT.
+- BPU001/002 (item biasa): Program/Sub Program/Kode Rekening tetap terisi dari rkasItem. BBU001 (tarik tunai, tanpa item & tanpa kegiatan nota) → `-` wajar.
+- DB Roaming produksi (`%APPDATA%\id.smartrkas.desktop`) belum punya tabel `nota_bku` → probe nota PDF memakai dev DB.
+
+## Catatan
+- Test kwitansi memakai `$this->program->update([...])` + `$this->rekening->update([...])` sebelum `makeItem()` — factory default `program`/`sub_program` null & kode P.####/5.1.2.##.####, jadi nilai eksplisit wajib utk assert isi.
+- Kwitansi transaksi nota kini memakai data kegiatan+kode rekening dari NOTA (bukan item); transaksi single-item memakai rkasItem. Keduanya mengisi kolom yang sama.
+
+## Test Status
+- PHPUnit `OK (365 tests, 1060 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Commit lokal; BELUM push.
