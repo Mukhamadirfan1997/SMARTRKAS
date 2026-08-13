@@ -258,8 +258,8 @@
             const totalBelanja = document.getElementById('total-belanja');
 
             const npsnCode = "{{ $npsn }}";
-            const countPenerimaan = {{ $countPenerimaan }};
-            const countPengeluaran = {{ $countPengeluaran }};
+            const nextSeqPenerimaan = @json($nextSeqPenerimaan);
+            const nextSeqPengeluaran = @json($nextSeqPengeluaran);
             const formEl = document.getElementById('form-bku');
             var volumeTouched = false;
             var initializing = true;
@@ -293,12 +293,13 @@
                 var dateObj = new Date(dateVal);
                 var m = String(dateObj.getMonth() + 1).padStart(2, '0');
                 var y = dateObj.getFullYear();
+                var bulan = parseInt(m, 10);
                 if (jenisSelect.value === 'penerimaan') {
-                    var num = String(countPenerimaan).padStart(3, '0');
-                    noBuktiInput.value = 'BBU' + num + '/' + npsnCode + '/' + m + '/' + y;
+                    var seq = nextSeqPenerimaan[bulan] || 1;
+                    noBuktiInput.value = 'BBU' + String(seq).padStart(3, '0') + '/' + npsnCode + '/' + m + '/' + y;
                 } else {
-                    var num = String(countPengeluaran).padStart(3, '0');
-                    noBuktiInput.value = 'BPU' + num + '/' + npsnCode + '/' + m + '/' + y;
+                    var seq = nextSeqPengeluaran[bulan] || 1;
+                    noBuktiInput.value = 'BPU' + String(seq).padStart(3, '0') + '/' + npsnCode + '/' + m + '/' + y;
                 }
             }
 

@@ -141,10 +141,8 @@ class TransaksiBkuController extends Controller
         $tahunAnggaranRecord = TahunAnggaran::where('status', true)->first(['id']);
         $tahunAnggaranId = $tahunAnggaranRecord ? $tahunAnggaranRecord->id : '';
 
-        $countPenerimaan = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranId)
-            ->where('jenis', 'penerimaan')->count() + 1;
-        $countPengeluaran = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranId)
-            ->where('jenis', 'pengeluaran')->count() + 1;
+        $nextSeqPenerimaan = NomorDokumen::nextSeqPerBulan('penerimaan');
+        $nextSeqPengeluaran = NomorDokumen::nextSeqPerBulan('pengeluaran');
 
         $kegiatans = MasterProgram::orderBy('kode')->get();
         $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
@@ -169,7 +167,7 @@ class TransaksiBkuController extends Controller
         }
 
         return view('transaksi-bku.create', compact(
-            'npsn', 'countPenerimaan', 'countPengeluaran', 'pickerInitial',
+            'npsn', 'nextSeqPenerimaan', 'nextSeqPengeluaran', 'pickerInitial',
             'kegiatans', 'kodeRekenings'
         ));
     }
@@ -611,11 +609,18 @@ class TransaksiBkuController extends Controller
 
         Storage::disk('public')->put($filePath, $pdf->output());
 
-        $kwitansi = $transaksiBku->kwitansi()->firstOrNew([]);
-        $kwitansi->nomor = $transaksiBku->no_bukti;
-        $kwitansi->dicetak_pada = now();
-        $kwitansi->file_pdf_path = $filePath;
-        $kwitansi->save();
+        // `no_bukti` bisa dipakai ulang setelah transaksi lama di-soft-delete
+        // (nomor terkecil bebas per bulan). Kwitansi lama untuk nomor tsb
+        // (milik transaksi soft-deleted) tetap ada dan `nomor` unik — jadi
+        // perbarui baris dgn `nomor` yang sama alih-alih insert baru.
+        Kwitansi::updateOrCreate(
+            ['nomor' => $transaksiBku->no_bukti],
+            [
+                'transaksi_bku_id' => $transaksiBku->id,
+                'dicetak_pada' => now(),
+                'file_pdf_path' => $filePath,
+            ]
+        );
 
         return $pdf->stream($fileName);
     }
@@ -655,11 +660,16 @@ class TransaksiBkuController extends Controller
         $fileName = 'kwitansi-batch-' . now()->format('YmdHis') . '.pdf';
 
         foreach ($transaksis as $transaksi) {
-            $kwitansi = $transaksi->kwitansi()->firstOrNew([]);
-            $kwitansi->nomor = $transaksi->no_bukti;
-            $kwitansi->dicetak_pada = now();
-            $kwitansi->file_pdf_path = 'kwitansi/' . $fileName;
-            $kwitansi->save();
+            // Sama dgn cetak tunggal: `nomor` unik dan bisa dipakai ulang setelah
+            // soft-delete → updateOrCreate agar tidak melanggar unique constraint.
+            Kwitansi::updateOrCreate(
+                ['nomor' => $transaksi->no_bukti],
+                [
+                    'transaksi_bku_id' => $transaksi->id,
+                    'dicetak_pada' => now(),
+                    'file_pdf_path' => 'kwitansi/' . $fileName,
+                ]
+            );
         }
 
         return $pdf->stream($fileName);

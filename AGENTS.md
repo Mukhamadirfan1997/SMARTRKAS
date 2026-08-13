@@ -1838,3 +1838,34 @@ Jawaban permintaan user: "sekarang cek ke semua apakah ada dampak dari perubahan
 
 ## Test Status
 - PHPUnit `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK. Tidak ada perubahan kode. `LAPORAN-PERUBAHAN.md` + AGENTS.md ini BELUM di-commit.
+
+---
+
+# Sesi 13 Agu 2026 — Verifikasi Keamanan Data Lama + Build & Install v0.5.0 (fitur sesi 12–13 akhirnya masuk installer)
+
+## Goal
+1) Jawab kekhawatiran user "apakah aman dengan data lama dan dengan tampilan data tabelnya, karena yang sudah perubahan ada yang tidak muncul coba cek" — ternyata "perubahan tidak muncul" karena instalasi terpasang masih **v0.4.2** (fitur nota multi-item, picker kegiatan/rekening, kolom Kode Kegiatan/Rekening di tabel, Riwayat Nota dll. masih commit lokal, belum di-build). 2) Setelah konfirmasi user, build installer v0.5.0 dan verifikasi di instalasi nyata.
+
+## Verifikasi Keamanan Data Lama (sebelum build — dibuktikan pada SALINAN DB produksi, bukan asli)
+- Salin DB produksi (`%APPDATA%\id.smartrkas.desktop\smartrkas.sqlite`) → `%TEMP%\opencode\prod-mig-test.sqlite`, lalu migrasi 000022–000025: **semua DONE**, 19 transaksi utuh, partial unique index `transaksi_bku_no_bukti_aktif_unique` (WHERE `deleted_at IS NULL`) terbentuk, tabel nota kosong.
+- Render `TransaksiBkuController::index` terhadap salinan pasca-migrasi: semua PASS (19 no_bukti tampil, kolom Kegiatan/Rekening/Jenis Belanja/Volume/Satuan terisi, tombol Riwayat Nota ada, tanpa link `nota-bku/create`). Contoh BPU006: `05.09.04.`, `5.2.02.10.02.0003`, badge "Belanja Modal Peralatan & Mesin", volume 1 unit.
+- **RealisasiQuery vs BKU = selisih 0** (11.181.000 = 11.181.000) → `RealisasiQuery::base()` aman untuk data lama tanpa nota (base() hanya kolom `id, rkas_item_id, bulan, jumlah` — TIDAK ada kolom `jenis`; cabang transaksi sudah filter pengeluaran di dalam union). Dashboard konsisten: Rencana Rp 180.320.000, Realisasi Rp 11.181.000, Sisa Rp 169.139.000.
+- Semua item yang dipakai transaksi produksi masih aktif (tidak ada soft-deleted) → kolom tidak kosong. BBU001/BBU002 (`rkas_item_id` NULL) = penerimaan, normal.
+- 2 artefak probe yang menyesatkan (jangan diulang): `DB::table('rkas_item')->withTrashed()` → BadMethodCallException (pakai `App\Models\RkasItem::withTrashed()`); `RkasItem::find('019fd4fc')` (8-char id) gagal → fallback `first()` memberi item SALAH ("Perjalanan Dinas dalam Daerah-"); `where('rb.jenis', ...)` di derived table → "no such column" (jenis ada di tabel sumber, bukan base). UUIDv7 punya prefix 8-hex sama untuk data sesaat.
+
+## Build v0.5.0
+- Bump **0.4.2 → 0.5.0** (5 file: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name="smartrkas"` saja) — `git diff --stat` = 5 file, 5+/5−.
+- `npm run build` OK (manifest + app-*.css/js). `tauri build --bundles nsis,msi` (background, log `%TEMP%\opencode\build-v050.log`): compile 4m55s → NSIS `SmartRKAS_0.5.0_x64-setup.exe` (61.2MB) → MSI `SmartRKAS_0.5.0_x64_en-US.msi` (92.8MB). `smartrkas.exe` ProductVersion = **0.5.0**.
+
+## Install & Verifikasi Instalasi Nyata (prosedur 3× bersih)
+- Kill app v0.4.2 (CloseMainWindow tidak merespon → kill paksa; job object mematikan anak php bersih). Uninstall `uninstall.exe /S` → folder `%LOCALAPPDATA%\SmartRKAS` terhapus, **data user di Roaming SELAMAT** (smartrkas.sqlite 1.5MB). Install v0.5.0 `/S` → exe 0.5.0, `php\php.exe` + `php\extras\ssl\cacert.pem` terbundle.
+- `Start-Process` app → server `php -S 127.0.0.1:53954` (router **tanpa** prefix `\\?\`, semua `-d opcache.enable=0 log_errors=1 error_log=... curl.cainfo=... openssl.cafile=...` terpasang) + `schedule:work`.
+- `/login` = **200/200/200** (len 11614). **Auto-migrate DB produksi bekerja**: 000022–000025 kini `[4] Ran` di DB asli. Data utuh: 19 transaksi aktif, nota=0, realisasi=BKU (selisih 0). `php-server-error.log` = 4 baris, semua fatal lama era `\\?\` (08-Agu), TIDAK ada error baru.
+
+## Catatan Proses
+- Sebelum build cek tidak ada proses cargo/tauri/node build lain (SOP anti-build rangkap).
+- App v0.5.0 sengaja DIBIARKAN BERJALAN setelah verifikasi — user akan uji manual UI (tabel BKU, picker, nota 2+ item, Riwayat Nota, penerimaan sederhana).
+- BELUM commit (bump versi + AGENTS.md masih working tree), BELUM push, BELUM rilis GitHub — menunggu hasil uji manual user.
+
+## Test Status
+- Tidak ada perubahan logika PHP pada sesi ini (hanya bump versi + AGENTS.md) → suite tetap `OK (365 tests, 1059 assertions)`, PHPStan level 6 `[OK] No errors`. Next: uji manual user → bila OK, commit bump + AGENTS + push + `gh release create v0.5.0`.

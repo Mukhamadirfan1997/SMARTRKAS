@@ -7,7 +7,7 @@
     <title>Rincian Belanja {{ $noBpu }}</title>
     <style>
         @page {
-            margin: 20mm 25mm 15mm 25mm;
+            margin: 35mm 25mm 18mm 25mm;
             size: 215mm 330mm;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -122,9 +122,12 @@
         }
 
         .footer-note {
-            margin-top: 24px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
             border-top: 1px solid #aaa;
-            padding-top: 6px;
+            padding-top: 4px;
             font-size: 8px;
             color: #555;
             text-align: center;
@@ -288,18 +291,18 @@
             <td>
                 <div style="font-size:10px; margin-bottom:2px;">Mengetahui,</div>
                 <div class="ttd-jabatan">Kepala {{ $namaSekolah }}</div>
-                <div class="ttd-nama">{{ strtoupper($namaKepsek) }}</div>
+                <div class="ttd-nama">{{ $namaKepsek }}</div>
                 <div class="ttd-nip">NIP. {{ $nipKepsek }}</div>
             </td>
             <td>
                 <div style="font-size:10px; margin-bottom:2px;">{{ $kab }}, {{ $tanggal }}</div>
                 <div class="ttd-jabatan">Bendahara</div>
-                <div class="ttd-nama">{{ strtoupper($namaBendahara) }}</div>
+                <div class="ttd-nama">{{ $namaBendahara }}</div>
                 <div class="ttd-nip">NIP. {{ $nipBendahara }}</div>
             </td>
         </tr>
     </table>
 
-    <div class="footer-note">Dokumen ini dibuat otomatis oleh SmartRKAS. Nomor BPU dan transaksi terkait bersifat permanen.</div>
+    <div class="footer-note">Dokumen ini dicetak otomatis dari aplikasi SmartRKAS.</div>
 </body>
 </html>

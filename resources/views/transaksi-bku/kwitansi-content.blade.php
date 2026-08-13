@@ -62,7 +62,11 @@
     }
 
     /* Terima Dari: sesuai contoh PDF — selalu Kepala Sekolah institusi tersebut */
-    $terimaDari = 'Kepala ' . $namaSekolah . ' ' . $kec;
+    $terimaDari = 'Kepala ' . $namaSekolah;
+    $suffixKec  = trim((string) $kec);
+    if ($suffixKec !== '' && !str_ends_with(mb_strtoupper(trim($namaSekolah)), mb_strtoupper($suffixKec))) {
+        $terimaDari .= ' ' . $suffixKec;
+    }
 @endphp
 
 <div class="wrap">
@@ -166,13 +170,13 @@
             <td>
                 <div style="font-size:10px; visibility:hidden; margin-bottom:2px;">-</div>
                 <div class="ttd-jabatan">Kepala {{ $namaSekolah }}</div>
-                <div class="ttd-nama">{{ strtoupper($namaKepsek) }}</div>
+                <div class="ttd-nama">{{ $namaKepsek }}</div>
                 <div class="ttd-nip">NIP. {{ $nipKepsek }}</div>
             </td>
             <td>
                 <div style="font-size:10px; margin-bottom:2px;">Lunas Bayar, -</div>
                 <div class="ttd-jabatan">Bendahara</div>
-                <div class="ttd-nama">{{ strtoupper($namaBendahara) }}</div>
+                <div class="ttd-nama">{{ $namaBendahara }}</div>
                 <div class="ttd-nip">NIP. {{ $nipBendahara }}</div>
             </td>
             <td>
