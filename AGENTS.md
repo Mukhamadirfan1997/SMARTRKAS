@@ -2031,3 +2031,32 @@ Samakan sumber data Rekap SIPLAH (`LaporanController::prepareRekapSiplahData` + 
 
 ## Test Status
 - PHPUnit `OK (378 tests, 1105 assertions)`, PHPStan level 6 `[OK] No errors`. Commit lokal; BELUM push.
+
+---
+
+# Sesi 14 Agu 2026 — Dashboard Konsisten dgn Nota: "Transaksi Terkini" & "Transaksi Bulan Ini" Ikut Transaksi Nota (commit lokal)
+
+## Goal
+Setelah fix realisasi nota (commit `816f7a3`) menyelaraskan Rekap SIPLAH + kartu Total Realisasi RKAS, tutup celah konsistensi yang tersisa di dashboard: transaksi hasil nota (`rkas_item_id = NULL`) TIDAK muncul di kartu **"Transaksi Terkini"** dan TIDAK dihitung oleh **`transaksiBulanIni`** (alert "Belum ada transaksi BKU bulan ini" bisa salah muncul). Audit log (Riwayat Aktivitas) dicek lebih dulu dan sudah konsisten (nota tercatat `nota_bku.create/delete`; transaksi flatten hanya Outbox — by design 1 nota = 1 BPU).
+
+## Changes
+- `app/Http/Controllers/DashboardController.php` — `transaksiBulanIni` & `recentTransaksi` kini pakai closure filter:
+  - `whereIn('rkas_item_id', $filteredIds)` **OR** `whereHas('notaBku', ...)` dengan `whereNull('deleted_at')` (nota aktif) + `whereHas('items', rkas_item_id in filteredIds)` — transaksi nota milik item yang ter-filter ikut terhitung/tampil.
+  - `recentTransaksi` eager-load ditambah `notaBku.kegiatan`, `notaBku.kodeRekening.jenisBelanja`, `notaBku.items.rkasItem` (selain `rkasItem.program/kodeRekening.jenisBelanja`).
+- `resources/views/dashboard.blade.php` — baris "Transaksi Terkini": fallback kolom saat transaksi nota (`rkasItem` null): `$kegiatanNama` = `rkasItem?->program?->nama ?? notaBku?->kegiatan?->nama ?? '-'`; `$jenisNama` serupa via kode rekening; `$uraianItem` = uraian item, bila null → daftar `notaBku->items` uraian item (map/filter/unique/implode ', '). Tambah badge `badge-purple text-xs ml-1` "Nota" di samping uraian saat `$trx->nota_bku_id`.
+- `tests/Feature/Laporan/LaporanTest.php` — **fix test flaky** (pra-ada, TIDAK terkait): `test_laporan_bku_with_different_tahun` memakai `tahun => 2024` yang bisa bertabrakan dgn tahun acak `TahunAnggaran::factory()` di setUp (`fake()->unique()->year()` range lebar ~1972–2026+) → `UNIQUE constraint failed: tahun_anggaran.tahun`. Ganti ke `tahun => 2100` (di luar range factory → deterministik).
+- `tests/Feature/Dashboard/DashboardTest.php` — +2 test (+ imports `NotaBku`, `NotaBkuItem`, `Illuminate\Support\Carbon`):
+  - `test_dashboard_transaksi_terkini_menampilkan_transaksi_nota`: nota 2 item (100000+200000) + 1 transaksi flatten (rkas_item_id null, BPU901, uraian "Nota belanja NOTA-0001", jumlah 300000) → assertSee uraian transaksi, kegiatan nota ("Kegiatan Unik Nota Dashboard" — kegiatan sengaja beda dari item agar bukti fallback), gabungan uraian item "Item Nota A, Item Nota B", dan `Rp 300.000`.
+  - `test_dashboard_alert_transaksi_bulan_ini_menyertakan_transaksi_nota`: nota bulan sekarang + transaksi flatten bulan sekarang → alert "Belum ada transaksi BKU bulan" TIDAK muncul (`assertDontSee`).
+
+## Verifikasi
+- PHPUnit full suite **`OK (380 tests, 1112 assertions)`** (naik dari 378/1105), PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Catatan: satu-satunya error saat iterasi = flaky LaporanTest (collision tahun 2024) — dibuktikan lewat sample range Faker (`fake()->year()` menghasilkan 1972–2023+ acak) lalu di-fix deterministik (2100); `--filter LaporanTest` → OK (29 tests, 69 assertions).
+
+## Catatan
+- Audit log sudah konsisten SEBELUM perubahan ini: `NotaBkuController` mencatat `nota_bku.create` (no_nota/total/jumlah_item) + `nota_bku.delete` (via `deleteNotaWithTransaksis`), badge aksi create/delete tampil lewat fallback `badge-green/badge-red` di `audit-log.blade.php`.
+- Deskripsi bug lama di baris-baris sesi sebelumnya yang menyebut "AuditLog `transaksi_bku.create` dijalankan per transaksi flatten" (sesi Nota Multi-Item) tidak akurat untuk perilaku nota saat ini — nota flatten hanya Outbox, bukan AuditLog (audit di level nota).
+- File berubah: 4 (DashboardController, dashboard.blade.php, DashboardTest, LaporanTest) — +137/−9. Commit lokal `5eb763d`; BELUM push/build/rilis (menunggu uji manual skenario 2+ item & all-or-nothing).
+
+## Test Status
+- PHPUnit `OK (380 tests, 1112 assertions)`, PHPStan level 6 `[OK] No errors`. Commit lokal; BELUM push.
