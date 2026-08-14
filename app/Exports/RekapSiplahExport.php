@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\TransaksiBku;
+use App\Support\RealisasiQuery;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
@@ -36,24 +37,23 @@ class RekapSiplahExport implements FromCollection, WithHeadings, WithTitle, With
     /** @return Collection<int, TransaksiBku> */
     public function collection()
     {
-        $query = TransaksiBku::query()
-            ->where('transaksi_bku.tahun_anggaran_id', $this->tahunAnggaranId)
-            ->where('transaksi_bku.jenis', 'pengeluaran')
-            ->whereIn('transaksi_bku.bulan', $this->months)
-            ->when($this->sumberDanaId, fn ($q) => $q->where('transaksi_bku.sumber_dana_id', $this->sumberDanaId));
+        $rows = RealisasiQuery::base()
+            ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+            ->join('master_kode_rekening as mkr_sub', 'mkr_sub.id', '=', 'ri_sub.kode_rekening_id')
+            ->join('jenis_belanja as jb_sub', 'jb_sub.id', '=', 'mkr_sub.jenis_belanja_id')
+            ->where('ri_sub.tahun_anggaran_id', $this->tahunAnggaranId)
+            ->whereIn('rb.bulan', $this->months)
+            ->when($this->sumberDanaId, fn ($q) => $q->where('ri_sub.sumber_dana_id', $this->sumberDanaId));
 
-        $rows = $query
-            ->join('rkas_item', 'rkas_item.id', '=', 'transaksi_bku.rkas_item_id')
-            ->join('master_kode_rekening', 'master_kode_rekening.id', '=', 'rkas_item.kode_rekening_id')
-            ->join('jenis_belanja', 'jenis_belanja.id', '=', 'master_kode_rekening.jenis_belanja_id')
+        $rows = $rows
             ->selectRaw("
-                COALESCE(jenis_belanja.nama, 'Tidak Terkategori') as jenis_belanja,
-                COALESCE(SUM(transaksi_bku.jumlah), 0) as total,
-                COALESCE(SUM(CASE WHEN transaksi_bku.metode_pengadaan = 'siplah' THEN transaksi_bku.jumlah ELSE 0 END), 0) as siplah,
-                COALESCE(SUM(CASE WHEN transaksi_bku.metode_pengadaan = 'non_siplah' THEN transaksi_bku.jumlah ELSE 0 END), 0) as non_siplah
+                COALESCE(jb_sub.nama, 'Tidak Terkategori') as jenis_belanja,
+                COALESCE(SUM(rb.jumlah), 0) as total,
+                COALESCE(SUM(CASE WHEN rb.metode_pengadaan = 'siplah' THEN rb.jumlah ELSE 0 END), 0) as siplah,
+                COALESCE(SUM(CASE WHEN rb.metode_pengadaan = 'non_siplah' THEN rb.jumlah ELSE 0 END), 0) as non_siplah
             ")
-            ->groupBy('jenis_belanja.nama')
-            ->orderBy('jenis_belanja.nama')
+            ->groupBy('jb_sub.nama')
+            ->orderBy('jb_sub.nama')
             ->get()
             ->map(function ($row) {
                 $total = (float) $row->total;

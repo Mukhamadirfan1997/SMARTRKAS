@@ -9,8 +9,8 @@ use App\Models\TahunAnggaran;
 use App\Models\SumberDana;
 use App\Models\MasterProgram;
 use App\Models\MasterKodeRekening;
-use App\Models\TransaksiBku;
 use App\Support\NumberParser;
+use App\Support\RealisasiQuery;
 use Illuminate\Http\Request;
 
 class RkasController extends Controller
@@ -70,9 +70,9 @@ class RkasController extends Controller
 
             $totalJumlah = (float) RkasItem::whereIn('id', $filteredIds())->sum('jumlah');
 
-            $totalRealisasi = (float) TransaksiBku::joinSub($filteredIds(), 'ri_filtered', fn ($j) => $j->on('transaksi_bku.rkas_item_id', '=', 'ri_filtered.id'))
-                ->where('transaksi_bku.jenis', 'pengeluaran')
-                ->sum('transaksi_bku.jumlah');
+            $totalRealisasi = (float) RealisasiQuery::base()
+                ->joinSub($filteredIds()->toBase(), 'ri_filtered', fn ($j) => $j->on('rb.rkas_item_id', '=', 'ri_filtered.id'))
+                ->sum('rb.jumlah');
 
             $belumLengkapCount = RkasItem::whereIn('id', $filteredIds())
                 ->where(function ($q) {

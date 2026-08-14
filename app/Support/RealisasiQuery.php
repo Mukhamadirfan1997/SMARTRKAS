@@ -24,7 +24,10 @@ use Illuminate\Support\Facades\DB;
  * (data lama hasil flatten per-item) juga TIDAK dihitung di cabang transaksi
  * agar tidak dobel dengan nota_bku_item.
  *
- * Kolom hasil union: id, rkas_item_id, bulan, jumlah.
+ * Kolom hasil union: id, rkas_item_id, bulan, jumlah, metode_pengadaan.
+ *
+ * Metode pengadaan untuk rincian nota diambil dari header nota_bku (nb.metode_pengadaan),
+ * karena nota_bku_item sendiri tidak membawa kolom metode pengadaan.
  */
 final class RealisasiQuery
 {
@@ -35,7 +38,7 @@ final class RealisasiQuery
             ->whereNull('deleted_at')
             ->whereNull('nota_bku_id')
             ->whereNotNull('rkas_item_id')
-            ->selectRaw('id, rkas_item_id, bulan, jumlah');
+            ->selectRaw('id, rkas_item_id, bulan, jumlah, metode_pengadaan');
 
         $nota = DB::table('nota_bku_item as nbi')
             ->join('nota_bku as nb', 'nb.id', '=', 'nbi.nota_bku_id')
@@ -46,7 +49,7 @@ final class RealisasiQuery
                     ->whereColumn('tb2.nota_bku_id', 'nb.id')
                     ->whereNull('tb2.deleted_at');
             })
-            ->selectRaw('nbi.id, nbi.rkas_item_id, nb.bulan as bulan, nbi.subtotal as jumlah');
+            ->selectRaw('nbi.id, nbi.rkas_item_id, nb.bulan as bulan, nbi.subtotal as jumlah, nb.metode_pengadaan as metode_pengadaan');
 
         return $transaksi->union($nota);
     }

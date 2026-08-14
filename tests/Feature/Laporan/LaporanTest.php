@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Laporan;
 
+use App\Models\JenisBelanja;
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
 use App\Models\NotaBku;
+use App\Models\NotaBkuItem;
 use App\Models\PengaturanSekolah;
 use App\Models\RkasItem;
 use App\Models\RkasItemBulan;
@@ -13,6 +15,7 @@ use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
 use App\Models\User;
 use App\Exports\BkuExport;
+use App\Exports\RekapSiplahExport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -162,6 +165,133 @@ class LaporanTest extends TestCase
             'nota' => $nota,
             'transaksi' => $transaksi,
         ];
+    }
+
+    /**
+     * @return array{rekening1: MasterKodeRekening, rekening2: MasterKodeRekening, item1: RkasItem, item2: RkasItem, nota: NotaBku, transaksi: TransaksiBku}
+     */
+    private function createNotaMultiItem(): array
+    {
+        $jenis1 = JenisBelanja::factory()->create(['nama' => 'Belanja ATK Nota']);
+        $rekening1 = MasterKodeRekening::factory()->create([
+            'kode' => '5.1.02.01.01.0101',
+            'nama' => 'Bahan ATK',
+            'jenis_belanja_id' => $jenis1->id,
+        ]);
+        $item1 = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'program_id' => MasterProgram::factory(),
+            'kode_rekening_id' => $rekening1->id,
+            'no_urut' => 10,
+            'uraian' => 'Pembelian Buku Tulis',
+            'jumlah' => 500000,
+        ]);
+
+        $jenis2 = JenisBelanja::factory()->create(['nama' => 'Belanja Obat Nota']);
+        $rekening2 = MasterKodeRekening::factory()->create([
+            'kode' => '5.1.02.01.01.0102',
+            'nama' => 'Bahan Obat',
+            'jenis_belanja_id' => $jenis2->id,
+        ]);
+        $item2 = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'program_id' => MasterProgram::factory(),
+            'kode_rekening_id' => $rekening2->id,
+            'no_urut' => 11,
+            'uraian' => 'Pembelian Obat',
+            'jumlah' => 300000,
+        ]);
+
+        $program = MasterProgram::factory()->create(['kode' => '06.05.09.', 'nama' => 'Kegiatan Nota Multi']);
+
+        $nota = NotaBku::factory()->create([
+            'no_nota' => 'NOTA-0099/20519260/01/2026',
+            'tanggal' => '2026-01-21',
+            'bulan' => 1,
+            'kegiatan_id' => $program->id,
+            'kode_rekening_id' => $rekening1->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'metode_pengadaan' => 'siplah',
+            'created_by' => $this->user->id,
+        ]);
+
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $item1->id,
+            'urutan' => 1,
+            'jumlah' => 10,
+            'satuan' => 'buah',
+            'harga_satuan' => 10000,
+            'subtotal' => 100000,
+        ]);
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $item2->id,
+            'urutan' => 2,
+            'jumlah' => 20,
+            'satuan' => 'botol',
+            'harga_satuan' => 10000,
+            'subtotal' => 200000,
+        ]);
+
+        $transaksi = TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'rkas_item_id' => null,
+            'nota_bku_id' => $nota->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 300000,
+            'no_bukti' => 'BPU998/20519260/01/2026',
+            'uraian' => 'Nota belanja NOTA-0099/20519260/01/2026',
+            'tanggal' => '2026-01-21',
+            'metode_pengadaan' => 'siplah',
+        ]);
+
+        return [
+            'rekening1' => $rekening1,
+            'rekening2' => $rekening2,
+            'item1' => $item1,
+            'item2' => $item2,
+            'nota' => $nota,
+            'transaksi' => $transaksi,
+        ];
+    }
+
+    public function test_laporan_rekap_siplah_menampilkan_realisasi_nota_multi_item(): void
+    {
+        $this->createNotaMultiItem();
+
+        $response = $this->actingAs($this->user)->get('/laporan/rekap-siplah/preview?periode=all');
+        $response->assertOk();
+        $response->assertSee('Belanja ATK Nota');
+        $response->assertSee('Belanja Obat Nota');
+        $response->assertSee('Rp 100.000');
+        $response->assertSee('Rp 200.000');
+        $response->assertSee('Rp 800.000');
+        $response->assertDontSee('Tidak Terkategori');
+    }
+
+    public function test_rekap_siplah_export_mencerminkan_realisasi_nota_multi_item(): void
+    {
+        $this->createNotaMultiItem();
+
+        $export = new RekapSiplahExport(range(1, 12), 'Seluruh Tahun', $this->tahunAnggaran->id);
+        $rows = $export->collection();
+
+        $rowAtk = $rows->first(fn (TransaksiBku $r) => $r->getAttribute('jenis_belanja') === 'Belanja ATK Nota');
+        $this->assertNotNull($rowAtk);
+        $this->assertSame(100000.0, (float) $rowAtk->getAttribute('total'));
+        $this->assertSame(100000.0, (float) $rowAtk->getAttribute('siplah'));
+
+        $rowObat = $rows->first(fn (TransaksiBku $r) => $r->getAttribute('jenis_belanja') === 'Belanja Obat Nota');
+        $this->assertNotNull($rowObat);
+        $this->assertSame(200000.0, (float) $rowObat->getAttribute('total'));
+
+        $this->assertTrue($rows->doesntContain(fn (TransaksiBku $r) => $r->getAttribute('jenis_belanja') === 'Tidak Terkategori'));
     }
 
     public function test_laporan_bku_menampilkan_kegiatan_rekening_jenis_dari_nota(): void

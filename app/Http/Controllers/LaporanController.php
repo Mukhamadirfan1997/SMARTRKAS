@@ -18,7 +18,6 @@ use App\Support\RealisasiQuery;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -450,45 +449,48 @@ class LaporanController extends Controller
         $sumberDanaId = $request->input('sumber_dana_id');
         $profil = PengaturanSekolah::get();
 
-        $totalsQuery = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
-            ->where('jenis', 'pengeluaran')
-            ->whereIn('bulan', $months)
-            ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId));
+        $totalsQuery = RealisasiQuery::base()
+            ->join('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+            ->whereIn('rb.bulan', $months)
+            ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId));
+
+        if ($tahunAnggaranAktif) {
+            $totalsQuery->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id);
+        }
 
         $totals = (clone $totalsQuery)->selectRaw("
-            COALESCE(SUM(jumlah), 0) as total,
-            COALESCE(SUM(CASE WHEN metode_pengadaan = 'siplah' THEN jumlah ELSE 0 END), 0) as siplah,
-            COALESCE(SUM(CASE WHEN metode_pengadaan = 'non_siplah' THEN jumlah ELSE 0 END), 0) as non_siplah
-        ")->firstOrFail();
+            COALESCE(SUM(rb.jumlah), 0) as total,
+            COALESCE(SUM(CASE WHEN rb.metode_pengadaan = 'siplah' THEN rb.jumlah ELSE 0 END), 0) as siplah,
+            COALESCE(SUM(CASE WHEN rb.metode_pengadaan = 'non_siplah' THEN rb.jumlah ELSE 0 END), 0) as non_siplah
+        ")->first();
 
-        $totalPengeluaran = (float) $totals->getAttribute('total');
-        $totalSiplah = (float) $totals->getAttribute('siplah');
-        $totalNonSiplah = (float) $totals->getAttribute('non_siplah');
+        $totalPengeluaran = (float) ($totals->total ?? 0);
+        $totalSiplah = (float) ($totals->siplah ?? 0);
+        $totalNonSiplah = (float) ($totals->non_siplah ?? 0);
         $totalBelumDiisi = $totalPengeluaran - $totalSiplah - $totalNonSiplah;
         $persenSiplah = $totalPengeluaran > 0 ? round(($totalSiplah / $totalPengeluaran) * 100, 1) : 0;
         $persenNonSiplah = $totalPengeluaran > 0 ? round(($totalNonSiplah / $totalPengeluaran) * 100, 1) : 0;
 
-        $breakdownRows = DB::table('transaksi_bku as tb')
-            ->leftJoin('rkas_item as ri', 'ri.id', '=', 'tb.rkas_item_id')
-            ->leftJoin('master_kode_rekening as mkr', 'mkr.id', '=', 'ri.kode_rekening_id')
-            ->leftJoin('jenis_belanja as jb', 'jb.id', '=', 'mkr.jenis_belanja_id')
-            ->where('tb.jenis', 'pengeluaran')
-            ->whereIn('tb.bulan', $months)
-            ->when($sumberDanaId, fn($q) => $q->where('tb.sumber_dana_id', $sumberDanaId));
+        $breakdownRows = RealisasiQuery::base()
+            ->leftJoin('rkas_item as ri_sub', 'ri_sub.id', '=', 'rb.rkas_item_id')
+            ->leftJoin('master_kode_rekening as mkr_sub', 'mkr_sub.id', '=', 'ri_sub.kode_rekening_id')
+            ->leftJoin('jenis_belanja as jb_sub', 'jb_sub.id', '=', 'mkr_sub.jenis_belanja_id')
+            ->whereIn('rb.bulan', $months)
+            ->when($sumberDanaId, fn($q) => $q->where('ri_sub.sumber_dana_id', $sumberDanaId));
 
         if ($tahunAnggaranAktif) {
-            $breakdownRows->where('tb.tahun_anggaran_id', $tahunAnggaranAktif->id);
+            $breakdownRows->where('ri_sub.tahun_anggaran_id', $tahunAnggaranAktif->id);
         }
 
         $breakdownRows = $breakdownRows
             ->selectRaw("
-                COALESCE(jb.nama, 'Tidak Terkategori') as jenis_belanja,
-                COALESCE(SUM(tb.jumlah), 0) as total,
-                COALESCE(SUM(CASE WHEN tb.metode_pengadaan = 'siplah' THEN tb.jumlah ELSE 0 END), 0) as siplah,
-                COALESCE(SUM(CASE WHEN tb.metode_pengadaan = 'non_siplah' THEN tb.jumlah ELSE 0 END), 0) as non_siplah
+                COALESCE(jb_sub.nama, 'Tidak Terkategori') as jenis_belanja,
+                COALESCE(SUM(rb.jumlah), 0) as total,
+                COALESCE(SUM(CASE WHEN rb.metode_pengadaan = 'siplah' THEN rb.jumlah ELSE 0 END), 0) as siplah,
+                COALESCE(SUM(CASE WHEN rb.metode_pengadaan = 'non_siplah' THEN rb.jumlah ELSE 0 END), 0) as non_siplah
             ")
-            ->groupBy('jb.nama')
-            ->orderBy('jb.nama')
+            ->groupBy('jb_sub.nama')
+            ->orderBy('jb_sub.nama')
             ->get();
 
         $breakdown = $breakdownRows->map(function ($row) {

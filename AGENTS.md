@@ -2002,3 +2002,32 @@ Jadikan mapping kode rekening `5.1.02.01.01.0026` (Bahan Cetak & Penggandaan) �
 
 ## Test Status
 - Tidak ada perubahan logika PHP pada sesi rilis → suite tetap `OK (375 tests, 1090 assertions)`, PHPStan level 6 `[OK] No errors`.
+
+---
+
+# Sesi 14 Agu 2026 — Fix Konsistensi Realisasi Nota Multi-Item di Rekap SIPLAH (Web+Export) & Kartu Total Realisasi RKAS (commit lokal)
+
+## Goal
+Samakan sumber data Rekap SIPLAH (`LaporanController::prepareRekapSiplahData` + `RekapSiplahExport`) dan kartu "Total Realisasi" di `/rkas` agar memakai **`RealisasiQuery` yang sudah ada** (bukan query `TransaksiBku` mentah), sehingga realisasi nota multi-item (atribusi via `nota_bku_item`) ikut terhitung dan terkategorisasi ke jenis belanja item-nya — bukan jatuh ke "Tidak Terkategori". Instruksi user: pakai `RealisasiQuery` yang ada (jangan query baru), samakan pola dengan `RekapRekeningExport`/`RekapKuartalExport`.
+
+## Summary
+- `RealisasiQuery::union()` kini mengembalikan kolom tambahan **`metode_pengadaan`** (cabang transaksi: `... jumlah, metode_pengadaan`; cabang nota: `... nbi.subtotal as jumlah, nb.metode_pengadaan as metode_pengadaan` — diambil dari header `nota_bku`, bukan `nota_bku_item`).
+- `prepareRekapSiplahData`: totals + breakdown via `RealisasiQuery::base()` (alias `rb`) + `join`/`leftJoin` `ri_sub` (rkas_item) → `mkr_sub` (master_kode_rekening) → `jb_sub` (jenis_belanja); filter `rb.bulan` + `ri_sub.sumber_dana_id` (+ `ri_sub.tahun_anggaran_id` bila ada). Web pakai `leftJoin` + `COALESCE(jb_sub.nama, 'Tidak Terkategori')` (perilaku lama); export pakai INNER join. `import DB` dihapus.
+- `RekapSiplahExport::collection()`: query via `RealisasiQuery::base()` + INNER join, `selectRaw` + `groupBy` + `orderBy('jb_sub.nama')`; mapping lama (`new TransaksiBku()` + `setAttribute`) dipertahankan utuh.
+- `RkasController::totalRealisasi`: `RealisasiQuery::base()->joinSub($filteredIds()->toBase(), 'ri_filtered', ...)->sum('rb.jumlah')` (joinSub butuh `Query\Builder` → `->toBase()` wajib); import `TransaksiBku` dihapus, `RealisasiQuery` ditambah.
+- Nota multi-item tetap hanya dihitung bila ≥1 transaksi flatten aktif (`whereExists`); transaksi flatten (`rkas_item_id` null) TIDAK dobel dihitung (cabang transaksi `whereNull('nota_bku_id')`).
+
+## Tests
+- `tests/Feature/Laporan/LaporanTest.php` — helper `createNotaMultiItem()` (+ docblock `@return array{...}` utk PHPStan): NotaBku metode `siplah` + 2 NotaBkuItem subtotal 100000/200000 (rkas_item_id & jenis belanja beda) + 1 transaksi flatten (rkas_item_id null, jumlah 300000). Test `test_laporan_rekap_siplah_menampilkan_realisasi_nota_multi_item` (assertSee jenis "Belanja ATK Nota"/"Belanja Obat Nota", `Rp 100.000`/`Rp 200.000`/`Rp 800.000`, assertDontSee `Tidak Terkategori`) dan `test_rekap_siplah_export_mencerminkan_realisasi_nota_multi_item` (rows per jenis, assertSame 100000.0/200000.0, doesntContain `Tidak Terkategori`).
+- `tests/Feature/RKAS/RkasControllerTest.php` — `test_index_total_realisasi_mencerminkan_nota_multi_item`: makeItem(1/2/3) = 500000/100000/200000 + nota 2 item (100000+200000) + flatten 300000 → `GET /rkas` assertSee `Rp 300.000` (unik vs Total Rencana `Rp 800.000`; tarif factory ≤ 100.000 tidak bentrok).
+- **Koreksi PHPStan**: `$totals` hasil `->first()` pada query agregat dinilai non-nullable → `(float) ($totals->total ?? 0)`, BUKAN `$totals?->total` (error `nullsafe.neverNull`).
+- Verifikasi: targeted `--filter "LaporanTest|RkasControllerTest"` → OK (56 tests, 147 assertions); full suite → **OK (378 tests, 1105 assertions)** (naik dari 375/1090); PHPStan level 6 → **`[OK] No errors`**.
+
+## Catatan
+- Union TIDAK membawa `tahun_anggaran_id`/`sumber_dana_id` → filter lewat join `ri_sub`.
+- `ExportAmountFormatTest::test_rekap_siplah_export_writes_amount_as_numeric_with_number_format` tetap hijau (pola export lama dipertahankan).
+- File berubah: 6 (`RealisasiQuery`, `LaporanController`, `RekapSiplahExport`, `RkasController`, `LaporanTest`, `RkasControllerTest`) — +244/−49.
+- BELUM push/build/rilis — masih ada uji manual belum tuntas (skenario 2+ item, all-or-nothing, dsb dari daftar sebelumnya) sebelum bicara rilis. Commit lokal sesuai instruksi user.
+
+## Test Status
+- PHPUnit `OK (378 tests, 1105 assertions)`, PHPStan level 6 `[OK] No errors`. Commit lokal; BELUM push.
