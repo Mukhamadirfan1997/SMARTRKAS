@@ -430,8 +430,8 @@ class LaporanTest extends TestCase
 
     public function test_laporan_bku_with_different_tahun(): void
     {
-        TahunAnggaran::factory()->create(['tahun' => 2024]);
-        $this->actingAs($this->user)->get('/laporan/bku?bulan=1&tahun=2024')->assertStatus(200);
+        TahunAnggaran::factory()->create(['tahun' => 2100]);
+        $this->actingAs($this->user)->get('/laporan/bku?bulan=1&tahun=2100')->assertStatus(200);
     }
 
     public function test_laporan_rekap_siplah_with_bulan_param(): void

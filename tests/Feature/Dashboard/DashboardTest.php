@@ -6,6 +6,8 @@ use App\Models\AuditLog;
 use App\Models\ImportLog;
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
+use App\Models\NotaBku;
+use App\Models\NotaBkuItem;
 use App\Models\RkasItem;
 use App\Models\RkasItemBulan;
 use App\Models\SumberDana;
@@ -13,6 +15,7 @@ use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
@@ -241,6 +244,96 @@ class DashboardTest extends TestCase
             ->get('/dashboard?bulan=1')
             ->assertOk()
             ->assertSee('Over Budget (150%)');
+    }
+
+    // =================== RECENT TRANSACTIONS (incl. NOTA) ===================
+
+    public function test_dashboard_transaksi_terkini_menampilkan_transaksi_nota(): void
+    {
+        $kegiatanNota = MasterProgram::factory()->create(['nama' => 'Kegiatan Unik Nota Dashboard']);
+        $kodeRekening = MasterKodeRekening::factory()->create();
+        $itemA = $this->makeItem(['uraian' => 'Item Nota A']);
+        $itemB = $this->makeItem(['uraian' => 'Item Nota B']);
+
+        $nota = NotaBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'kegiatan_id' => $kegiatanNota->id,
+            'kode_rekening_id' => $kodeRekening->id,
+            'no_nota' => 'NOTA-0001/20519260/01/2026',
+            'bulan' => 1,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $itemA->id,
+            'subtotal' => 100000,
+            'urutan' => 1,
+        ]);
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $itemB->id,
+            'subtotal' => 200000,
+            'urutan' => 2,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => null,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'no_bukti' => 'BPU901/20519260/01/2026',
+            'jumlah' => 300000,
+            'uraian' => 'Nota belanja NOTA-0001',
+        ]);
+
+        $this->actingAs($this->user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Nota belanja NOTA-0001')
+            ->assertSee('Kegiatan Unik Nota Dashboard')
+            ->assertSee('Item Nota A, Item Nota B')
+            ->assertSee('Rp 300.000');
+    }
+
+    public function test_dashboard_alert_transaksi_bulan_ini_menyertakan_transaksi_nota(): void
+    {
+        $program = MasterProgram::factory()->create();
+        $kodeRekening = MasterKodeRekening::factory()->create();
+        $item = $this->makeItem();
+
+        $nota = NotaBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'kegiatan_id' => $program->id,
+            'kode_rekening_id' => $kodeRekening->id,
+            'bulan' => (int) Carbon::now()->month,
+        ]);
+
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $item->id,
+            'subtotal' => 50000,
+            'urutan' => 1,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => null,
+            'bulan' => (int) Carbon::now()->month,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 50000,
+        ]);
+
+        $this->actingAs($this->user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Belum ada transaksi BKU bulan');
     }
 
     // =================== PAGINATION ===================

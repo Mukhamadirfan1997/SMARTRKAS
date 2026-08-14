@@ -309,15 +309,30 @@
                     </thead>
                     <tbody>
                         @foreach($recentTransaksi as $trx)
+                        @php
+                            $itemRkas = $trx->rkasItem;
+                            $kegiatanNama = $itemRkas?->program?->nama ?? $trx->notaBku?->kegiatan?->nama ?? '-';
+                            $jenisNama = $itemRkas?->kodeRekening?->jenisBelanja?->nama ?? $trx->notaBku?->kodeRekening?->jenisBelanja?->nama ?? '-';
+                            $uraianItem = $itemRkas?->uraian;
+                            if (!$uraianItem && $trx->notaBku?->items->isNotEmpty()) {
+                                $uraianItem = $trx->notaBku->items->map(fn ($i) => $i->rkasItem?->uraian)->filter()->unique()->implode(', ');
+                            }
+                            $uraianItem = $uraianItem ? Str::limit($uraianItem, 40) : '-';
+                        @endphp
                         <tr>
                             <td class="text-sm text-slate-500 whitespace-nowrap">
                                 {{ \Carbon\Carbon::parse($trx->created_at)->translatedFormat('d M Y') }}
                             </td>
                             <td>
-                                <div class="font-medium text-slate-800 text-sm">{{ Str::limit($trx->uraian ?? '-', 40) }}</div>
-                                <div class="text-xs text-slate-400">{{ $trx->rkasItem->program->nama ?? '-' }} / {{ $trx->rkasItem->kodeRekening->jenisBelanja->nama ?? '-' }}</div>
+                                <div class="font-medium text-slate-800 text-sm">
+                                    {{ Str::limit($trx->uraian ?? '-', 40) }}
+                                    @if($trx->nota_bku_id)
+                                        <span class="badge badge-purple text-xs ml-1">Nota</span>
+                                    @endif
+                                </div>
+                                <div class="text-xs text-slate-400">{{ $kegiatanNama }} / {{ $jenisNama }}</div>
                             </td>
-                            <td class="text-sm text-slate-600">{{ Str::limit($trx->rkasItem->uraian ?? '-', 40) }}</td>
+                            <td class="text-sm text-slate-600">{{ $uraianItem }}</td>
                             <td class="text-right font-semibold text-blue-600 text-sm whitespace-nowrap">
                                 Rp {{ number_format($trx->jumlah, 0, ',', '.') }}
                             </td>

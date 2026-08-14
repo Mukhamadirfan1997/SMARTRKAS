@@ -122,13 +122,33 @@ class DashboardController extends Controller
                 }
                 $trenBulanValues = array_values($realisasiPerBulan);
 
-                $transaksiBulanIni = TransaksiBku::whereIn('rkas_item_id', $filteredIds)
-                    ->where('bulan', (int) Carbon::now()->month)
+                $transaksiBulanIni = TransaksiBku::where('bulan', (int) Carbon::now()->month)
+                    ->where(function ($q) use ($filteredIds): void {
+                        $q->whereIn('rkas_item_id', $filteredIds)
+                            ->orWhereHas('notaBku', function ($q2) use ($filteredIds): void {
+                                $q2->whereNull('deleted_at')->whereHas('items', function ($q3) use ($filteredIds): void {
+                                    $q3->whereIn('rkas_item_id', $filteredIds);
+                                });
+                            });
+                    })
                     ->count();
 
-                $recentTransaksi = TransaksiBku::with(['rkasItem.program', 'rkasItem.kodeRekening.jenisBelanja'])
-                    ->whereIn('rkas_item_id', $filteredIds)
+                $recentTransaksi = TransaksiBku::with([
+                    'rkasItem.program',
+                    'rkasItem.kodeRekening.jenisBelanja',
+                    'notaBku.kegiatan',
+                    'notaBku.kodeRekening.jenisBelanja',
+                    'notaBku.items.rkasItem',
+                ])
                     ->where('jenis', 'pengeluaran')
+                    ->where(function ($q) use ($filteredIds): void {
+                        $q->whereIn('rkas_item_id', $filteredIds)
+                            ->orWhereHas('notaBku', function ($q2) use ($filteredIds): void {
+                                $q2->whereNull('deleted_at')->whereHas('items', function ($q3) use ($filteredIds): void {
+                                    $q3->whereIn('rkas_item_id', $filteredIds);
+                                });
+                            });
+                    })
                     ->orderByDesc('created_at')
                     ->limit(5)
                     ->get();
