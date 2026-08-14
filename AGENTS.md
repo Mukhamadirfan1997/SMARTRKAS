@@ -2060,3 +2060,25 @@ Setelah fix realisasi nota (commit `816f7a3`) menyelaraskan Rekap SIPLAH + kartu
 
 ## Test Status
 - PHPUnit `OK (380 tests, 1112 assertions)`, PHPStan level 6 `[OK] No errors`. Commit lokal; BELUM push.
+
+---
+
+# Sesi 14 Agu 2026 — Sidebar: Group "Pengaturan" Jadi Dropdown (commit lokal)
+
+## Goal
+User menanyakan perbaikan sidebar agar tidak terlalu scroll ke bawah. Pilihan disetujui user: **hanya group "Pengaturan" jadi dropdown** (pola sama seperti "Referensi & Master" yang sudah ada).
+
+## Changes
+- `resources/views/layouts/navigation.blade.php` — 7 item flat Pengaturan (Profil Sekolah, Akun & Login, Backup & Pemulihan, Riwayat Aktivitas, Kode Pemulihan, Notifikasi Telegram, Tentang Aplikasi) dibungkus dalam `x-data` dropdown ala "Referensi & Master":
+  - `open` = `routeIs('pengaturan-sekolah.*|profile.*|pengaturan.backup.*|pengaturan.audit.*|pengaturan.recovery-code.*|pengaturan.telegram.*|tentang.*')` → auto-expand saat halaman aktif.
+  - Submenu link memakai pola submenu lama (bullet circle + `nav-text`).
+  - **Bonus**: item aktif di-highlight `text-white bg-white/5` (submenu "Referensi & Master" belum punya ini — konsistensi visual untuk pengaturan saja, cakupan sesuai keputusan user).
+  - Item flat turun 14 → ~6 di layar (Dashboard + 4 RKAS + 2 dropdown).
+
+## Verifikasi
+- `php artisan view:cache` OK; PHPUnit `OK (380 tests, 1112 assertions)`.
+- Probe render nyata (CLI, route disimulasi): **9/9 PASS** — tombol Pengaturan ada, `open:false` di dashboard, `open:true` saat current route profile.edit, 7 submenu ada, link flat lama hilang, highlight `text-white bg-white/5` benar-benar terpasang pada item aktif.
+- Catatan probe: `ProfileController::edit` CLI butuh `view()->share('errors', new ViewErrorBag)`; `request()->routeIs()` di CLI selalu false → wajib simulasikan route (Route::get + setRouteResolver + `app()->instance('request', ...)`); panggil controller via `app()->make()` + `app()->call([$instance, 'method'])` (array `[Class::class, 'method']` dipanggil statik → error).
+
+## Test Status
+- PHPUnit `OK (380 tests, 1112 assertions)`, PHPStan level 6 `[OK] No errors` (tidak ada perubahan logika PHP/controller). Commit lokal `4dad817`; BELUM push/build/rilis.
