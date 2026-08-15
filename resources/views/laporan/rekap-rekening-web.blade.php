@@ -33,14 +33,18 @@
                 </div>
                 <div class="min-w-[160px]">
                     <label class="form-label">Program</label>
-                    <select name="program_id" class="form-select" onchange="this.form.submit()" style="border-radius:10px;border-color:#e2e8f0;min-width:160px;">
-                        <option value="">Semua Program</option>
-                        @foreach($programs ?? [] as $program)
-                            <option value="{{ $program->id }}" {{ request('program_id', $programId ?? '') == $program->id ? 'selected' : '' }}>
-                                {{ $program->kode }} - {{ $program->nama }}
-                            </option>
-                        @endforeach
-                    </select>
+                    @include('transaksi-bku._search-picker', [
+                        'spPrefix' => 'program',
+                        'spLabel' => '',
+                        'spLabelLower' => 'program',
+                        'spRequired' => false,
+                        'spStatusHint' => 'Semua Program',
+                        'spPlaceholder' => 'Cari program (kode / nama)...',
+                        'spInitial' => (string) request('program_id', $programId ?? ''),
+                        'spError' => 'program_id',
+                        'spAutoSubmit' => true,
+                        'spOptions' => collect($programs ?? [])->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
+                    ])
                 </div>
                 <div class="min-w-[160px]">
                     <label class="form-label">Sumber Dana</label>

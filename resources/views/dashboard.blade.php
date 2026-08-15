@@ -76,25 +76,33 @@
                 </div>
                 <div>
                     <label class="form-label">Program</label>
-                    <select name="program_id" class="form-select">
-                        <option value="">Semua Program</option>
-                        @foreach($programs as $program)
-                            <option value="{{ $program->id }}" {{ request('program_id') == $program->id ? 'selected' : '' }}>
-                                {{ $program->kode }} - {{ $program->nama }}
-                            </option>
-                        @endforeach
-                    </select>
+                    @include('transaksi-bku._search-picker', [
+                        'spPrefix' => 'program',
+                        'spLabel' => '',
+                        'spLabelLower' => 'program',
+                        'spRequired' => false,
+                        'spStatusHint' => 'Semua Program',
+                        'spPlaceholder' => 'Cari program (kode / nama)...',
+                        'spInitial' => (string) request('program_id', ''),
+                        'spError' => 'program_id',
+                        'spAutoSubmit' => false,
+                        'spOptions' => $programs->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
+                    ])
                 </div>
                 <div>
                     <label class="form-label">Kode Rekening</label>
-                    <select name="kode_rekening_id" class="form-select">
-                        <option value="">Semua Rekening</option>
-                        @foreach($kodeRekenings as $kr)
-                            <option value="{{ $kr->id }}" {{ request('kode_rekening_id') == $kr->id ? 'selected' : '' }}>
-                                {{ $kr->kode }} - {{ $kr->nama }}
-                            </option>
-                        @endforeach
-                    </select>
+                    @include('transaksi-bku._search-picker', [
+                        'spPrefix' => 'kode_rekening',
+                        'spLabel' => '',
+                        'spLabelLower' => 'kode rekening',
+                        'spRequired' => false,
+                        'spStatusHint' => 'Semua Rekening',
+                        'spPlaceholder' => 'Cari rekening (kode / nama)...',
+                        'spInitial' => (string) request('kode_rekening_id', ''),
+                        'spError' => 'kode_rekening_id',
+                        'spAutoSubmit' => false,
+                        'spOptions' => $kodeRekenings->map(fn ($r) => ['id' => (string) $r->id, 'text' => $r->kode . ' - ' . $r->nama])->values()->all(),
+                    ])
                 </div>
                 <div>
                     <label class="form-label">Sumber Dana</label>

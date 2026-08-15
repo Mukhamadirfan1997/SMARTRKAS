@@ -42,32 +42,34 @@
 
                     <div>
                         <label class="form-label">Program</label>
-                        <select name="program_id" class="form-select">
-                            <option value="">-- Pilih Program --</option>
-                            @foreach($masterPrograms as $program)
-                                <option value="{{ $program->id }}" {{ old('program_id', $rkasItem->program_id) == $program->id ? 'selected' : '' }}>
-                                    {{ $program->kode }} - {{ $program->nama }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('program_id')
-                            <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                        @enderror
+                        @include('transaksi-bku._search-picker', [
+                            'spPrefix' => 'program',
+                            'spLabel' => '',
+                            'spLabelLower' => 'program',
+                            'spRequired' => true,
+                            'spStatusHint' => 'Pilih program...',
+                            'spPlaceholder' => 'Cari program (kode / nama)...',
+                            'spInitial' => (string) old('program_id', $rkasItem->program_id ?? ''),
+                            'spError' => 'program_id',
+                            'spAutoSubmit' => false,
+                            'spOptions' => $masterPrograms->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
+                        ])
                     </div>
 
                     <div>
                         <label class="form-label">Kode Rekening</label>
-                        <select name="kode_rekening_id" class="form-select">
-                            <option value="">-- Pilih Kode Rekening --</option>
-                            @foreach($masterKodeRekenings as $kode)
-                                <option value="{{ $kode->id }}" {{ old('kode_rekening_id', $rkasItem->kode_rekening_id) == $kode->id ? 'selected' : '' }}>
-                                    {{ $kode->kode }} - {{ $kode->nama }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('kode_rekening_id')
-                            <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                        @enderror
+                        @include('transaksi-bku._search-picker', [
+                            'spPrefix' => 'kode_rekening',
+                            'spLabel' => '',
+                            'spLabelLower' => 'kode rekening',
+                            'spRequired' => true,
+                            'spStatusHint' => 'Pilih kode rekening...',
+                            'spPlaceholder' => 'Cari rekening (kode / nama)...',
+                            'spInitial' => (string) old('kode_rekening_id', $rkasItem->kode_rekening_id ?? ''),
+                            'spError' => 'kode_rekening_id',
+                            'spAutoSubmit' => false,
+                            'spOptions' => $masterKodeRekenings->map(fn ($r) => ['id' => (string) $r->id, 'text' => $r->kode . ' - ' . $r->nama])->values()->all(),
+                        ])
                     </div>
 
                     <div>

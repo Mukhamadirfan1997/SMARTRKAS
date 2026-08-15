@@ -82,14 +82,18 @@
                             </option>
                         @endforeach
                     </select>
-                    <select name="program_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()">
-                        <option value="">Semua Program</option>
-                        @foreach($programs as $program)
-                            <option value="{{ $program->id }}" {{ ($programId ?? '') == $program->id ? 'selected' : '' }}>
-                                {{ $program->kode }}. {{ $program->nama }}
-                            </option>
-                        @endforeach
-                    </select>
+                    @include('transaksi-bku._search-picker', [
+                        'spPrefix' => 'program',
+                        'spLabel' => 'Program',
+                        'spLabelLower' => 'program',
+                        'spRequired' => false,
+                        'spStatusHint' => 'Semua Program',
+                        'spPlaceholder' => 'Cari program (kode / nama)...',
+                        'spInitial' => (string) ($programId ?? ''),
+                        'spError' => 'program_id',
+                        'spAutoSubmit' => true,
+                        'spOptions' => $programs->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
+                    ])
                     <select name="tahun" class="form-select py-1.5 text-sm" onchange="this.form.submit()">
                         @foreach($tahunList as $t)
                             <option value="{{ $t->tahun }}" {{ request('tahun', $tahunAnggaranAktif->tahun ?? '') == $t->tahun ? 'selected' : '' }}>
@@ -105,14 +109,18 @@
                             </option>
                         @endforeach
                     </select>
-                    <select name="kode_rekening_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:180px">
-                        <option value="">Semua Kode Rekening</option>
-                        @foreach($kodeRekenings as $rek)
-                            <option value="{{ $rek->id }}" {{ request('kode_rekening_id', $kodeRekeningId ?? '') == $rek->id ? 'selected' : '' }}>
-                                {{ $rek->kode }} - {{ $rek->nama }}
-                            </option>
-                        @endforeach
-                    </select>
+                    @include('transaksi-bku._search-picker', [
+                        'spPrefix' => 'kode_rekening',
+                        'spLabel' => 'Kode Rekening',
+                        'spLabelLower' => 'kode rekening',
+                        'spRequired' => false,
+                        'spStatusHint' => 'Semua Kode Rekening',
+                        'spPlaceholder' => 'Cari rekening (kode / nama)...',
+                        'spInitial' => (string) ($kodeRekeningId ?? ''),
+                        'spError' => 'kode_rekening_id',
+                        'spAutoSubmit' => true,
+                        'spOptions' => $kodeRekenings->map(fn ($r) => ['id' => (string) $r->id, 'text' => $r->kode . ' - ' . $r->nama])->values()->all(),
+                    ])
                     <select name="jenis_belanja_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:170px">
                         <option value="">Semua Jenis Belanja</option>
                         @foreach($jenisBelanjas as $jb)

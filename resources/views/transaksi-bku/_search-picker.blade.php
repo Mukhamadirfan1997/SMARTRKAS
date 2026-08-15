@@ -2,19 +2,21 @@
     $spId = $spPrefix . '_id';
 @endphp
 <div>
-    <label for="{{ $spPrefix }}_search" class="form-label">{{ $spLabel }} <span class="text-red-500">*</span></label>
+    <label for="{{ $spPrefix }}_search" class="form-label">{{ $spLabel }}@if($spRequired ?? true) <span class="text-red-500">*</span>@endif</label>
     <div class="relative">
         <input type="text" id="{{ $spPrefix }}_search" class="form-input pr-8" placeholder="{{ $spPlaceholder }}" autocomplete="off">
         <input type="hidden" name="{{ $spId }}" id="{{ $spId }}" value="{{ $spInitial }}">
         <div id="{{ $spPrefix }}_results" class="hidden absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto"></div>
     </div>
     <div class="flex items-center justify-between mt-1">
-        <p class="text-xs text-slate-400" id="{{ $spPrefix }}_status">Ketik untuk memilih {{ $spLabelLower }}...</p>
+        <p class="text-xs text-slate-400" id="{{ $spPrefix }}_status">{{ $spStatusHint ?? ('Ketik untuk memilih ' . $spLabelLower . '...') }}</p>
         <button type="button" id="{{ $spPrefix }}_clear" class="hidden text-xs font-medium text-slate-400 hover:text-red-500" title="Bersihkan pilihan">Bersihkan</button>
     </div>
-    @error($spError)
-        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-    @enderror
+    @if($spShowError ?? true)
+        @error($spError)
+            <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+        @enderror
+    @endif
 </div>
 
 <script>
@@ -74,6 +76,7 @@
             if (statusEl) statusEl.classList.add('hidden');
             document.dispatchEvent(new CustomEvent('entitypicker:change', { detail: { id: cfg.hiddenId, value: opt.id } }));
             if (typeof cfg.onSelect === 'function') cfg.onSelect(opt);
+            if (cfg.autoSubmit) { var f = searchEl.closest('form'); if (f) f.submit(); }
         }
 
         function clear() {
@@ -83,6 +86,7 @@
             if (clearEl) clearEl.classList.add('hidden');
             if (statusEl) statusEl.classList.remove('hidden');
             document.dispatchEvent(new CustomEvent('entitypicker:change', { detail: { id: cfg.hiddenId, value: '' } }));
+            if (cfg.autoSubmit) { var f = searchEl.closest('form'); if (f) f.submit(); }
         }
 
         var debounce = null;
@@ -127,6 +131,7 @@
         resultsId: '{{ $spPrefix }}_results',
         clearId: '{{ $spPrefix }}_clear',
         statusId: '{{ $spPrefix }}_status',
+        autoSubmit: {{ ($spAutoSubmit ?? false) ? 'true' : 'false' }},
         options: @json($spOptions)
     });
 })();
