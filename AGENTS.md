@@ -2200,3 +2200,31 @@ Tambahkan blok "Ringkasan Capaian" + "Realisasi per Jenis Belanja" (sebelumnya h
 - Working tree juga membawa perubahan sebelumnya yang belum di-commit dari picker compact (`dashboard.blade.php` `spCompact`, `_search-picker.blade.php` guard `spLabel`) — diverifikasi suite hijau, digabung di commit sesi ini.
 - Verifikasi HTTP live memakai salinan DB (bukan produksi); DB produksi tidak diubah. Route temp `/__shot/*` dihapus agar tidak bocor ke produksi.
 - BELUM build installer, BELUM push — menunggu keputusan user.
+
+---
+
+# Sesi 15 Agu 2026 — Release v0.5.3 (Build + Push + GitHub)
+
+## Goal
+Bawa fitur "Ringkasan Capaian & Realisasi per Jenis Belanja di Data RKAS" (commit `8f9d8ee`) + fix volume sisa nota + picker compact (`0007070`) ke installer dan rilis ke GitHub. Versi bump 0.5.2 → **0.5.3** (karena v0.5.2 sudah ter-rilis dengan 2 asset).
+
+## Build
+- Bump 0.5.3 di 5 file (`config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name="smartrkas"` saja — diff Cargo.lock = 1 file 1+/1-).
+- `npm run build` OK. `tauri build --bundles nsis,msi` (background, log `%TEMP%\opencode\build-v053.log`): compile 7m21s → NSIS `SmartRKAS_0.5.3_x64-setup.exe` (58.4MB) + MSI `SmartRKAS_0.5.3_x64_en-US.msi` (89MB).
+
+## Reinstall & Verifikasi
+- Kill app v0.5.2 → job object mematikan anak php bersih (0 proses tersisa). Uninstall `/S` exit 0 → folder `%LOCALAPPDATA%\SmartRKAS` hilang, **data Roaming SELAMAT**. Install v0.5.3 `/S` → exe ProductVersion **0.5.3**, `php\php.exe` + `php\extras\ssl\cacert.pem` (186KB) terbundle.
+- App jalan → server `php -S 127.0.0.1:63200` (semua `-d opcache.enable=0 log_errors=1 error_log=... curl.cainfo=... openssl.cafile=...` terpasang; router TANPA prefix `\\?\`) → `/login` **200** (len 11272).
+- Fix strings terverifikasi di instalasi: `RkasController.php` (`persentaseCapaian`/`jenisBelanjaRealisasi`), `rkas/index.blade.php` ("Ringkasan Capaian"/"Realisasi per Jenis Belanja"), `config/app.php` APP_VERSION 0.5.3.
+- `php-server-error.log` = 4 baris (semua fatal lama era `\\?\` 08-Agu), tidak ada error baru.
+
+## Release
+- Commit `5633ae0` (bump 0.5.3) → push `master` (`52b0afc..5633ae0`).
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.5.3 — 2 asset state `uploaded` (NSIS 61.2MB + MSI 93.3MB), bukan draft.
+- Catatan rilis: Ringkasan Capaian, Realisasi per Jenis Belanja, fix volume sisa nota, picker filter compact, petunjuk halaman Tentang diperbarui.
+
+## Catatan Proses
+- Release create di-PowerShell bisa "timeout" di tool setelah URL muncul — jangan anggap gagal; verifikasi via `gh release view --json isDraft,isPrerelease,assets`.
+- `Invoke-WebRequest -MaximumRedirection 0` di PowerShell non-interactive melempar prompt error → pakai `curl.exe -s -o <file> -w "%{http_code}"` untuk cek status HTTP.
+- `(Get-Content -Raw) -replace '^version = ...'` (anchor `^...$`) TIDAK bekerja pada single string tanpa flag `(?m)` — pakai `-replace '(?m)^version = "0\.5\.2"$', ...`.
+- App v0.5.3 dibiarkan berjalan untuk uji manual user (server 63200).
