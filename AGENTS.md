@@ -2082,3 +2082,37 @@ User menanyakan perbaikan sidebar agar tidak terlalu scroll ke bawah. Pilihan di
 
 ## Test Status
 - PHPUnit `OK (380 tests, 1112 assertions)`, PHPStan level 6 `[OK] No errors` (tidak ada perubahan logika PHP/controller). Commit lokal `4dad817`; BELUM push/build/rilis.
+
+---
+
+# Sesi 11–13 Agu 2026 — RINGKASAN FITUR NOTA MULTI-ITEM (dari awal sampai Tahap 4 selesai)
+
+## Konsep Final (keputusan user, sesi 11 Agu)
+- **1 Nota = tepat 1 Kegiatan + boleh banyak Item Belanja.** Kegiatan berbeda → nota baru (NOTA-0001, NOTA-0002, dst).
+- `nota_bku` (no_nota, tanggal, bulan, kegiatan_id→master_program, kode_rekening_id→master_kode_rekening, sumber_dana_id→sumber_dana, toko_penerima, metode_pengadaan, no_invoice_siplah, uraian, tahun_anggaran_id, created_by) + `nota_bku_item` (urutan, rkas_item_id, jumlah, satuan, harga_satuan, subtotal). TIDAK ada perantara `nota_bku_kegiatan`.
+- `TransaksiBku` tetap transaksi finansial utama; nota = pengelompokan/dokumen yang di-*flatten* jadi transaksi.
+- **`no_nota` ≠ `no_bukti`** (format `NOTA-0001/NPSN/MM/YYYY` vs `BPU001/NPSN/MM/YYYY`).
+- Kegiatan & Sumber Dana = FK; sumber dana diturunkan dari item (campur → ditolak).
+- **Override Sisa Anggaran untuk nota = TIDAK ada** → guard all-or-nothing; PA/pergeseran (backlog) hanya utk item belum dibelanjakan.
+- Delete nota = hapus (soft) nota + SEMUA BPU hasil flatten (Audit + Outbox per transaksi + nota).
+
+## Evolusi Desain Selama Implementasi
+1. **Awal (11–12 Agu)**: `NotaBkuController` punya `create()` + route `POST /nota-bku` + view `nota-bku/create.blade.php`; transaksi flatten **N item = N TransaksiBku** (BPU018→Item1, BPU019→Item2, ...).
+2. **Poin 5 (13 Agu)**: 1 nota = **1 TransaksiBku** (total, `rkas_item_id=null`, `nota_bku_id`), realisasi per item ditelusuri via `nota_bku_item` (atribusi). `RealisasiQuery` (UNION) jadi satu-satunya sumber realisasi item.
+3. **Poin 6 (13 Agu)**: reuse `no_bukti` soft-deleted via **partial unique index** `transaksi_bku_no_bukti_aktif_unique (WHERE deleted_at IS NULL)`; `NomorDokumen::noBukti()` nomor terkecil bebas.
+4. **Poin 4 (13 Agu)**: form kembali terisi saat nota/gabungan ditolak (restore `old('items')` via hidden inputs `items[{uuid}][...]`).
+5. **Penyatuan form (12 Agu, Tahap 1–4)**: form Pengeluaran jadi SATU form di `/transaksi-bku/create` — pilih Kegiatan → Kode Rekening → centang item → qty/harga. **1 item tercentang** = transaksi langsung (dgn opsi override + kunci kwitansi); **2+ item** = NotaBku all-or-nothing. Route `/nota-bku/create` + `NotaBkuController::create()` + view `nota-bku/create.blade.php` DIHAPUS (Tahap 4). Entry point nota kini HANYA lewat form BKU terpadu.
+6. **Fix realisasi (13 Agu)**: transaksi flatten legacy (`rkas_item_id` + `nota_bku_id`) tidak dobel (`whereNull('nota_bku_id')`); rincian nota hanya dihitung bila ≥1 transaksi aktif (`whereExists`); hapus BPU nota → cascade hapus nota (anggaran kembali).
+
+## Struktur Akhir (Tahap 4)
+- **Model**: `NotaBku` (HasUuids+SoftDeletes+HasFactory; relasi kegiatan/sumberDana/tahunAnggaran/createdBy/items/transaksiBkus/kodeRekening), `NotaBkuItem` (notaBku/rkasItem).
+- **Controller**: `NotaBkuController` (index/show/destroy/cetak/items + `storeFromItems()` reusable + `deleteNotaWithTransaksis()`); `TransaksiBkuController::store()` dispatch: `count≥2` → `storeFromItems()`, `count===1` → `storeSingleItem()`.
+- **Routes** (grup auth): `nota-bku.index`, `nota-bku.items`, `nota-bku.show`, `nota-bku.destroy`, `nota-bku.cetak` — TANPA POST `/nota-bku` (dihapus Tahap 4). Form gabungan via `transaksi-bku.create` POST `/transaksi-bku`.
+- **Views**: `nota-bku/index|show|cetak`; `transaksi-bku/create|edit` (form gabungan + picker `_search-picker.blade.php`); kwitansi/nota PDF isi Program/Sub Program/Kode Rekening (dari nota saat `rkas_item_id` null), "No. BPU"/"Rincian Belanja", tanpa "No. Nota" & tanpa field "Uraian" (cukup kotak "Untuk").
+- **Realisasi item**: `app/Support/RealisasiQuery.php` (UNION transaksi aktif tanpa nota + nota_bku_item dari nota ber-transaksi aktif) dipakai Dashboard, Rekap SIPLAH (web+export), kartu Total Realisasi RKAS, guard `realisasiKumulatifSd()`.
+- **Dashboard**: Transaksi Terkini & transaksi bulan ini ikut transaksi nota (fallback kegiatan/rekening/uraian dari nota + badge "Nota").
+- **Laporan BKU**: kolom Kegiatan/Rekening/Jenis Belanja isi dari nota (PDF+web+export); migrasi universal `5.1.02.01.01.0026` → "Belanja Cetak".
+
+## Status Akhir
+- PHPUnit **`OK (380 tests, 1114 assertions)`** (jumlah test sama dgn baseline 380; +2 assertion dari cek item kedua di test normalisasi; 0 test dihapus — semua cakupan nota dipertahankan lewat payload 2+ item di `postNota()`), PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Rilis v0.5.2 sudah di-push (memuat fitur nota sampai 13 Agu). Perubahan Tahap 4 (route POST `/nota-bku` dihapus + `store()` wrapper dihapus + test diadaptasi ke `/transaksi-bku`) adalah **commit lokal baru** — BELUM push/build/rilis.

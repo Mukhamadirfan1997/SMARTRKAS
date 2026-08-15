@@ -80,7 +80,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('transaksi-bku/cetak-kwitansi-batch', [TransaksiBkuController::class, 'cetakKwitansiBatch'])->name('transaksi-bku.cetak-kwitansi-batch');
 
     Route::get('nota-bku', [NotaBkuController::class, 'index'])->name('nota-bku.index');
-    Route::post('nota-bku', [NotaBkuController::class, 'store'])->name('nota-bku.store');
     Route::get('nota-bku/items', [NotaBkuController::class, 'items'])->name('nota-bku.items');
     Route::get('nota-bku/{notaBku}', [NotaBkuController::class, 'show'])->name('nota-bku.show');
     Route::delete('nota-bku/{notaBku}', [NotaBkuController::class, 'destroy'])->name('nota-bku.destroy');

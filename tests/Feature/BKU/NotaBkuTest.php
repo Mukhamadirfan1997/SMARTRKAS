@@ -64,13 +64,18 @@ class NotaBkuTest extends TestCase
     }
 
     /**
+     * POST nota multi-item lewat jalur produksi: form pengeluaran gabungan
+     * `/transaksi-bku` dengan 2+ item dicentang (dispatch → storeFromItems).
+     * Route POST /nota-bku sudah dihapus (Tahap 4) — entry point nota kini
+     * hanya lewat form BKU pengeluaran terpadu.
+     *
      * @param array<int, array<string, mixed>> $items
      * @param array<string, mixed> $overrides
      * @return \Illuminate\Testing\TestResponse<\Symfony\Component\HttpFoundation\Response>
      */
     private function postNota(array $items, array $overrides = []): \Illuminate\Testing\TestResponse
     {
-        return $this->actingAs($this->user)->post('/nota-bku', array_merge([
+        return $this->actingAs($this->user)->post('/transaksi-bku', array_merge([
             'tanggal' => '2026-01-15',
             'kegiatan_id' => $this->program->id,
             'kode_rekening_id' => $this->rekening->id,
@@ -176,17 +181,20 @@ class NotaBkuTest extends TestCase
     public function test_store_rejected_when_item_from_other_kode_rekening(): void
     {
         $rekeningLain = MasterKodeRekening::factory()->create();
+        $valid = $this->makeItem(1000000);
         $item = RkasItem::factory()->create([
             'tahun_anggaran_id' => $this->tahun->id,
             'sumber_dana_id' => $this->sumber->id,
             'program_id' => $this->program->id,
             'kode_rekening_id' => $rekeningLain->id,
-            'no_urut' => 1,
+            'no_urut' => 2,
             'uraian' => 'Item rekening lain',
         ]);
         RkasItemBulan::factory()->create(['rkas_item_id' => $item->id, 'bulan' => 1, 'rencana' => 1000000]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota([
+            ['rkas_item_id' => $valid->id, 'qty' => '1', 'harga' => '50000'],
             ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000'],
         ]);
 
@@ -197,10 +205,16 @@ class NotaBkuTest extends TestCase
 
     public function test_store_rejected_when_kode_rekening_missing(): void
     {
-        $item = $this->makeItem(1000000);
+        $item1 = $this->makeItem(1000000);
+        $item2 = $this->makeItem(1000000);
+        $item2->update(['no_urut' => 2]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota(
-            [['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000']],
+            [
+                ['rkas_item_id' => $item1->id, 'qty' => '1', 'harga' => '50000'],
+                ['rkas_item_id' => $item2->id, 'qty' => '1', 'harga' => '50000'],
+            ],
             ['kode_rekening_id' => '']
         );
 
@@ -210,10 +224,14 @@ class NotaBkuTest extends TestCase
 
     public function test_store_saves_kode_rekening_nota_relation_via_transaksi(): void
     {
-        $item = $this->makeItem(5000000);
+        $item1 = $this->makeItem(5000000);
+        $item2 = $this->makeItem(1000000);
+        $item2->update(['no_urut' => 2]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota([
-            ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '100000'],
+            ['rkas_item_id' => $item1->id, 'qty' => '1', 'harga' => '100000'],
+            ['rkas_item_id' => $item2->id, 'qty' => '1', 'harga' => '50000'],
         ]);
 
         $response->assertRedirect();
@@ -227,17 +245,20 @@ class NotaBkuTest extends TestCase
         $tahunLain = TahunAnggaran::factory()->create(['status' => false]);
         $sumberLain = SumberDana::factory()->create();
         $rekeningLain = MasterKodeRekening::factory()->create();
+        $valid = $this->makeItem(1000000);
         $item = RkasItem::factory()->create([
             'tahun_anggaran_id' => $tahunLain->id,
             'sumber_dana_id' => $sumberLain->id,
             'program_id' => $this->program->id,
             'kode_rekening_id' => $rekeningLain->id,
-            'no_urut' => 1,
+            'no_urut' => 2,
             'uraian' => 'Item tahun anggaran lama',
         ]);
         RkasItemBulan::factory()->create(['rkas_item_id' => $item->id, 'bulan' => 1, 'rencana' => 1000000]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota([
+            ['rkas_item_id' => $valid->id, 'qty' => '1', 'harga' => '50000'],
             ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000'],
         ]);
 
@@ -304,9 +325,12 @@ class NotaBkuTest extends TestCase
 
     public function test_store_rejected_without_items(): void
     {
-        $response = $this->postNota([]);
+        // Form gabungan selalu mengirim jenis; tanpa item tercentang tidak boleh
+        // ada nota maupun transaksi yang tersimpan.
+        $response = $this->postNota([], ['jenis' => 'pengeluaran']);
 
-        $response->assertSessionHasErrors('items');
+        $response->assertRedirect();
+        $response->assertSessionHasErrors();
         $this->assertDatabaseCount('nota_bku', 0);
         $this->assertDatabaseCount('transaksi_bku', 0);
     }
@@ -314,9 +338,13 @@ class NotaBkuTest extends TestCase
     public function test_store_rejected_when_item_from_other_kegiatan(): void
     {
         $otherProgram = MasterProgram::factory()->create();
+        $valid = $this->makeItem(1000000);
         $item = $this->makeItem(1000000, $otherProgram);
+        $item->update(['no_urut' => 2]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota([
+            ['rkas_item_id' => $valid->id, 'qty' => '1', 'harga' => '50000'],
             ['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000'],
         ]);
 
@@ -378,30 +406,42 @@ class NotaBkuTest extends TestCase
 
     public function test_store_normalizes_indonesian_number_format(): void
     {
-        $item = $this->makeItem(5000000);
+        $item1 = $this->makeItem(5000000);
+        $item2 = $this->makeItem(1000000);
+        $item2->update(['no_urut' => 2]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota([
-            ['rkas_item_id' => $item->id, 'qty' => '2,5', 'harga' => '1.500.000', 'satuan' => 'paket'],
+            ['rkas_item_id' => $item1->id, 'qty' => '2,5', 'harga' => '1.500.000', 'satuan' => 'paket'],
+            ['rkas_item_id' => $item2->id, 'qty' => '1', 'harga' => '100.000', 'satuan' => 'paket'],
         ]);
 
         $response->assertRedirect();
 
         $nota = NotaBku::firstOrFail();
-        $notaItem = $nota->items()->firstOrFail();
-        $this->assertSame(2.5, (float) $notaItem->jumlah);
-        $this->assertSame(1500000.0, (float) $notaItem->harga_satuan);
-        $this->assertSame(3750000.0, (float) $notaItem->subtotal);
+        $notaItems = $nota->items()->orderBy('urutan')->get();
+        $this->assertCount(2, $notaItems);
+        $this->assertSame(2.5, (float) $notaItems[0]->jumlah);
+        $this->assertSame(1500000.0, (float) $notaItems[0]->harga_satuan);
+        $this->assertSame(3750000.0, (float) $notaItems[0]->subtotal);
+        $this->assertSame(100000.0, (float) $notaItems[1]->subtotal);
 
         $transaksi = TransaksiBku::where('nota_bku_id', $nota->id)->firstOrFail();
-        $this->assertSame(3750000.0, (float) $transaksi->jumlah);
+        $this->assertSame(3850000.0, (float) $transaksi->jumlah);
     }
 
     public function test_store_siplah_requires_no_invoice(): void
     {
-        $item = $this->makeItem(1000000);
+        $item1 = $this->makeItem(1000000);
+        $item2 = $this->makeItem(1000000);
+        $item2->update(['no_urut' => 2]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota(
-            [['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000']],
+            [
+                ['rkas_item_id' => $item1->id, 'qty' => '1', 'harga' => '50000'],
+                ['rkas_item_id' => $item2->id, 'qty' => '1', 'harga' => '50000'],
+            ],
             ['metode_pengadaan' => 'siplah', 'no_invoice_siplah' => '']
         );
 
@@ -411,10 +451,16 @@ class NotaBkuTest extends TestCase
 
     public function test_store_siplah_saves_invoice_on_nota_and_transaksi(): void
     {
-        $item = $this->makeItem(1000000);
+        $item1 = $this->makeItem(1000000);
+        $item2 = $this->makeItem(1000000);
+        $item2->update(['no_urut' => 2]);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $response = $this->postNota(
-            [['rkas_item_id' => $item->id, 'qty' => '1', 'harga' => '50000']],
+            [
+                ['rkas_item_id' => $item1->id, 'qty' => '1', 'harga' => '50000'],
+                ['rkas_item_id' => $item2->id, 'qty' => '1', 'harga' => '50000'],
+            ],
             ['metode_pengadaan' => 'siplah', 'no_invoice_siplah' => 'INV/2026/000123']
         );
 
@@ -658,12 +704,20 @@ class NotaBkuTest extends TestCase
     {
         $item = $this->makeItem(1000000);
         $item->update(['no_urut' => 2]);
+        $itemPendamping = $this->makeItem(1000000);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $this->postNota([
             [
                 'rkas_item_id' => $item->id,
                 'qty' => '10',
                 'harga' => '50000',
+                'satuan' => 'paket',
+            ],
+            [
+                'rkas_item_id' => $itemPendamping->id,
+                'qty' => '1',
+                'harga' => '10000',
                 'satuan' => 'paket',
             ],
         ]);
@@ -695,12 +749,20 @@ class NotaBkuTest extends TestCase
     {
         $item = $this->makeItem(1000000);
         $item->update(['no_urut' => 2]);
+        $itemPendamping = $this->makeItem(1000000);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $this->postNota([
             [
                 'rkas_item_id' => $item->id,
                 'qty' => '10',
                 'harga' => '50000',
+                'satuan' => 'paket',
+            ],
+            [
+                'rkas_item_id' => $itemPendamping->id,
+                'qty' => '1',
+                'harga' => '10000',
                 'satuan' => 'paket',
             ],
         ]);
@@ -723,12 +785,20 @@ class NotaBkuTest extends TestCase
     {
         $item = $this->makeItem(1000000);
         $item->update(['no_urut' => 2]);
+        $itemPendamping = $this->makeItem(1000000);
 
+        // 2 item agar sampai jalur nota (1 item tercentang = transaksi langsung).
         $this->postNota([
             [
                 'rkas_item_id' => $item->id,
                 'qty' => '10',
                 'harga' => '50000',
+                'satuan' => 'paket',
+            ],
+            [
+                'rkas_item_id' => $itemPendamping->id,
+                'qty' => '1',
+                'harga' => '10000',
                 'satuan' => 'paket',
             ],
         ]);

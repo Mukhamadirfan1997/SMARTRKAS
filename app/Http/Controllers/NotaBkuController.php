@@ -77,11 +77,6 @@ class NotaBkuController extends Controller
         return response()->json(['results' => $results]);
     }
 
-    public function store(Request $request): RedirectResponse
-    {
-        return $this->storeFromItems($request);
-    }
-
     /**
      * Simpan nota multi-item: validasi (kegiatan & sumber dana seragam),
      * guard anggaran ALL-OR-NOTHING, lalu flatten menjadi 1 TransaksiBku per item
