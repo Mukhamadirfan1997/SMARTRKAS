@@ -2116,3 +2116,31 @@ User menanyakan perbaikan sidebar agar tidak terlalu scroll ke bawah. Pilihan di
 ## Status Akhir
 - PHPUnit **`OK (380 tests, 1114 assertions)`** (jumlah test sama dgn baseline 380; +2 assertion dari cek item kedua di test normalisasi; 0 test dihapus — semua cakupan nota dipertahankan lewat payload 2+ item di `postNota()`), PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
 - Rilis v0.5.2 sudah di-push (memuat fitur nota sampai 13 Agu). Perubahan Tahap 4 (route POST `/nota-bku` dihapus + `store()` wrapper dihapus + test diadaptasi ke `/transaksi-bku`) adalah **commit lokal baru** — BELUM push/build/rilis.
+
+---
+
+# Sesi 15 Agu 2026 — Reinstall v0.5.2 (fix realisasi nota + dropdown searchable) + 2 TEMUAN BARU (PENDING — dilanjutkan nanti)
+
+## Reinstall v0.5.2 (fix RKAS + dropdown searchable) — SELESAI
+- **Fix realisasi nota per-item** (commit `364ce4c`): `RkasController::index()` eager-load `notaBkuItems`; view `rkas/index.blade.php:168` — `$realisasi = transaksiBkus->sum('jumlah') + notaBkuItems->sum('subtotal')`; sisa/persen konsisten dgn kartu Total Realisasi & Dashboard. Test `test_index_sisa_per_item_mencerminkan_realisasi_nota`.
+- **Dropdown program & kode rekening searchable** (commit `9b7d939`): partial `_search-picker.blade.php` dipakai di filter RKAS, dashboard, laporan rekap-rekening & rekap-kuartal (program), form edit RKAS. Opsi baru partial: `spRequired` (default true), `spStatusHint`, `spShowError`, `spAutoSubmit` (submit form saat pilih/bersihkan — menggantikan `onchange="this.form.submit()"`).
+- Build ulang installer: NSIS `SmartRKAS_0.5.2_x64-setup.exe` (61.2MB, 12:15) + MSI `SmartRKAS_0.5.2_x64_en-US.msi` (93.2MB, 12:18). Reinstall (uninstall `/S` exit 0 → install `/S` exit 0) → exe ProductVersion **0.5.2**, php + cacert terbundle, controller/view terpasang berisi fix (verif string). App jalan → `/login` **200** (port 58116), DB Roaming utuh (1.63MB), `php-server-error.log` tetap 4 baris (tidak bertambah).
+- Full suite **`OK (384 tests, 1126 assertions)`** (naik dari 380 — 2 test nota RkasController + 2 test dashboard + fix flaky LaporanTest tahun 2100), PHPStan `[OK] No errors`, `view:cache` OK. Commit lokal `364ce4c` + `9b7d939`; **BELUM push**.
+
+## TEMUAN BARU 1 — Tabel RKAS item "Tinta Spidol Whiteboard" (angka tampil mencurigakan)
+User melaporkan baris item `Tinta Spidol Whiteboard` di tabel RKAS menampilkan:
+```
+Volume: 10 dus · Tarif: Rp 10.000 · Jumlah: Rp 500.000 · Realisasi: Rp 100.000 · Sisa: Rp 400.000 · (sisa 10 dus) · Status: 20%
+```
+- **Masalah A (volume sisa salah)**: `rkas/index.blade.php:171-172` — `$realisasiVolume = $item->transaksiBkus->sum('volume')`; `$sisaVolume = volume - realisasiVolume`. Bila realisasi Rp 100.000 berasal dari **nota multi-item** (transaksi flatten `rkas_item_id=null`, `volume=null`, atribusi via `nota_bku_item`), maka `transaksiBkus` item TIDAK membawa volume → realisasiVolume 0 → sisa volume tampil 10 dus padahal secara nominal 10 dus×Rp 10.000 = Rp 100.000 sudah terpakai semua. **Belum diverifikasi dari DB** (probe PHP bundle `-r` gagal parse `\` di PowerShell — perlu script file di `%TEMP%`).
+- **Masalah B (konsistensi volume×tarif vs jumlah)**: 10 × 10.000 = 100.000 ≠ jumlah 500.000. Status 20% dihitung dari realisasi/jumlah (100.000/500.000) — perlu cek apakah `jumlah` item (sum rencana bulan) memang 500.000 & tarif/volume memang 10.000/10 (data entry user) atau ada bug normalisasi.
+- **Belum ada perbaikan** — perlu verifikasi DB dulu (data produksi Roaming, jangan ubah apa pun).
+
+## TEMUAN BARU 2 — Form pencarian program & kode rekening "tidak responsif" (di tabel RKAS)
+- Setelah dropdown diganti searchable picker, user melaporkan form pencarian kode program & rekening di halaman RKAS **tidak responsif** (kemungkinan: dropdown hasil tidak muncul / autocomplete tidak jalan / layout flex form filter rusak / item hasil tak bisa diklik).
+- `rkas/index.blade.php:73-131` — form filter `<form class="flex items-center gap-3">` berisi: search input, select `bulan`, **picker program**, select `tahun`, select `sumber_dana_id`, **picker kode_rekening**, select `jenis_belanja_id` — 7 kontrol dalam satu baris flex tanpa `flex-wrap`. Picker partial merender div `<label>+<input>+<div relative>+<p status>` (tinggi lebih besar drpd select) → layout tidak sejajar & di layar kecil meluber. Plus partial punya 2 blok `<script>` per include (guard `__entityPickerInit`), 2 include → 2 panggilan init.
+- **Belum diverifikasi di browser** — perlu cek DOM nyata (apakah `#program_results` muncul, `initEntityPicker` error, atau hanya masalah layout/wrap).
+
+## Catatan Proses
+- Probe PHP bundle dari PowerShell: jangan pakai `php -r` dengan `\` escaped berlapis (parse error); tulis script temp di `%TEMP%\opencode` + panggil `php.exe <script>` dengan env `DB_DATABASE`/`SMARTRKAS_DATA_DIR` di-set.
+- App v0.5.2 dibiarkan berjalan (port 58116) untuk uji manual user.
