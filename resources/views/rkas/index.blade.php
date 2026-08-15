@@ -66,43 +66,128 @@
         </div>
     @endif
 
+    @if($totalJumlah > 0 || $jenisBelanjaRealisasi->isNotEmpty())
+        @php $totalSisa = $totalJumlah - $totalRealisasi; @endphp
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Ringkasan Capaian</span>
+                </div>
+                <div class="card-body space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-slate-600">Realisasi / Rencana</span>
+                            <span class="font-semibold text-slate-800">{{ $persentaseCapaian }}%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-3">
+                            <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-3 rounded-full transition-all duration-500" style="width: {{ min(100, $persentaseCapaian) }}%"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <div class="bg-slate-50 rounded-lg p-3 text-center">
+                            <div class="text-xs text-slate-400 mb-1">Rencana</div>
+                            <div class="font-bold text-indigo-700 text-sm">Rp {{ number_format($totalJumlah, 0, ',', '.') }}</div>
+                        </div>
+                        <div class="bg-slate-50 rounded-lg p-3 text-center">
+                            <div class="text-xs text-slate-400 mb-1">Realisasi</div>
+                            <div class="font-bold text-emerald-700 text-sm">Rp {{ number_format($totalRealisasi, 0, ',', '.') }}</div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-3 text-center">
+                        <div class="text-xs text-slate-400 mb-1">Sisa Anggaran</div>
+                        <div class="font-bold {{ $totalSisa >= 0 ? 'text-emerald-600' : 'text-red-600' }} text-sm">Rp {{ number_format($totalSisa, 0, ',', '.') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Realisasi per Jenis Belanja</span>
+                </div>
+                <div class="card-body">
+                    @if($jenisBelanjaRealisasi->isNotEmpty())
+                        <div class="space-y-3">
+                            @foreach($jenisBelanjaRealisasi as $jb)
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-slate-600">{{ $jb['label'] }}</span>
+                                        <span class="font-semibold text-slate-800">Rp {{ number_format($jb['total'], 0, ',', '.') }} ({{ $jb['persen'] }}%)</span>
+                                    </div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2">
+                                        <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: {{ min(100, $jb['persen']) }}%"></div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-center py-8 text-slate-400">
+                            <p class="text-sm">Belum ada realisasi</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-header">
             <span class="card-title">Daftar RKAS</span>
-            <div class="flex flex-wrap items-center gap-3">
-                <form method="GET" action="{{ route('rkas.index') }}" class="flex flex-wrap items-center gap-3">
-                    <input type="text" name="search" class="form-input text-sm py-1.5" placeholder="Cari uraian..." value="{{ request('search') }}">
-                    @if(request('search'))
-                        <a href="{{ route('rkas.index') }}" class="btn btn-ghost btn-sm">Reset</a>
-                    @endif
-                    <select name="bulan" class="form-select py-1.5 text-sm" onchange="this.form.submit()">
+            <div class="flex items-center gap-2">
+                <a href="{{ route('import-rkas.index') }}" class="btn-primary btn-sm">
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    Import Excel
+                </a>
+                <button type="button" class="btn btn-danger btn-sm" onclick="hapusSemuaRkas()">
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Hapus Semua
+                </button>
+            </div>
+        </div>
+        <form method="GET" action="{{ route('rkas.index') }}" class="px-6 py-4 bg-slate-50 border-b border-slate-100">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label for="search" class="form-label">Cari Uraian</label>
+                    <input type="text" name="search" id="search" class="form-input" placeholder="Cari uraian item..." value="{{ request('search') }}">
+                </div>
+                <div>
+                    <label for="bulan" class="form-label">Bulan</label>
+                    <select name="bulan" id="bulan" class="form-select">
+                        <option value="">Semua Bulan</option>
                         @foreach(range(1, 12) as $m)
-                            <option value="{{ $m }}" {{ $bulan == $m ? 'selected' : '' }}>
+                            <option value="{{ $m }}" {{ request('bulan', $bulan) == $m ? 'selected' : '' }}>
                                 {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
                             </option>
                         @endforeach
                     </select>
+                </div>
+                <div>
+                    <label for="program_search" class="form-label">Program</label>
                     @include('transaksi-bku._search-picker', [
                         'spPrefix' => 'program',
-                        'spLabel' => 'Program',
+                        'spLabel' => '',
                         'spLabelLower' => 'program',
                         'spRequired' => false,
-                        'spStatusHint' => 'Semua Program',
+                        'spCompact' => true,
                         'spPlaceholder' => 'Cari program (kode / nama)...',
                         'spInitial' => (string) ($programId ?? ''),
                         'spError' => 'program_id',
-                        'spAutoSubmit' => true,
-                        'spCompact' => true,
+                        'spAutoSubmit' => false,
                         'spOptions' => $programs->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
                     ])
-                    <select name="tahun" class="form-select py-1.5 text-sm" onchange="this.form.submit()">
+                </div>
+                <div>
+                    <label for="tahun" class="form-label">Tahun</label>
+                    <select name="tahun" id="tahun" class="form-select">
                         @foreach($tahunList as $t)
                             <option value="{{ $t->tahun }}" {{ request('tahun', $tahunAnggaranAktif->tahun ?? '') == $t->tahun ? 'selected' : '' }}>
                                 {{ $t->tahun }}
                             </option>
                         @endforeach
                     </select>
-                    <select name="sumber_dana_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:160px">
+                </div>
+                <div>
+                    <label for="sumber_dana_id" class="form-label">Sumber Dana</label>
+                    <select name="sumber_dana_id" id="sumber_dana_id" class="form-select">
                         <option value="">Semua Sumber Dana</option>
                         @foreach($sumberDanaList as $sd)
                             <option value="{{ $sd->id }}" {{ request('sumber_dana_id', $sumberDanaId ?? '') == $sd->id ? 'selected' : '' }}>
@@ -110,38 +195,38 @@
                             </option>
                         @endforeach
                     </select>
+                </div>
+                <div>
+                    <label for="kode_rekening_search" class="form-label">Kode Rekening</label>
                     @include('transaksi-bku._search-picker', [
                         'spPrefix' => 'kode_rekening',
-                        'spLabel' => 'Kode Rekening',
+                        'spLabel' => '',
                         'spLabelLower' => 'kode rekening',
                         'spRequired' => false,
-                        'spStatusHint' => 'Semua Kode Rekening',
+                        'spCompact' => true,
                         'spPlaceholder' => 'Cari rekening (kode / nama)...',
                         'spInitial' => (string) ($kodeRekeningId ?? ''),
                         'spError' => 'kode_rekening_id',
-                        'spAutoSubmit' => true,
-                        'spCompact' => true,
+                        'spAutoSubmit' => false,
                         'spOptions' => $kodeRekenings->map(fn ($r) => ['id' => (string) $r->id, 'text' => $r->kode . ' - ' . $r->nama])->values()->all(),
                     ])
-                    <select name="jenis_belanja_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:170px">
-                        <option value="">Semua Jenis Belanja</option>
-                        @foreach($jenisBelanjas as $jb)
-                            <option value="{{ $jb->id }}" {{ request('jenis_belanja_id', $jenisBelanjaId ?? '') == $jb->id ? 'selected' : '' }}>
-                                {{ $jb->nama }}
-                            </option>
-                        @endforeach
-                    </select>
-                </form>
-                <a href="{{ route('import-rkas.index') }}" class="btn-primary">
-                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                    Import Excel
-                </a>
-                <button type="button" class="btn btn-danger" onclick="hapusSemuaRkas()">
-                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    Hapus Semua
-                </button>
+                </div>
+                <div>
+                    <label for="jenis_belanja_id" class="form-label">Jenis Belanja</label>
+                    <div class="flex gap-2">
+                        <select name="jenis_belanja_id" id="jenis_belanja_id" class="form-select flex-1">
+                            <option value="">Semua Jenis Belanja</option>
+                            @foreach($jenisBelanjas as $jb)
+                                <option value="{{ $jb->id }}" {{ request('jenis_belanja_id', $jenisBelanjaId ?? '') == $jb->id ? 'selected' : '' }}>
+                                    {{ $jb->nama }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="btn-primary btn-sm whitespace-nowrap">Filter</button>
+                    </div>
+                </div>
             </div>
-        </div>
+        </form>
 
         <div class="overflow-x-auto">
             @if($rkasItems->count() > 0)
@@ -149,17 +234,14 @@
                     <thead>
                         <tr>
                             <th class="w-10">No</th>
-                            <th class="w-1/4">Uraian</th>
-                            <th class="w-24">Program</th>
-                            <th class="w-28">Kode Rekening</th>
-                            <th class="w-20">Sumber Dana</th>
-                            <th class="text-right w-16">Volume</th>
-                            <th class="w-14">Satuan</th>
-                            <th class="text-right w-24">Tarif</th>
-                            <th class="text-right w-28">Jumlah</th>
-                            <th class="text-right w-28">Realisasi</th>
-                            <th class="text-right w-28">Sisa</th>
-                            <th class="w-28">Status</th>
+                            <th>Uraian</th>
+                            <th class="w-40">Program</th>
+                            <th class="w-40">Kode Rekening</th>
+                            <th class="w-24">Sumber Dana</th>
+                            <th class="text-right whitespace-nowrap" style="min-width:140px">Rencana</th>
+                            <th class="text-right whitespace-nowrap" style="min-width:140px">Realisasi</th>
+                            <th class="text-right whitespace-nowrap" style="min-width:140px">Sisa</th>
+                            <th class="text-center w-32">Status</th>
                             <th class="text-center w-24">Aksi</th>
                         </tr>
                     </thead>
@@ -167,24 +249,31 @@
                         @foreach($rkasItems as $item)
                             @php
                                 $isLengkap = $item->program_id && $item->kode_rekening_id;
+                                $rencanaBulan = $bulan ? (float) ($item->bulanRencana->first()?->rencana ?? 0) : null;
+                                $rencana = $rencanaBulan ?? (float) $item->jumlah;
                                 $realisasi = $item->transaksiBkus->sum('jumlah') + $item->notaBkuItems->sum('subtotal');
-                                $sisa = $item->jumlah - $realisasi;
-                                $persen = $item->jumlah > 0 ? ($realisasi / $item->jumlah) * 100 : 0;
+                                $sisa = $rencana - $realisasi;
+                                $persen = $rencana > 0 ? ($realisasi / $rencana) * 100 : 0;
                                 $realisasiVolume = $item->transaksiBkus->sum('volume') + $item->notaBkuItems->sum('jumlah');
                                 $sisaVolume = $item->volume > 0 ? ($item->volume - $realisasiVolume) : null;
+                                $satuan = $item->satuan ?: 'item';
+                                $subRencana = ($item->volume > 0 && $item->tarif > 0)
+                                    ? number_format($item->volume, 0, ',', '.') . ' ' . $satuan . ' × Rp ' . number_format($item->tarif, 0, ',', '.')
+                                    : '';
                             @endphp
                             <tr class="{{ $isLengkap ? '' : 'bg-amber-50/50' }}">
                                 <td class="font-semibold text-slate-700">{{ $loop->iteration }}</td>
                                 <td>
                                     <div class="font-medium text-slate-800">{{ $item->uraian }}</div>
+                                    <div class="text-xs text-slate-400">No. {{ $item->no_urut ?? $loop->iteration }}</div>
                                     @if(!$isLengkap)
-                                        <div class="text-xs text-amber-600 mt-0.5">Perlu koreksi</div>
+                                        <span class="badge badge-yellow mt-1">Perlu koreksi</span>
                                     @endif
                                 </td>
                                 <td>
                                     @if($item->program)
                                         <div class="font-medium text-slate-700 text-xs">{{ $item->program->kode }}</div>
-                                        <div class="text-xs text-slate-400">{{ $item->program->nama }}</div>
+                                        <div class="text-xs text-slate-400 line-clamp-2">{{ $item->program->nama }}</div>
                                     @else
                                         <span class="badge badge-red">-</span>
                                     @endif
@@ -192,7 +281,8 @@
                                 <td>
                                     @if($item->kodeRekening)
                                         <div class="font-mono font-medium text-slate-700 text-xs">{{ $item->kodeRekening->kode }}</div>
-                                        <div class="text-xs text-slate-400">{{ $item->kodeRekening->nama }}</div>
+                                        <div class="text-xs text-slate-400 line-clamp-2">{{ $item->kodeRekening->nama }}</div>
+                                        <span class="badge badge-blue mt-1">{{ $item->kodeRekening->jenisBelanja->nama ?? 'Belum dikategorikan' }}</span>
                                     @else
                                         <span class="badge badge-red">-</span>
                                     @endif
@@ -204,28 +294,41 @@
                                         <span class="text-slate-300 text-xs">&mdash;</span>
                                     @endif
                                 </td>
-                                <td class="text-right text-slate-700 font-medium whitespace-nowrap">{{ $item->volume > 0 ? number_format($item->volume, 0, ',', '.') : '-' }}</td>
-                                <td class="text-slate-600 text-xs">{{ $item->satuan ?: '-' }}</td>
-                                <td class="text-right text-slate-700 whitespace-nowrap">{{ $item->tarif > 0 ? 'Rp ' . number_format($item->tarif, 0, ',', '.') : '-' }}</td>
-                                <td class="text-right font-bold text-slate-800 whitespace-nowrap">Rp {{ number_format($item->jumlah, 0, ',', '.') }}</td>
-                                <td class="text-right font-semibold text-blue-600 whitespace-nowrap">Rp {{ number_format($realisasi, 0, ',', '.') }}</td>
-                                <td class="text-right font-bold whitespace-nowrap {{ $sisa >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
-                                    Rp {{ number_format($sisa, 0, ',', '.') }}
-                                    @if($sisaVolume !== null)
-                                        <br><span class="text-xs font-normal">(sisa {{ number_format($sisaVolume, 0, ',', '.') }} {{ $item->satuan ?: 'item' }})</span>
+                                <td class="text-right whitespace-nowrap">
+                                    <div class="font-semibold text-slate-700">Rp {{ number_format($rencana, 0, ',', '.') }}</div>
+                                    @if($subRencana)
+                                        <div class="text-xs text-slate-400">{{ $subRencana }}</div>
                                     @endif
                                 </td>
-                                <td>
-                                    @if($sisa < 0)
-                                        <span class="badge badge-red">Over ({{ number_format($persen, 0) }}%)</span>
+                                <td class="text-right whitespace-nowrap">
+                                    <div class="font-semibold text-blue-600">Rp {{ number_format($realisasi, 0, ',', '.') }}</div>
+                                    @if($realisasiVolume > 0)
+                                        <div class="text-xs text-blue-300">{{ number_format($realisasiVolume, 0, ',', '.') }} {{ $satuan }}</div>
+                                    @endif
+                                </td>
+                                <td class="text-right whitespace-nowrap">
+                                    <div class="font-semibold {{ $sisa >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                                        Rp {{ number_format($sisa, 0, ',', '.') }}
+                                    </div>
+                                    @if($sisaVolume !== null)
+                                        <div class="text-xs {{ $sisaVolume >= 0 ? 'text-emerald-400' : 'text-red-400' }}">
+                                            sisa {{ number_format($sisaVolume, 0, ',', '.') }} {{ $satuan }}
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="text-center">
+                                    @if($persen > 100)
+                                        <span class="badge badge-red">Over Budget ({{ number_format($persen, 0) }}%)</span>
                                     @elseif($persen >= 90)
-                                        <span class="badge badge-orange">Hampir Habis</span>
-                                    @elseif($persen > 0)
-                                        <span class="badge badge-green">{{ number_format($persen, 0) }}%</span>
-                                    @elseif(!$isLengkap)
-                                        <span class="badge badge-yellow">Koreksi</span>
+                                        <span class="badge badge-orange">Hampir Habis ({{ number_format($persen, 0) }}%)</span>
+                                    @elseif($persen == 0)
+                                        @if(!$isLengkap)
+                                            <span class="badge badge-yellow">Koreksi</span>
+                                        @else
+                                            <span class="badge badge-yellow">Belum Realisasi</span>
+                                        @endif
                                     @else
-                                        <span class="badge badge-slate">Belum</span>
+                                        <span class="badge badge-green">Normal ({{ number_format($persen, 0) }}%)</span>
                                     @endif
                                 </td>
                                 <td class="text-center">

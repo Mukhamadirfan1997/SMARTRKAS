@@ -2167,3 +2167,36 @@ Volume: 10 dus · Tarif: Rp 10.000 · Jumlah: Rp 500.000 · Realisasi: Rp 100.00
 - Render nyata thd DB produksi (probe `probe-rkas-picker.php`): item Tinta → `(sisa 0 dus)`; picker → `statusId: null` ×2, label `<label for="program_search"` count 0, `flex flex-wrap` aktif.
 - PHPUnit full suite **`OK (385 tests, 1130 assertions)`** (naik dari 384/1126 — +1 test volume), PHPStan level 6 `[OK] No errors`, `view:cache` OK.
 - BELUM build installer, BELUM push — menunggu uji manual user di app (app terpasang masih v0.5.2 tanpa fix ini).
+
+---
+
+# Sesi 15 Agu 2026 — Ringkasan Capaian & Realisasi per Jenis Belanja di Data RKAS (commit lokal, BELUM push)
+
+## Goal
+Tambahkan blok "Ringkasan Capaian" + "Realisasi per Jenis Belanja" (sebelumnya hanya ada di Dashboard) ke halaman Data RKAS di atas card filter "Daftar RKAS", dengan perhitungan **identik Dashboard** (keputusan user: "hitungannya tetap seperti itu").
+
+## Summary
+- PHPUnit full `OK (389 tests, 1150 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+- HTTP live (salinan DB): capaian 6.9% (12.388.000/180.320.000), breakdown 5 jenis belanja yang **jumlahnya = total realisasi** (selisih 0).
+- Route temp `/__shot/rkas` & `/__shot/dashboard` DIHAPUS; server dev 8027 dimatikan; artefak temp dibersihkan.
+
+## Changes
+- `app/Http/Controllers/RkasController.php` — `index()`:
+  - `$filteredIdsNoBulan = (clone $baseQuery)->pluck('id')` diambil **SEBELUM** `whereHas('bulanRencana')` → dipakai breakdown per jenis secara kumulatif (pola persis `DashboardController::chartData` baris 95-103). **PENTING**: closure `$filteredIds` men-capture object `$baseQuery`, jadi kalau dipanggil setelah `whereHas` bulan sudah masuk filter bulan — itu yang dipakai untuk `totalJumlah`/`totalRealisasi` bulan-aware.
+  - `$persentaseCapaian = $totalJumlah > 0 ? round(($totalRealisasi / $totalJumlah) * 100, 1) : 0`.
+  - `$jenisBelanjaRealisasi` = `RealisasiQuery::base()->whereIn('rb.rkas_item_id', $filteredIdsNoBulan)` + join `rkas_item`/`master_kode_rekening`/`jenis_belanja`, `selectRaw('jenis_belanja.nama as label, sum(rb.jumlah) as total')`, groupBy nama, orderByDesc total → map ke `['label','total','persen']` (persen dari `$totalRealisasi`), filter total > 0.
+  - Tambah `persentaseCapaian`, `jenisBelanjaRealisasi` ke `compact()`.
+- `resources/views/rkas/index.blade.php` — blok `grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6` di atas card filter:
+  - Card "Ringkasan Capaian": progress bar `bg-gradient-to-r from-indigo-500 to-emerald-500` + tile Rencana/Realisasi/Sisa (sisa merah bila negatif).
+  - Card "Realisasi per Jenis Belanja": daftar label + `Rp … (persen%)` + progress bar `bg-blue-500` (persen dari total realisasi); empty-state "Belum ada realisasi".
+  - Kondisi tampil: `$totalJumlah > 0 || $jenisBelanjaRealisasi->isNotEmpty()` (aman saat tahun non-aktif: variabel default 0/collect()).
+- `resources/views/pengaturan/tentang.blade.php` — "Petunjuk Penggunaan Singkat" item 3 (Data RKAS: filter + pantau capaian per jenis) & item 4 (BKU pengeluaran: Kegiatan→Rekening→centang item, 2+ item = Nota Multi-Item).
+- `tests/Feature/RKAS/RkasControllerTest.php` — `test_index_menampilkan_ringkasan_capaian_dan_realisasi_per_jenis_belanja` (2 jenis belanja beda, 2 transaksi → assert "Ringkasan Capaian", "Realisasi per Jenis Belanja", Rp 800.000, Rp 150.000, nama kedua jenis, "66.7" = 100.000/150.000).
+- `LAPORAN-PERUBAHAN.md` — tambah bagian 6.
+
+## Catatan
+- Breakdown per jenis sengaja **kumulatif** (tanpa filter bulan) agar konsisten dengan chart dashboard; ringkasan capaian tetap bulan-aware mengikuti total halaman. Inkonsistensi ini sudah ada di Dashboard dan dipertahankan sesuai instruksi user.
+- Progress bar `min(100, ...)` mencegah overflow visual saat capaian >100%.
+- Working tree juga membawa perubahan sebelumnya yang belum di-commit dari picker compact (`dashboard.blade.php` `spCompact`, `_search-picker.blade.php` guard `spLabel`) — diverifikasi suite hijau, digabung di commit sesi ini.
+- Verifikasi HTTP live memakai salinan DB (bukan produksi); DB produksi tidak diubah. Route temp `/__shot/*` dihapus agar tidak bocor ke produksi.
+- BELUM build installer, BELUM push — menunggu keputusan user.

@@ -9,6 +9,7 @@ use App\Models\MasterProgram;
 use App\Models\NotaBku;
 use App\Models\NotaBkuItem;
 use App\Models\RkasItem;
+use App\Models\RkasItemBulan;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
@@ -550,5 +551,161 @@ class RkasControllerTest extends TestCase
         $response->assertSee('Rp 100.000');
         $response->assertSee('sisa 0 dus', false);
         $response->assertDontSee('sisa 10 dus');
+    }
+
+    public function test_index_bulan_filter_shows_only_items_with_plan_that_month(): void
+    {
+        $itemJan = $this->makeItem(1, 'Belanja Januari', 100000);
+        $itemFeb = $this->makeItem(2, 'Belanja Februari', 200000);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $itemJan->id,
+            'bulan' => 1,
+            'rencana' => 50000,
+        ]);
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $itemFeb->id,
+            'bulan' => 2,
+            'rencana' => 200000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas?bulan=1');
+
+        $response->assertOk();
+        $response->assertSee('Belanja Januari');
+        $response->assertDontSee('Belanja Februari');
+    }
+
+    public function test_index_bulan_filter_uses_monthly_plan_and_realisasi(): void
+    {
+        $item = $this->makeItem(1, 'Belanja Bulanan', 1000000);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 200000,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 50000,
+            'no_bukti' => 'BPU501/20519260/01/2026',
+            'tanggal' => '2026-01-15',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 300000,
+            'no_bukti' => 'BPU502/20519260/02/2026',
+            'tanggal' => '2026-02-15',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas?bulan=1');
+
+        $response->assertOk();
+        $response->assertSee('Belanja Bulanan');
+        $response->assertSee('Rp 200.000');
+        $response->assertSee('Rp 50.000');
+        $response->assertSee('Rp 150.000');
+    }
+
+    public function test_index_without_bulan_uses_yearly_jumlah_and_cumulative_realisasi(): void
+    {
+        $item = $this->makeItem(1, 'Belanja Tahunan', 1000000);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 200000,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 50000,
+            'no_bukti' => 'BPU503/20519260/01/2026',
+            'tanggal' => '2026-01-15',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas');
+
+        $response->assertOk();
+        $response->assertSee('Belanja Tahunan');
+        $response->assertSee('Rp 1.000.000');
+        $response->assertSee('Rp 50.000');
+    }
+
+    public function test_index_menampilkan_ringkasan_capaian_dan_realisasi_per_jenis_belanja(): void
+    {
+        $jenisA = JenisBelanja::factory()->create(['nama' => 'Belanja Alat Tulis']);
+        $jenisB = JenisBelanja::factory()->create(['nama' => 'Belanja Obat']);
+        $rekA = MasterKodeRekening::factory()->create(['jenis_belanja_id' => $jenisA->id]);
+        $rekB = MasterKodeRekening::factory()->create(['jenis_belanja_id' => $jenisB->id]);
+
+        $itemA = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekA->id,
+            'no_urut' => 1,
+            'uraian' => 'Belanja ATK',
+            'jumlah' => 500000,
+        ]);
+        $itemB = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $rekB->id,
+            'no_urut' => 2,
+            'uraian' => 'Belanja Obat Kantor',
+            'jumlah' => 300000,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $itemA->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'no_bukti' => 'BPU601/20519260/01/2026',
+            'tanggal' => '2026-01-15',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $itemB->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 50000,
+            'no_bukti' => 'BPU602/20519260/01/2026',
+            'tanggal' => '2026-01-16',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas');
+
+        $response->assertOk();
+        $response->assertSee('Ringkasan Capaian');
+        $response->assertSee('Realisasi per Jenis Belanja');
+        $response->assertSee('Rp 800.000');
+        $response->assertSee('Rp 150.000');
+        $response->assertSee('Belanja Alat Tulis');
+        $response->assertSee('Belanja Obat');
+        $response->assertSee('66.7');
     }
 }

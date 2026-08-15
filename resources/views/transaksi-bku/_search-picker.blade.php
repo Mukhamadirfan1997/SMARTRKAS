@@ -3,7 +3,7 @@
     $spCompact = $spCompact ?? false;
 @endphp
 <div>
-    @if(!$spCompact)
+    @if(!$spCompact && !empty($spLabel))
     <label for="{{ $spPrefix }}_search" class="form-label">{{ $spLabel }}@if($spRequired ?? true) <span class="text-red-500">*</span>@endif</label>
     @endif
     <div class="relative">

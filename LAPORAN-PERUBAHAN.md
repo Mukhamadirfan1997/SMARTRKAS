@@ -3,6 +3,8 @@
 > Tanggal: 13 Agu 2026 · Commit: `8c96eb0`, `b748a4b`, `7076b98` (lokal, BELUM push)
 > Cakupan: seluruh pekerjaan revisi form BKU + nota multi-item + pencarian ala picker (dashboard → laporan, semua cetak).
 
+> **Tambahan 15 Agu 2026** — Ringkasan Capaian & Realisasi per Jenis Belanja di halaman Data RKAS (lihat bagian 6).
+
 ---
 
 ## 1. Ringkasan Perubahan
@@ -80,3 +82,37 @@ Lingkup probe meniru alur HTTP server (login `admin@sekolah.test`, render view/c
 
 - Semua commit **lokal saja** (`8c96eb0`, `b748a4b`, `7076b98` di atas `master` HEAD). **Belum push, belum build installer, belum rilis GitHub** — menunggu konfirmasi user sesuai SOP.
 - Versi app: **0.4.2** (belum di-bump).
+
+---
+
+## 6. Tambahan 15 Agu — Ringkasan Capaian & Realisasi per Jenis Belanja di Data RKAS
+
+Menambahkan blok "Ringkasan Capaian" + "Realisasi per Jenis Belanja" (sebelumnya hanya ada di Dashboard) ke halaman **Data RKAS**, di atas card filter "Daftar RKAS". Perhitungan **identik dengan Dashboard** (keputusan user: "hitungannya tetap seperti itu").
+
+### Perubahan kode
+- `app/Http/Controllers/RkasController.php` — `index()`:
+  - `$filteredIdsNoBulan = (clone $baseQuery)->pluck('id')` diambil SEBELUM `whereHas('bulanRencana')` → dipakai breakdown per jenis belanja secara **kumulatif** (sama seperti chart dashboard yang tidak memfilter bulan).
+  - `$persentaseCapaian = totalRealisasi / totalJumlah * 100` (bulan-aware, mengikuti total halaman RKAS).
+  - `$jenisBelanjaRealisasi` = `RealisasiQuery::base()` + join `rkas_item`/`master_kode_rekening`/`jenis_belanja`, `groupBy('jenis_belanja.nama')`, `orderByDesc('total')` — pola persis `DashboardController::chartData` (baris 95-103), termasuk nota multi-item.
+  - Compact list baru: `persentaseCapaian`, `jenisBelanjaRealisasi`.
+- `resources/views/rkas/index.blade.php` — blok `<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">`:
+  - Card **"Ringkasan Capaian"**: progress bar gradient (indigo→emerald) + tile Rencana/Realisasi/Sisa (sisa merah bila negatif).
+  - Card **"Realisasi per Jenis Belanja"**: daftar label + `Rp … (persen%)` + progress bar biru (persen dari total realisasi); empty-state "Belum ada realisasi".
+  - Kondisi tampil: `$totalJumlah > 0 || $jenisBelanjaRealisasi->isNotEmpty()`.
+- `resources/views/pengaturan/tentang.blade.php` — "Petunjuk Penggunaan Singkat" diperbarui: item Data RKAS menyebut filter + pantauan capaian per jenis belanja; item BKU menyebut alur pengeluaran Kegiatan→Rekening→centang item dan Nota Multi-Item.
+
+### Verifikasi
+- **Suite**: PHPUnit full `OK (389 tests, 1150 assertions)` (baru `test_index_menampilkan_ringkasan_capaian_dan_realisasi_per_jenis_belanja` di `RkasControllerTest`), PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- **HTTP live** terhadap salinan DB (port 8027, route temp `/__shot/rkas`, sudah dihapus): blok tampil, capaian 6.9% (12.388.000/180.320.000), breakdown per jenis: Belanja Modal Peralatan & Mesin 7.500.000 (60.5%), Barang Persediaan 1.987.000 (16%), Jasa 1.275.000 (10.3%), Cetak 1.176.000 (9.5%), Perjalanan Dinas 450.000 (3.6%) — **jumlah = total realisasi 12.388.000** (selisih 0).
+- **Tanpa bulan** (`?bulan=` kosong): rencana tahunan `jumlah` + realisasi kumulatif; **dengan bulan**: rencana per bulan `rkas_item_bulan` + realisasi bulan tsb, dan item tanpa rencana di bulan tsb disembunyikan.
+
+### Dampak & risiko
+| Halaman/Fungsi | Dampak | Risiko |
+|----------------|--------|--------|
+| Data RKAS | Ringkasan capaian + breakdown per jenis belanja di atas filter; perhitungan sama dengan dashboard | Rendah |
+| Dashboard | Tidak diubah oleh sesi ini (hanya basis perhitungan yang sama) | Tidak ada |
+| Halaman lain | Tidak ada perubahan (controller/view lain tidak tersentuh) | Tidak ada |
+
+### Keterbatasan
+- Breakdown per jenis belanja **kumulatif** (tanpa filter bulan) — konsisten dengan chart dashboard; ringkasan capaian tetap bulan-aware mengikuti total halaman. Ini disengaja sesuai keputusan user.
+- Verifikasi di atas memakai salinan DB (bukan DB produksi Roaming); DB produksi tidak diubah.

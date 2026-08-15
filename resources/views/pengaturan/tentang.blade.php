@@ -82,8 +82,8 @@
             <ol class="list-decimal ml-5 space-y-1">
                 <li><strong>Pengaturan → Profil Sekolah</strong> — isi identitas sekolah (dipakai di kop laporan).</li>
                 <li><strong>Master data</strong> — Tahun Anggaran, Sumber Dana, Jenis Belanja, Master Program, Kode Rekening.</li>
-                <li><strong>Data RKAS</strong> — isi rencana kegiatan per item per bulan, atau impor dari file Excel.</li>
-                <li><strong>Buku Kas Umum</strong> — catat setiap transaksi kas masuk/keluar.</li>
+                <li><strong>Data RKAS</strong> — isi rencana kegiatan per item per bulan, atau impor dari file Excel; gunakan filter program/rekening/bulan dan pantau capaian realisasi per jenis belanja di bagian atas halaman.</li>
+                <li><strong>Buku Kas Umum</strong> — catat setiap transaksi kas masuk/keluar. Untuk pengeluaran, pilih kegiatan → kode rekening → centang item belanja; 2+ item disimpan sebagai Nota Multi-Item (riwayat tersedia di menu terkait).</li>
                 <li><strong>Laporan</strong> — BKU, Rekap Rekening, Rekap Kuartal, Rekap SIPLAH (preview, PDF, export Excel).</li>
                 <li><strong>Backup rutin</strong> — lakukan di Pengaturan → Backup &amp; Pemulihan, terutama sebelum memperbarui aplikasi.</li>
             </ol>

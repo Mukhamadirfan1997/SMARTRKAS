@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditLog;
 use App\Models\JenisBelanja;
 use App\Models\RkasItem;
+use App\Models\RkasItemBulan;
 use App\Models\TahunAnggaran;
 use App\Models\SumberDana;
 use App\Models\MasterProgram;
@@ -17,7 +18,8 @@ class RkasController extends Controller
 {
     public function index(Request $request): \Illuminate\View\View
     {
-        $bulan = $request->get('bulan', date('n'));
+        $bulanInput = $request->input('bulan');
+        $bulan = $request->filled('bulan') && is_numeric($bulanInput) ? (int) $bulanInput : null;
         $programId = $request->get('program_id');
         $kodeRekeningId = $request->get('kode_rekening_id');
         $jenisBelanjaId = $request->get('jenis_belanja_id');
@@ -39,6 +41,9 @@ class RkasController extends Controller
         $totalJumlah = 0;
         $totalRealisasi = 0;
         $belumLengkapCount = 0;
+        $persentaseCapaian = 0;
+        $jenisBelanjaRealisasi = collect();
+        $filteredIdsNoBulan = collect();
         $rkasItems = collect();
 
         if ($tahunAnggaranAktif) {
@@ -68,11 +73,52 @@ class RkasController extends Controller
 
             $filteredIds = fn () => (clone $baseQuery)->select('id');
 
-            $totalJumlah = (float) RkasItem::whereIn('id', $filteredIds())->sum('jumlah');
+            $filteredIdsNoBulan = (clone $baseQuery)->pluck('id');
 
-            $totalRealisasi = (float) RealisasiQuery::base()
-                ->joinSub($filteredIds()->toBase(), 'ri_filtered', fn ($j) => $j->on('rb.rkas_item_id', '=', 'ri_filtered.id'))
-                ->sum('rb.jumlah');
+            if ($bulan) {
+                $baseQuery->whereHas('bulanRencana', function ($q) use ($bulan): void {
+                    $q->where('bulan', $bulan);
+                });
+            }
+
+            if ($bulan) {
+                $totalJumlah = (float) RkasItemBulan::whereIn('rkas_item_id', $filteredIds())
+                    ->where('bulan', $bulan)
+                    ->sum('rencana');
+                $totalRealisasi = (float) RealisasiQuery::base()
+                    ->whereIn('rb.rkas_item_id', $filteredIds())
+                    ->where('rb.bulan', $bulan)
+                    ->sum('rb.jumlah');
+            } else {
+                $totalJumlah = (float) RkasItem::whereIn('id', $filteredIds())->sum('jumlah');
+
+                $totalRealisasi = (float) RealisasiQuery::base()
+                    ->joinSub($filteredIds()->toBase(), 'ri_filtered', fn ($j) => $j->on('rb.rkas_item_id', '=', 'ri_filtered.id'))
+                    ->sum('rb.jumlah');
+            }
+
+            $persentaseCapaian = $totalJumlah > 0 ? round(($totalRealisasi / $totalJumlah) * 100, 1) : 0;
+
+            if ($filteredIdsNoBulan->isNotEmpty()) {
+                $chartData = RealisasiQuery::base()
+                    ->whereIn('rb.rkas_item_id', $filteredIdsNoBulan)
+                    ->join('rkas_item', 'rkas_item.id', '=', 'rb.rkas_item_id')
+                    ->join('master_kode_rekening', 'rkas_item.kode_rekening_id', '=', 'master_kode_rekening.id')
+                    ->join('jenis_belanja', 'master_kode_rekening.jenis_belanja_id', '=', 'jenis_belanja.id')
+                    ->selectRaw('jenis_belanja.nama as label, sum(rb.jumlah) as total')
+                    ->groupBy('jenis_belanja.nama')
+                    ->orderByDesc('total')
+                    ->get();
+
+                $jenisBelanjaRealisasi = $chartData
+                    ->filter(fn ($d) => (float) ($d->total ?? 0) > 0)
+                    ->map(fn ($d): array => [
+                        'label' => (string) ($d->label ?? 'Tidak Terkategori'),
+                        'total' => (float) ($d->total ?? 0),
+                        'persen' => $totalRealisasi > 0 ? round(((float) $d->total / $totalRealisasi) * 100, 1) : 0,
+                    ])
+                    ->values();
+            }
 
             $belumLengkapCount = RkasItem::whereIn('id', $filteredIds())
                 ->where(function ($q) {
@@ -84,17 +130,25 @@ class RkasController extends Controller
             $rkasItems = $baseQuery
                 ->with([
                     'program',
-                    'kodeRekening',
+                    'kodeRekening.jenisBelanja',
                     'sumberDana',
                     'bulanRencana' => function ($q) use ($bulan): void {
-                        $q->where('bulan', (int) $bulan);
+                        if ($bulan) {
+                            $q->where('bulan', $bulan);
+                        }
                     },
-                    'transaksiBkus' => function ($q): void {
+                    'transaksiBkus' => function ($q) use ($bulan): void {
                         $q->where('jenis', 'pengeluaran');
+                        if ($bulan) {
+                            $q->where('bulan', $bulan);
+                        }
                     },
-                    'notaBkuItems' => function ($q): void {
-                        $q->whereHas('notaBku', function ($q2): void {
+                    'notaBkuItems' => function ($q) use ($bulan): void {
+                        $q->whereHas('notaBku', function ($q2) use ($bulan): void {
                             $q2->whereNull('deleted_at');
+                            if ($bulan) {
+                                $q2->where('bulan', $bulan);
+                            }
                         });
                     },
                 ])
@@ -106,6 +160,7 @@ class RkasController extends Controller
         return view('rkas.index', compact(
             'rkasItems', 'tahunAnggaranAktif', 'tahunList', 'bulan', 'programs', 'programId',
             'totalJumlah', 'totalRealisasi', 'belumLengkapCount',
+            'persentaseCapaian', 'jenisBelanjaRealisasi',
             'sumberDanaList', 'sumberDanaId',
             'kodeRekenings', 'jenisBelanjas', 'kodeRekeningId', 'jenisBelanjaId'
         ));

@@ -81,7 +81,7 @@
                         'spLabel' => '',
                         'spLabelLower' => 'program',
                         'spRequired' => false,
-                        'spStatusHint' => 'Semua Program',
+                        'spCompact' => true,
                         'spPlaceholder' => 'Cari program (kode / nama)...',
                         'spInitial' => (string) request('program_id', ''),
                         'spError' => 'program_id',
@@ -96,7 +96,7 @@
                         'spLabel' => '',
                         'spLabelLower' => 'kode rekening',
                         'spRequired' => false,
-                        'spStatusHint' => 'Semua Rekening',
+                        'spCompact' => true,
                         'spPlaceholder' => 'Cari rekening (kode / nama)...',
                         'spInitial' => (string) request('kode_rekening_id', ''),
                         'spError' => 'kode_rekening_id',
@@ -167,8 +167,13 @@
                             @endif
                         </td>
                         <td>
-                            <div class="font-mono text-xs text-slate-600">{{ $item->kodeRekening->kode ?? '-' }}</div>
-                            <span class="badge badge-blue mt-1">{{ $item->kodeRekening->jenisBelanja->nama ?? '-' }}</span>
+                            @if($item->kodeRekening)
+                                <div class="font-mono text-xs text-slate-600">{{ $item->kodeRekening->kode }}</div>
+                                <div class="text-xs text-slate-400 line-clamp-2">{{ $item->kodeRekening->nama }}</div>
+                                <span class="badge badge-blue mt-1">{{ $item->kodeRekening->jenisBelanja->nama ?? '-' }}</span>
+                            @else
+                                <span class="text-slate-400 text-xs">&mdash;</span>
+                            @endif
                         </td>
                         <td class="text-right whitespace-nowrap">
                             <div class="font-semibold text-slate-700 text-sm">Rp {{ number_format($item->dynamic_rencana, 0, ',', '.') }}</div>
