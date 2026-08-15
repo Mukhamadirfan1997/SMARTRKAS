@@ -36,12 +36,7 @@
             @endif
         </div>
 
-        <div class="flex items-center justify-between mb-6">
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input id="remember_me" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" name="remember">
-                <span class="text-sm text-slate-600">Ingat saya</span>
-            </label>
-
+        <div class="mb-6">
             @if (Route::has('password.request'))
                 <a class="text-sm text-blue-600 hover:text-blue-800 font-medium" href="{{ route('password.request') }}">
                     Lupa password?

@@ -352,6 +352,16 @@ pub fn run() {
                 true,
             );
 
+            // Wajib login ulang setiap aplikasi dibuka: buang semua sesi login
+            // dan token "ingat saya" dari database. Tanpa ini, cookie sesi yang
+            // dipertahankan webview membuat user langsung masuk dashboard saat
+            // app dibuka kembali (berisiko disalahgunakan orang lain).
+            run_php(
+                &handle,
+                &["artisan".to_string(), "app:flush-sessions".to_string()],
+                true,
+            );
+
             let port = find_free_port();
             let php = php_binary(&handle);
             let root = app_root(&handle);

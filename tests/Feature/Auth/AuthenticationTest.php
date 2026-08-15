@@ -19,6 +19,17 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(200);
     }
 
+    public function test_login_screen_does_not_offer_remember_me(): void
+    {
+        User::factory()->create(['last_login_at' => now()]);
+
+        $response = $this->get('/login');
+
+        $response->assertStatus(200);
+        $response->assertDontSee('Ingat saya');
+        $response->assertDontSee('name="remember"');
+    }
+
     public function test_login_redirects_to_onboarding_when_first_run(): void
     {
         User::factory()->create();
