@@ -1,17 +1,25 @@
 @php
     $spId = $spPrefix . '_id';
+    $spCompact = $spCompact ?? false;
 @endphp
 <div>
+    @if(!$spCompact)
     <label for="{{ $spPrefix }}_search" class="form-label">{{ $spLabel }}@if($spRequired ?? true) <span class="text-red-500">*</span>@endif</label>
+    @endif
     <div class="relative">
-        <input type="text" id="{{ $spPrefix }}_search" class="form-input pr-8" placeholder="{{ $spPlaceholder }}" autocomplete="off">
+        <input type="text" id="{{ $spPrefix }}_search" class="{{ $spCompact ? 'form-input py-1.5 text-sm' : 'form-input' }} pr-8" placeholder="{{ $spPlaceholder }}" autocomplete="off">
         <input type="hidden" name="{{ $spId }}" id="{{ $spId }}" value="{{ $spInitial }}">
+        @if($spCompact)
+            <button type="button" id="{{ $spPrefix }}_clear" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 hover:text-red-500" title="Bersihkan pilihan">&times;</button>
+        @endif
         <div id="{{ $spPrefix }}_results" class="hidden absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-auto"></div>
     </div>
+    @if(!$spCompact)
     <div class="flex items-center justify-between mt-1">
         <p class="text-xs text-slate-400" id="{{ $spPrefix }}_status">{{ $spStatusHint ?? ('Ketik untuk memilih ' . $spLabelLower . '...') }}</p>
         <button type="button" id="{{ $spPrefix }}_clear" class="hidden text-xs font-medium text-slate-400 hover:text-red-500" title="Bersihkan pilihan">Bersihkan</button>
     </div>
+    @endif
     @if($spShowError ?? true)
         @error($spError)
             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
@@ -130,7 +138,7 @@
         hiddenId: '{{ $spId }}',
         resultsId: '{{ $spPrefix }}_results',
         clearId: '{{ $spPrefix }}_clear',
-        statusId: '{{ $spPrefix }}_status',
+        statusId: {{ $spCompact ? 'null' : "'{$spPrefix}_status'" }},
         autoSubmit: {{ ($spAutoSubmit ?? false) ? 'true' : 'false' }},
         options: @json($spOptions)
     });

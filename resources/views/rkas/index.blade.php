@@ -70,7 +70,7 @@
         <div class="card-header">
             <span class="card-title">Daftar RKAS</span>
             <div class="flex flex-wrap items-center gap-3">
-                <form method="GET" action="{{ route('rkas.index') }}" class="flex items-center gap-3">
+                <form method="GET" action="{{ route('rkas.index') }}" class="flex flex-wrap items-center gap-3">
                     <input type="text" name="search" class="form-input text-sm py-1.5" placeholder="Cari uraian..." value="{{ request('search') }}">
                     @if(request('search'))
                         <a href="{{ route('rkas.index') }}" class="btn btn-ghost btn-sm">Reset</a>
@@ -92,6 +92,7 @@
                         'spInitial' => (string) ($programId ?? ''),
                         'spError' => 'program_id',
                         'spAutoSubmit' => true,
+                        'spCompact' => true,
                         'spOptions' => $programs->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
                     ])
                     <select name="tahun" class="form-select py-1.5 text-sm" onchange="this.form.submit()">
@@ -119,6 +120,7 @@
                         'spInitial' => (string) ($kodeRekeningId ?? ''),
                         'spError' => 'kode_rekening_id',
                         'spAutoSubmit' => true,
+                        'spCompact' => true,
                         'spOptions' => $kodeRekenings->map(fn ($r) => ['id' => (string) $r->id, 'text' => $r->kode . ' - ' . $r->nama])->values()->all(),
                     ])
                     <select name="jenis_belanja_id" class="form-select py-1.5 text-sm" onchange="this.form.submit()" style="min-width:170px">
@@ -168,7 +170,7 @@
                                 $realisasi = $item->transaksiBkus->sum('jumlah') + $item->notaBkuItems->sum('subtotal');
                                 $sisa = $item->jumlah - $realisasi;
                                 $persen = $item->jumlah > 0 ? ($realisasi / $item->jumlah) * 100 : 0;
-                                $realisasiVolume = $item->transaksiBkus->sum('volume');
+                                $realisasiVolume = $item->transaksiBkus->sum('volume') + $item->notaBkuItems->sum('jumlah');
                                 $sisaVolume = $item->volume > 0 ? ($item->volume - $realisasiVolume) : null;
                             @endphp
                             <tr class="{{ $isLengkap ? '' : 'bg-amber-50/50' }}">

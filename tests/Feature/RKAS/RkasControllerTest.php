@@ -237,7 +237,7 @@ class RkasControllerTest extends TestCase
         $response = $this->actingAs($this->user)->get('/rkas');
 
         $response->assertOk();
-        $response->assertSee('Semua Kode Rekening');
+        $response->assertSee('Cari rekening (kode / nama)...');
         $response->assertSee('Semua Jenis Belanja');
     }
 
@@ -491,5 +491,64 @@ class RkasControllerTest extends TestCase
         $response->assertOk();
         $response->assertSee('Rp 300.000');
         $response->assertSee('Rp 0');
+    }
+
+    public function test_index_sisa_volume_mencerminkan_nota_multi_item(): void
+    {
+        $item1 = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 1,
+            'uraian' => 'Tinta Spidol Whiteboard',
+            'volume' => 10,
+            'satuan' => 'dus',
+            'tarif' => 10000,
+            'jumlah' => 500000,
+        ]);
+
+        $nota = NotaBku::factory()->create([
+            'no_nota' => 'NOTA-0300/20519260/01/2026',
+            'tanggal' => '2026-01-22',
+            'bulan' => 1,
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'tahun_anggaran_id' => $this->tahun->id,
+            'metode_pengadaan' => 'non_siplah',
+            'created_by' => $this->user->id,
+        ]);
+
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $item1->id,
+            'urutan' => 1,
+            'jumlah' => 10,
+            'satuan' => 'dus',
+            'harga_satuan' => 10000,
+            'subtotal' => 100000,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => null,
+            'nota_bku_id' => $nota->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 100000,
+            'no_bukti' => 'BPU999/20519260/01/2026',
+            'uraian' => 'Nota belanja NOTA-0300/20519260/01/2026',
+            'tanggal' => '2026-01-22',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas');
+
+        $response->assertOk();
+        $response->assertSee('Rp 100.000');
+        $response->assertSee('sisa 0 dus', false);
+        $response->assertDontSee('sisa 10 dus');
     }
 }

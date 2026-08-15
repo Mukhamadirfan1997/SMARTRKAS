@@ -2144,3 +2144,26 @@ Volume: 10 dus · Tarif: Rp 10.000 · Jumlah: Rp 500.000 · Realisasi: Rp 100.00
 ## Catatan Proses
 - Probe PHP bundle dari PowerShell: jangan pakai `php -r` dengan `\` escaped berlapis (parse error); tulis script temp di `%TEMP%\opencode` + panggil `php.exe <script>` dengan env `DB_DATABASE`/`SMARTRKAS_DATA_DIR` di-set.
 - App v0.5.2 dibiarkan berjalan (port 58116) untuk uji manual user.
+
+---
+
+# Sesi 15 Agu 2026 — Fix 2 Temuan: Volume Sisa dari Nota + Picker Compact di Filter RKAS (commit lokal, BELUM push)
+
+## Temuan 1 TERVERIFIKASI & DIFIX — Volume sisa item RKAS tidak menghitung nota multi-item
+- **Bukti DB produksi** (probe `%TEMP%\opencode\probe-tinta.php` thd Roaming DB): item `Tinta Spidol Whiteboard` (id `019fd4fc-920c-70c5-a9d8-dbdcd74027a9`): volume=10 dus, tarif=10000, jumlah=500000, sum rencana bulan=500000. Transaksi aktif item = **0**; nota aktif 1 (`01a003aa-...`): `nota_bku_item qty=10 dus subtotal=100000`. Jadi realisasi Rp 100.000 = nota multi-item (10 dus × Rp 10.000 sudah terpakai semua).
+- **Fix** `resources/views/rkas/index.blade.php:171`: `$realisasiVolume = $item->transaksiBkus->sum('volume') + $item->notaBkuItems->sum('jumlah')` (qty nota ikut dihitung). Sebelumnya hanya `transaksiBkus->sum('volume')` = 0 utk transaksi flatten (`volume=null`) → sisa tampil 10 dus (SALAH). Kini tampil `(sisa 0 dus)` — terverifikasi render nyata thd DB produksi.
+- **Inkonsistensi data item** (BUKAN bug kode): `volume×tarif` (100.000) ≠ `jumlah` (500.000) — user pernah menaikkan rencana tanpa menyesuaikan volume/tarif. Status 20% = 100.000/500.000 benar sesuai rumus.
+- Test baru `test_index_sisa_volume_mencerminkan_nota_multi_item` (skenario persis laporan user).
+
+## Temuan 2 TERVERIFIKASI & DIFIX — Form filter RKAS meluber karena picker lebih tinggi dari select
+- User konfirmasi gejala = **layout berantakan/meluber** (bukan dropdown mati). Form `rkas/index.blade.php:73` = `flex items-center gap-3` (7 kontrol, tanpa `flex-wrap`); partial picker merender label + input + status hint (tinggi jauh melebihi select).
+- **Fix**: partial `_search-picker.blade.php` dapat opsi baru **`spCompact`** (default false):
+  - Saat `spCompact=true`: label status & tombol "Bersihkan" bawah TIDAK dirender; tombol clear jadi `×` absolute di kanan input; input pakai `py-1.5 text-sm` (sejajar select); `statusId` dikirim `null` ke JS.
+  - Filter RKAS: kedua include picker tambah `'spCompact' => true` + form jadi `flex flex-wrap items-center gap-3`.
+  - Dashboard & laporan TIDAK diubah (sudah pakai grid `items-end`, tidak meluber).
+- Test lama `test_index_page_renders_new_filters` diadaptasi: assert `Cari rekening (kode / nama)...` (placeholder) menggantikan `Semua Kode Rekening` (status hint tak dirender lagi).
+
+## Verifikasi
+- Render nyata thd DB produksi (probe `probe-rkas-picker.php`): item Tinta → `(sisa 0 dus)`; picker → `statusId: null` ×2, label `<label for="program_search"` count 0, `flex flex-wrap` aktif.
+- PHPUnit full suite **`OK (385 tests, 1130 assertions)`** (naik dari 384/1126 — +1 test volume), PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+- BELUM build installer, BELUM push — menunggu uji manual user di app (app terpasang masih v0.5.2 tanpa fix ini).
