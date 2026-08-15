@@ -435,4 +435,61 @@ class RkasControllerTest extends TestCase
         $response->assertOk();
         $response->assertSee('Rp 300.000');
     }
+
+    public function test_index_sisa_per_item_mencerminkan_realisasi_nota(): void
+    {
+        $item1 = $this->makeItem(1, 'Belanja Obat', 100000);
+        $item2 = $this->makeItem(2, 'Belanja Alat', 200000);
+
+        $nota = NotaBku::factory()->create([
+            'no_nota' => 'NOTA-0200/20519260/01/2026',
+            'tanggal' => '2026-01-22',
+            'bulan' => 1,
+            'kegiatan_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'tahun_anggaran_id' => $this->tahun->id,
+            'metode_pengadaan' => 'siplah',
+            'created_by' => $this->user->id,
+        ]);
+
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $item1->id,
+            'urutan' => 1,
+            'jumlah' => 10,
+            'satuan' => 'buah',
+            'harga_satuan' => 10000,
+            'subtotal' => 100000,
+        ]);
+        NotaBkuItem::factory()->create([
+            'nota_bku_id' => $nota->id,
+            'rkas_item_id' => $item2->id,
+            'urutan' => 2,
+            'jumlah' => 20,
+            'satuan' => 'botol',
+            'harga_satuan' => 10000,
+            'subtotal' => 200000,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => null,
+            'nota_bku_id' => $nota->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 300000,
+            'no_bukti' => 'BPU998/20519260/01/2026',
+            'uraian' => 'Nota belanja NOTA-0200/20519260/01/2026',
+            'tanggal' => '2026-01-22',
+            'metode_pengadaan' => 'siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas');
+
+        $response->assertOk();
+        $response->assertSee('Rp 300.000');
+        $response->assertSee('Rp 0');
+    }
 }

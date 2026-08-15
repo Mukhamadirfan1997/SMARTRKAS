@@ -92,6 +92,11 @@ class RkasController extends Controller
                     'transaksiBkus' => function ($q): void {
                         $q->where('jenis', 'pengeluaran');
                     },
+                    'notaBkuItems' => function ($q): void {
+                        $q->whereHas('notaBku', function ($q2): void {
+                            $q2->whereNull('deleted_at');
+                        });
+                    },
                 ])
                 ->orderBy('no_urut')
                 ->paginate(50)

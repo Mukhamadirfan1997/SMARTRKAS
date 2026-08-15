@@ -157,7 +157,7 @@
                         @foreach($rkasItems as $item)
                             @php
                                 $isLengkap = $item->program_id && $item->kode_rekening_id;
-                                $realisasi = $item->transaksiBkus->sum('jumlah');
+                                $realisasi = $item->transaksiBkus->sum('jumlah') + $item->notaBkuItems->sum('subtotal');
                                 $sisa = $item->jumlah - $realisasi;
                                 $persen = $item->jumlah > 0 ? ($realisasi / $item->jumlah) * 100 : 0;
                                 $realisasiVolume = $item->transaksiBkus->sum('volume');
