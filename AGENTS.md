@@ -2228,3 +2228,50 @@ Bawa fitur "Ringkasan Capaian & Realisasi per Jenis Belanja di Data RKAS" (commi
 - `Invoke-WebRequest -MaximumRedirection 0` di PowerShell non-interactive melempar prompt error → pakai `curl.exe -s -o <file> -w "%{http_code}"` untuk cek status HTTP.
 - `(Get-Content -Raw) -replace '^version = ...'` (anchor `^...$`) TIDAK bekerja pada single string tanpa flag `(?m)` — pakai `-replace '(?m)^version = "0\.5\.2"$', ...`.
 - App v0.5.3 dibiarkan berjalan untuk uji manual user (server 63200).
+
+---
+
+# Sesi 15-16 Agu 2026 - SELESAI (commit lokal, BELUM push/build/rilis): Fitur "Terima Hasil Pergeseran/PAK dari ARKAS (via Import)"
+
+## Status
+- **SELESAI DIIMPLEMENTASI** (Tahap 1-4) + 18 test baru (11 ImportRevisiControllerTest + 7 ImportRevisiImportTest). Commit lokal `4e67e01`.
+- Pivot desain: pengerjaan pergeseran/PAK dilakukan di ARKAS (system of record) - SmartRKAS TIDAK membangun form pergeseran manual, tapi MENERIMA hasil via import (menumpang infrastruktur import RKAS).
+- **BELUM diuji manual browser** - seluruh Tahap 1-4 belum pernah disentuh dari UI sungguhan; uji manual (dgn SALINAN DB produksi di `%TEMP%\opencode\test-revisi.sqlite`) adalah langkah berikutnya sebelum bicara rilis.
+
+## Ringkasan Implementasi
+- `database/migrations/2026_08_16_000027_create_rkas_revisi_tables.php` — tabel `rkas_revisi` (id, no_revisi, tanggal, bulan? NO — per revisi: tahun_anggaran_id, sumber_dana_id, jenis pergeseran/pak, keterangan, arah?, data_perubahan JSON, created_by, timestamps, softDeletes) + `rkas_revisi_item` (rkas_revisi_id FK cascade, rkas_item_id FK null, urutan, bulan, sebelum, sesudah, selisih, arah naik/turun, jenis_belanja_id?, data_perubahan JSON).
+- Model `RkasRevisi`/`RkasRevisiItem` + factory; `NomorDokumen::noRevisi()` (PGS-0001/NPSN/MM/YYYY atau PAK-0001/...).
+- `app/Imports/ImportRevisiImport.php` — parser diff-first per bulan (header 2 baris via `RkasImportHeaderDetector::detectColumns`, akses 0-based), cocokkan item by (program, kode_rekening, normalizeUraian), item baru dibuat (rkas_item_id null, arah naik), net-zero per scope, item sumber ber-realisasi ditolak.
+- `app/Jobs/ProcessRkasRevisiImport.php` — sinkron (tanpa ShouldQueue), all-or-nothing, `DB::transaction` → RkasRevisi + RkasRevisiItem + tulis `rkas_item_bulan` + `RkasItem::renumber()`/`syncJumlah()` + AuditLog (`tabel='rkas_revisi'`, aksi `import_pergeseran`/`import_pak`) + Outbox + Cache::increment.
+- `app/Http/Controllers/ImportRevisiController.php` — index (list revisi + import log terbaru), store (validasi files 1..12 + upload ke `storage/app/import_revisi` + dispatch job sinkron + flash), show (detail snapshot per item).
+- View `resources/views/import-revisi/index.blade.php` + `show.blade.php`; link sidebar "Import Revisi / PAK".
+- Routes: `GET/POST /import-revisi`, `GET /import-revisi/{revisi}` (grup auth, di bawah route index).
+- **Guard sempit `RkasController::update()` TIDAK diimplementasikan** (sesuai keputusan user saat commit: dikeluarkan dari scope, dikerjakan terpisah nanti bila diminta).
+
+## Keputusan kunci (konfirmasi user)
+1. Format file = SAMA dengan template import RKAS (No Urut, Kode Rekening, Kode Program, Uraian, Volume, Satuan, Tarif, Jumlah); rencana per bulan; upload files[1..12], boleh hanya bulan yang berubah.
+2. Item yang TIDAK ada di file revisi - DIBIARKAN apa adanya (tidak dihapus).
+3. Item ter-realisasi boleh jadi TARGET (naik), TIDAK boleh jadi SUMBER (turun) - guard tolak semua bila ada item sumber ber-realisasi.
+4. Net-zero per scope (toleransi ~Rp1): Pergeseran - per (sumber_dana + jenis_belanja); PAK - per sumber_dana.
+5. TIDAK ada blok kuota PAK 1x/tahun (ARKAS yang otoritas).
+6. Riwayat = rkas_revisi + rkas_revisi_item (snapshot sebelum/sesudah per bulan).
+7. no_revisi: PGS-0001/NPSN/MM/YYYY (pergeseran), PAK-0001/... (pak) - lewat NomorDokumen::noRevisi().
+8. Pengetatan RkasController::update/destroy TIDAK masuk sesi ini.
+
+## Alur
+Menu /import-revisi (grup RKAS) - form (tahun anggaran, sumber dana, jenis radio, tanggal, keterangan, files[1..12]) - ProcessRkasRevisiImport (sinkron, tanpa ShouldQueue) - parse via RkasImportHeaderDetector::detectColumns (baris 8/9, akses 0-based) - cocokkan item by (program, kode_rekening, normalizeUraian) - diff per (item, bulan) - guard all-or-nothing (negatif, sumber ber-realisasi, net-zero) - DB::transaction: RkasRevisi + RkasRevisiItem + tulis rkas_item_bulan + syncJumlah + AuditLog (tabel rkas_revisi, aksi import_pergeseran/import_pak) + Outbox + Cache::increment. Gagal - ImportLog failed + error_detail, tak ada yang diterapkan.
+
+## Artefak yang akan dibuat
+- Migrasi 2026_08_16_000027_create_rkas_revisi_tables.php (rkas_revisi + rkas_revisi_item; arah, sebelum_total, sesudah_total, data_perubahan JSON per bulan)
+- Model RkasRevisi/RkasRevisiItem + factory
+- NomorDokumen::noRevisi()
+- ImportRevisiImport (parser per bulan; RkasImport ToModel tidak bisa dipakai untuk diff-first)
+- ImportRevisiController (index/store) + job ProcessRkasRevisiImport
+- View import-revisi/index + show (detail snapshot); link sidebar
+- ImportRevisiTest (net-zero lolos/gagal, sumber ber-realisasi tolak, target ber-realisasi izin + kunci kwitansi terbuka, item tak di file dibiarkan, bulan negatif tolak, format no_revisi, item baru dibuat, AuditLog)
+
+## Verifikasi
+- PHPUnit full suite `OK (407 tests, 1223 assertions)`, PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- 18 test baru: `ImportRevisiControllerTest` (11) + `ImportRevisiImportTest` (7).
+- BELUM diuji manual browser; uji manual berikutnya memakai **salinan** DB produksi (`%TEMP%\opencode\test-revisi.sqlite`), bukan Roaming asli.
+- BELUM push / bump versi / build installer / rilis — tunggu konfirmasi user + uji manual.

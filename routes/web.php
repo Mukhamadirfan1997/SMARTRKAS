@@ -6,6 +6,7 @@ use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportRkasController;
+use App\Http\Controllers\ImportRevisiController;
 use App\Http\Controllers\JenisBelanjaController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MasterKodeRekeningController;
@@ -68,6 +69,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('import-rkas', [ImportRkasController::class, 'store'])->name('import-rkas.store');
     Route::get('import-rkas/download-template', [ImportRkasController::class, 'downloadTemplate'])->name('import-rkas.download-template');
     Route::get('import-rkas/status', [ImportRkasController::class, 'status'])->name('import-rkas.status');
+
+    Route::get('import-revisi', [ImportRevisiController::class, 'index'])->name('import-revisi.index');
+    Route::post('import-revisi', [ImportRevisiController::class, 'store'])->name('import-revisi.store');
+    Route::get('import-revisi/{rkasRevisi}', [ImportRevisiController::class, 'show'])->name('import-revisi.show');
 
     Route::get('transaksi-bku', [TransaksiBkuController::class, 'index'])->name('transaksi-bku.index');
     Route::get('transaksi-bku/create', [TransaksiBkuController::class, 'create'])->name('transaksi-bku.create');

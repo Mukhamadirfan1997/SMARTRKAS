@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\NotaBku;
 use App\Models\PengaturanSekolah;
+use App\Models\RkasRevisi;
 use App\Models\TransaksiBku;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -113,5 +114,49 @@ final class NomorDokumen
         } while (NotaBku::withTrashed()->where('no_nota', $candidate)->exists());
 
         return $candidate;
+    }
+
+    /**
+     * No revisi pergeseran/PAK, format: {PREFIX}-{seq:4} / {NPSN} / {MM} / {YYYY}.
+     * PREFIX = PGS- (pergeseran) atau PAK- (pak). Nomor berjalan PER BULAN:
+     * meneruskan dari nomor tertinggi yang pernah dipakai di bulan tsb
+     * (aktif + soft-deleted) — nomor dokumen formal TIDAK dipakai ulang.
+     */
+    public static function noRevisi(string $jenis, string $tanggal): string
+    {
+        $prefix = strtolower($jenis) === 'pak' ? 'PAK-' : 'PGS-';
+        $month = Carbon::parse($tanggal)->format('m');
+        $year = Carbon::parse($tanggal)->format('Y');
+        $npsn = PengaturanSekolah::get()->npsn ?? '00000000';
+
+        $seq = self::nextRevisiSeq($prefix, $npsn, $month, $year);
+
+        do {
+            $candidate = $prefix . str_pad((string) $seq, 4, '0', STR_PAD_LEFT)
+                . '/' . $npsn . '/' . $month . '/' . $year;
+            $seq++;
+        } while (RkasRevisi::withTrashed()->where('no_revisi', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    /**
+     * Nomor urut tertinggi+1 utk kombinasi (prefix, npsn, bulan, tahun) pada
+     * tabel rkas_revisi (termasuk soft-deleted, agar nomor tidak terpakai ulang).
+     */
+    private static function nextRevisiSeq(string $prefix, string $npsn, string $month, string $year): int
+    {
+        $pattern = $prefix . '%/' . $npsn . '/' . $month . '/' . $year;
+
+        /** @var Collection<int, string> $noRevisis */
+        $noRevisis = RkasRevisi::withTrashed()
+            ->where('no_revisi', 'like', $pattern)
+            ->pluck('no_revisi');
+
+        $maxAll = $noRevisis
+            ->map(static fn (string $r): int => (int) substr($r, strlen($prefix), 4))
+            ->max();
+
+        return $maxAll === null ? 1 : $maxAll + 1;
     }
 }
