@@ -2234,7 +2234,7 @@ Bawa fitur "Ringkasan Capaian & Realisasi per Jenis Belanja di Data RKAS" (commi
 # Sesi 15-16 Agu 2026 - SELESAI (commit lokal, BELUM push/build/rilis): Fitur "Terima Hasil Pergeseran/PAK dari ARKAS (via Import)"
 
 ## Status
-- **SELESAI DIIMPLEMENTASI** (Tahap 1-4) + 18 test baru (11 ImportRevisiControllerTest + 7 ImportRevisiImportTest). Commit lokal `4e67e01`.
+- **SELESAI DIIMPLEMENTASI** (Tahap 1-4) + 18 test baru (11 ImportRevisiControllerTest + 7 ImportRevisiImportTest). Commit lokal `5119ece`.
 - Pivot desain: pengerjaan pergeseran/PAK dilakukan di ARKAS (system of record) - SmartRKAS TIDAK membangun form pergeseran manual, tapi MENERIMA hasil via import (menumpang infrastruktur import RKAS).
 - **BELUM diuji manual browser** - seluruh Tahap 1-4 belum pernah disentuh dari UI sungguhan; uji manual (dgn SALINAN DB produksi di `%TEMP%\opencode\test-revisi.sqlite`) adalah langkah berikutnya sebelum bicara rilis.
 
