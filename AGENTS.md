@@ -2302,3 +2302,27 @@ Perbaiki celah logika pada guard "item sumber ber-realisasi ditolak" di fitur Im
 - PHPStan level 6 error 3× saat penambahan test (`missingType.iterableValue` + `missingType.generics` di helper `makeUpload`/`postPergeseran`) → di-fix dengan PHPDoc: `@param array<int, array<int, string>> $rows` dan `@return \Illuminate\Testing\TestResponse<\Illuminate\Http\RedirectResponse>`.
 - Perintah user: **commit sekarang dengan pesan yang jelas** (sebut fix celah bulan, guard baru update(), regression test permanen); **update AGENTS.md dgn status akhir; JANGAN push**.
 - Commit ini = lanjutan dari fitur Import Revisi/PAK (commit `5119ece`). Menunggu uji manual + keputusan user sebelum push/build/rilis.
+
+---
+
+# Sesi 16 Agu 2026 — Tahap 4 Import Revisi: Controller Test + Commit + Setup Uji Manual (server 8027) — ISTIRAHAT, LANJUT NANTI
+
+## Status (titik berhenti)
+- **Commit lokal**: `5119ece` (fitur Import Revisi/PAK lengkap) + `7c06202` (AGENTS status akhir). Working tree BERSIH. BELUM push/bump/build/rilis.
+- **Uji manual fitur Import Revisi/PAK BELUM dimulai** — server dev sudah jalan (lihat di bawah), tinggal login & uji dari browser.
+
+## Tahap 4 (sesi ini)
+- `tests/Feature/Import/ImportRevisiControllerTest.php` — 11 test (guest redirect; index render; index warn tanpa tahun aktif `assertDontSee('Upload File Revisi')`; store wajib files; store error tanpa tahun aktif; net-zero sukses `PGS-0001/20519260/01/2026` + sebelum/sesudah 300000 + rkas_item_bulan updated + 2 items + ImportLog success + file_path null; net-zero tidak seimbang tolak + rkas_revisi 0 + rencana utuh + ImportLog failed + error_detail; sumber ber-realisasi tolak via `TransaksiBku::factory()`; item baru dibuat dgn item lain menurun (net-zero butuh offset!); PAK `PAK-0001/...` + audit_log `import_pak`; show render detail). Helper: `makeUpload` (Storage::fake('local') + anonymous FromArray + Excel::store + UploadedFile test=true mime xlsx), `makeItem` (kode `5.1.01.01.001`, program `P.001.01`), `makeRencana`, `makeNota`? TIDAK — uji sumber-realisasi pakai `TransaksiBku::factory()`.
+- **Bug yang di-fix**: `ProcessRkasRevisiImport` pakai `use Illuminate\Queue\Queueable;` → harus `Illuminate\Bus\Queueable` (fatal trait not found). PHPStan 6 issue: array type `array<int|string, UploadedFile|null>` (kunci bisa string), hapus `?? ''` redundant di `$meta['log_id']` (offset selalu ada), `@param array<int, string>|string $errors` di `mapAllLogs`.
+- Full suite `OK (407 tests, 1223 assertions)` · PHPStan `[OK] No errors` · `view:cache` OK.
+
+## Setup Uji Manual (JANGAN sentuh DB Roaming asli)
+- **Salinan DB**: `C:\Users\yudhi\AppData\Local\Temp\opencode\test-revisi.sqlite` (dari Roaming `id.smartrkas.desktop\smartrkas.sqlite`; 1 user, 108 rkas_item, 139 master_program, 23 transaksi, 1 tahun anggaran; `rkas_revisi`/`rkas_revisi_item` = 0). Migrasi `000027` sudah di-`migrate --force` pada salinan ini.
+- **Server dev**: `php -S 127.0.0.1:8027 -t public` (di `cmd /c` dengan `set "DB_DATABASE=C:\Users\yudhi\AppData\Local\Temp\opencode\test-revisi.sqlite"` — PENTING: kutip `set "VAR=path"` tanpa spasi; versi tanpa kutip menghasilkan path dgn spasi trailing → 500 "Database file ... does not exist"). TIDAK pakai `SMARTRKAS_DATA_DIR` (tanpa itu error "Please provide a valid cache path" — storage_path rusak). Log: `%TEMP%\opencode\server-revisi.log`.
+- `/login` = 200; `/import-revisi` guest → 302 ke `/login` (benar).
+- Port 8027 sudah dicek bersih (hanya VS Code php-intellisense yang hidup — bukan server web, wajar). Pastikan SOP cek duplikat port sebelum uji.
+
+## Next (lanjutan)
+1. Buka `http://127.0.0.1:8027/login` di browser (akun = akun produksi; DB = salinan, data asli).
+2. Uji manual: upload file revisi pergeseran (net-zero per sumber_dana+jenis_belanja) → sukses + PGS-0001 + rencana berubah + Riwayat Revisi + Detail snapshot; uji sengaja-gagal: net-zero tidak seimbang, item sumber ber-realisasi diturunkan → semua ditolak, tak ada yang diterapkan.
+3. Bila OK → lapor ke user → putuskan commit lanjutan/push/build/rilis (TIDAK otomatis).
