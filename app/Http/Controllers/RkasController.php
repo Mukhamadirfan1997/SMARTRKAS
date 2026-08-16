@@ -13,6 +13,7 @@ use App\Models\MasterKodeRekening;
 use App\Support\NumberParser;
 use App\Support\RealisasiQuery;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class RkasController extends Controller
 {
@@ -194,6 +195,16 @@ class RkasController extends Controller
             'tarif' => 'nullable|numeric',
             'jumlah' => 'required|numeric',
         ]);
+
+        $realisasi = $rkasItem->realisasiTotal();
+        if ($realisasi > 0 && (float) $validated['jumlah'] < (float) $rkasItem->jumlah) {
+            throw ValidationException::withMessages([
+                'jumlah' => sprintf(
+                    'Item sudah ber-realisasi (total Rp %s) sehingga jumlah/rencana tidak dapat diturunkan. Gunakan pergeseran/perubahan anggaran (PAK) di ARKAS bila perlu mengubah anggaran.',
+                    number_format($realisasi, 0, ',', '.')
+                ),
+            ]);
+        }
 
         $dataLama = $rkasItem->only([
             'no_urut', 'uraian', 'program_id', 'kode_rekening_id', 'sumber_dana_id',

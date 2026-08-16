@@ -17,7 +17,11 @@ use Maatwebsite\Excel\Facades\Excel;
  *
  * Guard yang dilakukan di level parser (all-or-nothing, dipanggil controller):
  *  - jumlah negatif ditolak;
- *  - item yang menjadi SUMBER (turun) tapi sudah ber-realisasi ditolak;
+ *  - item yang menjadi SUMBER (turun) tapi sudah ber-realisasi ditolak —
+ *    "ber-realisasi" diartikan lintas-bulan (total realisasi seluruh bulan
+ *    dalam tahun anggaran), bukan hanya s.d. bulan file, agar item dengan
+ *    realisasi di bulan yang lebih akhir dari bulan file tetap tidak bisa
+ *    dijadikan sumber;
  *  - net-zero per scope (pergeseran: per sumber_dana + jenis_belanja; PAK: per
  *    sumber_dana) dengan toleransi ~Rp1.
  *
@@ -132,7 +136,7 @@ class ImportRevisiImport
                 continue;
             }
 
-            $realisasi = $item !== null ? $item->realisasiKumulatifSd($bulan) : 0.0;
+            $realisasi = $item !== null ? $item->realisasiTotal() : 0.0;
 
             $diffs[] = [
                 'rkas_item_id'    => $item?->id,

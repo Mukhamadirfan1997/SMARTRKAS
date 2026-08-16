@@ -131,6 +131,25 @@ class RkasItem extends Model
     }
 
     /**
+     * Total realisasi lintas-bulan (seluruh bulan dalam tahun anggaran, tanpa
+     * filter bulan). Dipakai definisi "punya realisasi" yang sama untuk guard
+     * pergeseran/perubahan anggaran (import revisi) dan edit manual item RKAS:
+     * bila item sudah ber-realisasi di bulan mana pun, ia tidak boleh dijadikan
+     * sumber/turunkan anggarannya.
+     */
+    public function realisasiTotal(?string $exceptTransaksiId = null): float
+    {
+        $query = RealisasiQuery::base()
+            ->where('rb.rkas_item_id', $this->id);
+
+        if ($exceptTransaksiId !== null) {
+            $query->where('rb.id', '!=', $exceptTransaksiId);
+        }
+
+        return (float) $query->sum('rb.jumlah');
+    }
+
+    /**
      * Sisa anggaran kumulatif s.d. bulan tertentu: total rencana (rkas_item_bulan)
      * dikurangi total realisasi pengeluaran (transaksi + rincian nota) sampai bulan itu.
      * Nilai inilah yang diperiksa oleh guard input BKU (store/update), jadi

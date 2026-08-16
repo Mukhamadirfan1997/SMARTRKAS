@@ -2275,3 +2275,30 @@ Menu /import-revisi (grup RKAS) - form (tahun anggaran, sumber dana, jenis radio
 - 18 test baru: `ImportRevisiControllerTest` (11) + `ImportRevisiImportTest` (7).
 - BELUM diuji manual browser; uji manual berikutnya memakai **salinan** DB produksi (`%TEMP%\opencode\test-revisi.sqlite`), bukan Roaming asli.
 - BELUM push / bump versi / build installer / rilis — tunggu konfirmasi user + uji manual.
+
+---
+
+# Sesi 16 Agu 2026 — Fix Celah Bulan Guard Realisasi: Realisasi Lintas-Bulan (`realisasiTotal()`) di Import Revisi + Guard Baru `RkasController::update()` (commit lokal, BELUM push)
+
+## Goal
+Perbaiki celah logika pada guard "item sumber ber-realisasi ditolak" di fitur Import Revisi/PAK: sebelumnya memakai `realisasiKumulatifSd($bulan)` yang hanya menghitung realisasi S.D. bulan dif-nya — padahal definisi yang benar (dan konsisten dengan keputusan fitur) adalah item "sudah ber-realisasi" bila **pernah direalisasikan di bulan mana pun** dalam tahun anggaran (realisasi lintas-bulan). Sekaligus pasang guard yang SAMA di `RkasController::update()` (menurunkan `jumlah` item ber-realisasi ditolak), karena sebelumnya `update()` TIDAK punya guard apa pun — user bisa menurunkan rencana item yang sudah terpakai tanpa jejak.
+
+## Root Cause (celah bulan, dari investigasi test_d)
+- `ImportRevisiImport.php` guard turun: `$item->realisasiKumulatifSd($bulan) > 0` → untuk diff bulan 1, item dengan realisasi di bulan 2 dianggap "belum ber-realisasi" → pergeseran keluar dari item itu LULUS (anggaran bisa berkurang padahal barang sudah dibeli).
+- `RkasController::update()` tidak memvalidasi penurunan rencana sama sekali → beban ber-realisasi bisa dikurangi manual tanpa memicu pergeseran/PAK.
+
+## Perubahan
+- `app/Models/RkasItem.php` — method baru **`realisasiTotal(?string $exceptTransaksiId = null): float`** (total realisasi SELURUH bulan TA, tanpa filter bulan; delegasi ke `RealisasiQuery::base()`; dgn `exceptTransaksiId` utk pengecualian transaksi saat edit). Di-pakai sebagai definisi tunggal "item ber-realisasi" (dipilih eksplisit, bukan `realisasiKumulatifSd(12)` agar tidak ambigu).
+- `app/Imports/ImportRevisiImport.php` — baris 135: `$realisasi = $item !== null ? $item->realisasiTotal() : 0.0;`; docblock perbarui (definisi realisasi lintas-bulan; field `realisasi` HANYA dipakai guard turun, `ProcessRkasRevisiImport::apply()` tidak menggunakannya — sudah diverifikasi).
+- `app/Http/Controllers/RkasController.php` — import `Illuminate\Validation\ValidationException`; `update()` tambah guard: bila `$rkasItem->realisasiTotal() > 0 && (float) $validated['jumlah'] < (float) $rkasItem->jumlah` → `ValidationException::withMessages(['jumlah' => 'Item sudah ber-realisasi (total Rp …) sehingga jumlah/rencana tidak dapat diturunkan. Gunakan pergeseran/perubahan anggaran (PAK) di ARKAS bila perlu mengubah anggaran.'])`. (Menaikkan jumlah/rencana tetap diperbolehkan.)
+- `tests/Feature/Import/RealisasiLintasBulanGuardTest.php` (BARU, permanen) — 5 test regression: a/b/d = guard import menolak item ber-realisasi di bulan berbeda/lebih awal/lebih akhir (rencana sumber TIDAK berubah, `rkas_revisi` count 0); c = `update()` menolak penurunan jumlah item ber-realisasi lintas-bulan; c2 = tanpa realisasi, penurunan jumlah tetap diizinkan (jumlah jadi 50000).
+
+## Verifikasi
+- `RealisasiLintasBulanGuardTest` → `OK (5 tests, 30 assertions)` · `ImportRevisi` → `OK (18 tests, 68 assertions)` · `RkasControllerTest` → `OK (33 tests, 128 assertions)`.
+- Full suite **`OK (412 tests, 1239 assertions)`** (naik dari 407/1223), PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Test utk membuktikan celah (temp) TIDAK ikut commit; `fwrite(STDERR)` debug dihapus; `git mv` gagal utk file untracked → pakai `Move-Item` PowerShell.
+
+## Catatan Proses
+- PHPStan level 6 error 3× saat penambahan test (`missingType.iterableValue` + `missingType.generics` di helper `makeUpload`/`postPergeseran`) → di-fix dengan PHPDoc: `@param array<int, array<int, string>> $rows` dan `@return \Illuminate\Testing\TestResponse<\Illuminate\Http\RedirectResponse>`.
+- Perintah user: **commit sekarang dengan pesan yang jelas** (sebut fix celah bulan, guard baru update(), regression test permanen); **update AGENTS.md dgn status akhir; JANGAN push**.
+- Commit ini = lanjutan dari fitur Import Revisi/PAK (commit `5119ece`). Menunggu uji manual + keputusan user sebelum push/build/rilis.
