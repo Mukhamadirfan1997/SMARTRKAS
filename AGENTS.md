@@ -2417,3 +2417,43 @@ Hapus `overflow-hidden` dari `.card`. `border-radius: 1rem` (dari `rounded-2xl`)
 
 ## Test Status
 - PHPStan level 6: `[OK] No errors`. PHPUnit `OK (414 tests, 1251 assertions)`.
+
+---
+
+# Sesi 17 Agu 2026 — Fix JS Syntax Error (Blade `{{ }}` di Script Tags) + Release v0.6.2
+
+## Goal
+Perbaiki bug JS `Unexpected token '&'` yang muncul di halaman BKU create/edit, Dashboard, RKAS filter, Laporan — semua halaman yang memakai `_search-picker.blade.php`.
+
+## Root Cause
+`_search-picker.blade.php:141` menggunakan `{{ $spCompact ? 'null' : "'{$spPrefix}_status'" }}` di dalam tag `<script>`. Blade `{{ }}` meng-HTML-encode karakter `'` menjadi `&#039;`, menghasilkan JavaScript tidak valid:
+```js
+statusId: 'kegiatan_status&#039;',  // ← syntax error
+```
+
+## Fix
+Ganti `{{ }}` → `{!! !!}` (raw output) untuk nilai `statusId` yang menghasilkan string literal JS:
+```js
+statusId: 'kegiatan_status',      // ← benar
+```
+
+## Changes
+- `resources/views/transaksi-bku/_search-picker.blade.php:141` — `{{ }}` → `{!! !!}`.
+
+## Catatan Verifikasi
+- Probe render (`find-ampersand.php`): output dikonfirmasi bersih dari `&#039;` di blok `<script>` (line 588 & 717 sekarang render `'kegiatan_status'` / `'kode_rekening_status'` tanpa encoding). Line 880 `esc()` function adalah string literal HTML entity yang disengaja.
+- SOP: PHPStan `[OK] No errors`, PHPUnit `OK (414 tests, 1251 assertions)`, `view:cache` OK, `npm run build` OK.
+
+## Release v0.6.2
+- Commit `e3ac813` (fix JS syntax error + bump v0.6.2 di 5 file) → push `master`.
+- Build: NSIS 61.3MB + MSI 93.8MB.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.2 (2 asset, state `uploaded`).
+
+## Reinstall v0.6.2
+- Uninstall v0.6.1 → install v0.6.2 → exe ProductVersion **0.6.2**.
+- php.exe + cacert.pem terbundle.
+- App jalan → server `php -S 127.0.0.1:62385` → `/login` = **200**.
+- Tidak ada orphan php setelah kill app.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`. PHPUnit `OK (414 tests, 1251 assertions)`. Tidak ada perubahan logika PHP/app — hanya view + versi.
