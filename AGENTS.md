@@ -2354,3 +2354,41 @@ Perbaiki celah logika pada guard "item sumber ber-realisasi ditolak" di fitur Im
 
 ## Test Status
 - Tidak ada perubahan kode pada sesi ini (murni verifikasi) → suite tetap `OK (412 tests, 1239 assertions)`, PHPStan level 6 `[OK] No errors`.
+
+---
+
+# Sesi 17 Agu 2026 — Fitur Template Transaksi (commit lokal)
+
+## Goal
+Tambahkan fitur "Template Transaksi Berulang": simpan pola transaksi BKU sebagai template, lalu pakai ulang di form BKU baru (auto-fill kegiatan, rekening, item, toko, metode, uraian). Template hanya dari transaksi single-item (bukan nota multi-item).
+
+## Summary
+- Phase 1 (migration + model + factory) + Phase 2 (controller + routes + sidebar) + Phase 3 (UI — manage page + modal simpan + dropdown pakai) SELESAI dalam satu commit.
+- `cariItemDiTahunAktif()` pada model menggunakan `RkasItem::normalizeUraian()` untuk pencocokan uraian item lintas tahun anggaran (sama dgn `ImportRevisiImport`).
+- Template `apply()` endpoint AJAX mengembalikan data kegiatan/rekening (nama), item RKAS tahun aktif (atau null bila tidak cocok), toko, metode, uraian.
+- Form BKU create: dropdown "Pakai Template?" + handler JS `applyTemplate()` yang fetch AJAX, set picker kegiatan/rekening, auto-check item (via `_templateAutoCheck` flag di `renderItems`), isi toko/metode/uraian. Mendukung `?template_id=` URL param dari tombol "Pakai" di manage page.
+- BKU index: tombol ikon "Simpan Template" per baris (hanya pengeluaran single-item) + modal dialog input nama.
+- Manage page (`transaksi-template/index`): tabel + hapus + link "Pakai" ke form BKU create.
+- Edit BKU: tambah `autoLengkapiBulanUraian()` (dari sesi sebelumnya, belum di-commit).
+
+## Changes
+- `database/migrations/2026_08_17_000028_create_transaksi_template_table.php` — tabel `transaksi_template`: id uuid, nama_template, kode_rekening_id FK, kegiatan_id FK, uraian_item_snapshot, toko_penerima, metode_pengadaan, uraian_dasar, sumber_dana_id FK nullable, created_by, timestamps, softDeletes.
+- `app/Models/TransaksiTemplate.php` — HasUuids+SoftDeletes+HasFactory, relasi kodeRekening/kegiatan/sumberDana/createdByUser, `cariItemDiTahunAktif()` (filter TA aktif + whereHas kodeRekening + whereHas kegiatan + where normalizeUraian match).
+- `database/factories/TransaksiTemplateFactory.php` — factory standar.
+- `app/Http/Controllers/TransaksiTemplateController.php` — `index()`, `store()` (dari BKU row, cek single-item), `destroy()`, `apply()` (AJAX JSON).
+- `app/Http/Controllers/TransaksiBkuController.php` — `create()` tambah load `$templates`.
+- `routes/web.php` — 4 route template (index/store/destroy/apply) + import controller.
+- `resources/views/transaksi-template/index.blade.php` — manage page (tabel + hapus + link pakai).
+- `resources/views/transaksi-bku/index.blade.php` — tombol simpan template per row + modal dialog.
+- `resources/views/transaksi-bku/create.blade.php` — banner "Pakai Template?" + dropdown + `applyTemplate()` JS + `_templateAutoCheck` hook di `renderItems` + `?template_id=` URL param handler.
+- `resources/views/transaksi-bku/edit.blade.php` — tambah `autoLengkapiBulanUraian()`.
+- `resources/views/layouts/navigation.blade.php` — link sidebar "Template Transaksi".
+
+## Verifikasi
+- PHPStan level 6: `[OK] No errors` (fix `@property` nullable di TransaksiTemplate).
+- PHPUnit: `OK (414 tests, 1251 assertions)` — semua hijau.
+- `php artisan view:cache` OK.
+- BELUM diuji manual browser; BELUM push/build/rilis.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`. PHPUnit `OK (414 tests, 1251 assertions)`. Commit `43001ab`.
