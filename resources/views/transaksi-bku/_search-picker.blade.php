@@ -138,7 +138,7 @@
         hiddenId: '{{ $spId }}',
         resultsId: '{{ $spPrefix }}_results',
         clearId: '{{ $spPrefix }}_clear',
-        statusId: {{ $spCompact ? 'null' : "'{$spPrefix}_status'" }},
+        statusId: {!! $spCompact ? 'null' : "'{$spPrefix}_status'" !!},
         autoSubmit: {{ ($spAutoSubmit ?? false) ? 'true' : 'false' }},
         options: @json($spOptions)
     });
