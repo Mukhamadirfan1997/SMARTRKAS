@@ -8,6 +8,7 @@
 - Jangan push ke GitHub atau buat rilis publik tanpa konfirmasi eksplisit dari user — commit lokal boleh, publikasi tidak.
 - Root cause harus dibuktikan dengan bukti keras (log error asli, payload nyata, render output nyata) — bukan dugaan dari baca kode saja, kalau memungkinkan untuk diverifikasi.
 - Sebelum uji manual via browser, selalu cek dulu apakah ada proses php.exe/server dev lain yang sudah listening di port yang sama (`Get-CimInstance Win32_Process -Filter "Name='php.exe'"` atau `netstat`) — server duplikat pernah 2x menyebabkan hasil uji tidak bisa dipercaya karena request jatuh acak ke server dengan state/DB berbeda.
+- Kalau ada lebih dari satu server dev jalan bersamaan untuk keperluan uji berbeda, catat eksplisit port + `DB_DATABASE` masing-masing sebelum mulai uji manual — supaya tidak salah menyimpulkan hasil dari server/database yang salah. Ini kejadian ketiga (server duplikat + salah DB) yang bikin hasil uji membingungkan.
 
 ---
 
@@ -2326,3 +2327,30 @@ Perbaiki celah logika pada guard "item sumber ber-realisasi ditolak" di fitur Im
 1. Buka `http://127.0.0.1:8027/login` di browser (akun = akun produksi; DB = salinan, data asli).
 2. Uji manual: upload file revisi pergeseran (net-zero per sumber_dana+jenis_belanja) → sukses + PGS-0001 + rencana berubah + Riwayat Revisi + Detail snapshot; uji sengaja-gagal: net-zero tidak seimbang, item sumber ber-realisasi diturunkan → semua ditolak, tak ada yang diterapkan.
 3. Bila OK → lapor ke user → putuskan commit lanjutan/push/build/rilis (TIDAK otomatis).
+
+---
+
+# Sesi 16 Agu 2026 — TEMUAN UJI: Guard `RkasController::update()` (realisasiTotal) TERVERIFIKASI BERFUNGSI (bukan tembus) — perbedaan DB server adalah penjelasnya
+
+## Laporan user
+"Guard RkasController::update() (commit 03996a9) masih tembus setelah restart server" — penurunan jumlah item "Perjalanan Dinas dalam Daerah-" seharusnya ditolak karena item ber-realisasi, tapi seolah lolos.
+
+## Verifikasi langsung (bukan asumsi) — HASIL: guard bekerja, TIDAK tembus
+1. **HEAD server = benar**: `git log --oneline -1` di direktori repo yang dibaca kedua server → `5693f54` (lebih baru dari `03996a9`).
+2. **File yang benar-benar dibaca server**: kedua server php (`php.exe -S` port 8027 & 8031) jalan dari repo ini, dan `app\Http\Controllers\RkasController.php` memuat `realisasiTotal()` di baris 199. Tidak ada server dari `%LOCALAPPDATA%\SmartRKAS` (proses smartrkas tidak ada).
+3. **Reproduksi langsung (bukan browser)**:
+   - Programmatic (boot Laravel + `RkasController::update()` pada item realisasi Rp 420.000, turunkan 1.950.000 → 1.850.000): `ValidationException` → `{"jumlah":["Item sudah ber-realisasi (total Rp 420.000) ..."]}`, DB tidak berubah.
+   - HTTP live server 8027 (login nyata + PUT `/rkas/{id}`): `302` → `/rkas/{id}/edit` (bukan redirect sukses ke index), halaman edit render error merah, `jumlah` di DB tetap 1.950.000, tanpa baris AuditLog baru.
+4. **Urutan kode benar**: guard (baris 199–207) SEBELUM `$rkasItem->update($validated)` (baris 214).
+
+## Akar "terlihat tembus" (penjelasan, bukan bug)
+- Server **8031 memakai DB dev** (`database/database.sqlite`) di mana KEDUA item "Perjalanan Dinas dalam Daerah-" punya **`realisasiTotal() = 0`** → penurunan jumlah memang lulus secara logika. Server 8027 memakai salinan DB produksi (`test-revisi.sqlite`) yang item-nya ber-realisasi → ditolak.
+- **Pelajaran**: kalau uji manual memakai server yang menunjuk DB berbeda (dev vs salinan produksi), hasil uji akan beda. Pastikan dulu DB mana yang benar-benar dibaca server yang diuji (`DB_DATABASE` di env proses), bukan asumsi dari .env repo.
+- Guard `update()` memang hanya menolak bila `realisasiTotal() > 0 && jumlah baru < jumlah lama`; menaikkan jumlah atau item tanpa realisasi TIDAK ditolak (by design).
+
+## Artefak uji (temp, tidak ikut commit)
+- Probe: `%TEMP%\opencode\probe-guard-update.php`, `probe-item.php`, `probe-devdb.php`, `probe-verify.php`, `probe-setpw.php`; cookie jar `cookies-guard*.txt`; body `put-body.html`, `edit-after-put.html`.
+- Password user di DB salinan `test-revisi.sqlite` di-set sementara `probe-pass-2026` utk uji HTTP (DB salinan, bukan Roaming asli).
+
+## Test Status
+- Tidak ada perubahan kode pada sesi ini (murni verifikasi) → suite tetap `OK (412 tests, 1239 assertions)`, PHPStan level 6 `[OK] No errors`.

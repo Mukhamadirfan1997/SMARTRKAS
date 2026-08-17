@@ -254,11 +254,12 @@
                                 $realisasi = $item->transaksiBkus->sum('jumlah') + $item->notaBkuItems->sum('subtotal');
                                 $sisa = $rencana - $realisasi;
                                 $persen = $rencana > 0 ? ($realisasi / $rencana) * 100 : 0;
-                                $realisasiVolume = $item->transaksiBkus->sum('volume') + $item->notaBkuItems->sum('jumlah');
-                                $sisaVolume = $item->volume > 0 ? ($item->volume - $realisasiVolume) : null;
+                                $rencanaVolume = ($rencana > 0 && $item->tarif > 0) ? round($rencana / $item->tarif, 2) : null;
+                                $realisasiVolume = ($realisasi > 0 && $item->tarif > 0) ? round($realisasi / $item->tarif, 2) : 0;
+                                $sisaVolume = $rencanaVolume !== null ? $rencanaVolume - $realisasiVolume : null;
                                 $satuan = $item->satuan ?: 'item';
-                                $subRencana = ($item->volume > 0 && $item->tarif > 0)
-                                    ? number_format($item->volume, 0, ',', '.') . ' ' . $satuan . ' × Rp ' . number_format($item->tarif, 0, ',', '.')
+                                $subRencana = ($rencanaVolume !== null && $rencanaVolume > 0 && $item->tarif > 0)
+                                    ? number_format($rencanaVolume, 0, ',', '.') . ' ' . $satuan . ' × Rp ' . number_format($item->tarif, 0, ',', '.')
                                     : '';
                             @endphp
                             <tr class="{{ $isLengkap ? '' : 'bg-amber-50/50' }}">

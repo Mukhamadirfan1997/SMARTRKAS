@@ -549,7 +549,7 @@ class RkasControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Rp 100.000');
-        $response->assertSee('sisa 0 dus', false);
+        $response->assertSee('sisa 40 dus', false);
         $response->assertDontSee('sisa 10 dus');
     }
 
@@ -707,5 +707,131 @@ class RkasControllerTest extends TestCase
         $response->assertSee('Belanja Alat Tulis');
         $response->assertSee('Belanja Obat');
         $response->assertSee('66.7');
+    }
+
+    public function test_index_sisa_volume_tanpa_filter_bulan_tidak_negatif(): void
+    {
+        $item = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 1,
+            'uraian' => 'Nasi Dus & Lauk Pauk (biasa)-Hidangan rapat/tamu',
+            'volume' => 13,
+            'satuan' => 'dus',
+            'tarif' => 30000,
+            'jumlah' => 4290000,
+        ]);
+
+        foreach ([1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12] as $bln) {
+            RkasItemBulan::create([
+                'rkas_item_id' => $item->id,
+                'bulan' => $bln,
+                'rencana' => 390000,
+            ]);
+        }
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 390000,
+            'volume' => 13,
+            'satuan' => 'dus',
+            'no_bukti' => 'BPU101/20519260/01/2026',
+            'tanggal' => '2026-01-22',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 390000,
+            'volume' => 13,
+            'satuan' => 'dus',
+            'no_bukti' => 'BPU102/20519260/02/2026',
+            'tanggal' => '2026-02-13',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas');
+
+        $response->assertOk();
+        $response->assertSee('Rp 4.290.000');
+        $response->assertSee('Rp 780.000');
+        $response->assertSee('Rp 3.510.000');
+        $response->assertSee('117 dus', false);
+        $response->assertDontSee('-13 dus');
+        $response->assertSee('143 dus × Rp 30.000', false);
+    }
+
+    public function test_index_sisa_volume_dengan_filter_bulan_tetap_benar(): void
+    {
+        $item = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 1,
+            'uraian' => 'Nasi Dus & Lauk Pauk (biasa)-Hidangan rapat/tamu',
+            'volume' => 13,
+            'satuan' => 'dus',
+            'tarif' => 30000,
+            'jumlah' => 4290000,
+        ]);
+
+        RkasItemBulan::create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 390000,
+        ]);
+
+        RkasItemBulan::create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 2,
+            'rencana' => 390000,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 1,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 390000,
+            'volume' => 13,
+            'satuan' => 'dus',
+            'no_bukti' => 'BPU103/20519260/01/2026',
+            'tanggal' => '2026-01-22',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 390000,
+            'volume' => 13,
+            'satuan' => 'dus',
+            'no_bukti' => 'BPU104/20519260/02/2026',
+            'tanggal' => '2026-02-13',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas?bulan=1');
+
+        $response->assertOk();
+        $response->assertSee('Rp 390.000');
+        $response->assertSee('13 dus × Rp 30.000', false);
+        $response->assertSee('sisa 0 dus', false);
+        $response->assertDontSee('-13 dus');
     }
 }
