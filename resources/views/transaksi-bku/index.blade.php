@@ -256,6 +256,11 @@
                             </td>
                             <td class="text-center">
                                 <div class="flex items-center justify-center gap-1">
+                                    @if($transaksi->rkasItem && strtolower($transaksi->jenis) === 'pengeluaran' && empty($transaksi->nota_bku_id))
+                                        <button type="button" class="btn btn-info btn-sm" title="Simpan sebagai Template" onclick="showSaveTemplate('{{ $transaksi->id }}', '{{ addslashes($transaksi->no_bukti) }}')">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+                                        </button>
+                                    @endif
                                     @if($transaksi->masihOverBudget())
                                         <span class="btn btn-success btn-sm opacity-50 cursor-not-allowed" title="Kwitansi terkunci: lakukan pergeseran / Perubahan Anggaran (PA) dulu">
                                             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
@@ -323,6 +328,29 @@
     </form>
     </div>
 
+    <div id="modal-save-template" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-lg font-bold text-slate-800 mb-1">Simpan sebagai Template</h3>
+            <p class="text-sm text-slate-500 mb-4">Template ini akan menyimpan data item belanja untuk dipakai ulang.</p>
+            <form method="POST" action="{{ route('transaksi-template.store') }}">
+                @csrf
+                <input type="hidden" name="transaksi_bku_id" id="template-transaksi-id">
+                <div class="mb-4">
+                    <label for="template-nama" class="form-label">Nama Template</label>
+                    <input type="text" name="nama_template" id="template-nama" class="form-input" placeholder="Contoh: Belanja ATK Rutin Bulanan" required maxlength="255">
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>Ref: <span id="template-no-bukti" class="font-mono"></span></span>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeModalTemplate()">Batal</button>
+                    <button type="submit" class="btn-primary">Simpan Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         function toggleCheckAll(source) {
             document.querySelectorAll('.check-item').forEach(cb => cb.checked = source.checked);
@@ -357,6 +385,16 @@
             if (note === null) return;
             document.getElementById('hapus-semua-alasan').value = note;
             document.getElementById('form-hapus-semua').submit();
+        }
+        function showSaveTemplate(transaksiId, noBukti) {
+            document.getElementById('template-transaksi-id').value = transaksiId;
+            document.getElementById('template-no-bukti').textContent = noBukti;
+            document.getElementById('template-nama').value = '';
+            document.getElementById('modal-save-template').classList.remove('hidden');
+            document.getElementById('template-nama').focus();
+        }
+        function closeModalTemplate() {
+            document.getElementById('modal-save-template').classList.add('hidden');
         }
     </script>
 </x-app-layout>

@@ -13,6 +13,7 @@ use App\Models\RkasItem;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
+use App\Models\TransaksiTemplate;
 use App\Support\NomorDokumen;
 use App\Support\NumberParser;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -146,6 +147,7 @@ class TransaksiBkuController extends Controller
 
         $kegiatans = MasterProgram::orderBy('kode')->get();
         $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
+        $templates = TransaksiTemplate::orderBy('nama_template')->get();
 
         $pickerInitial = null;
         $oldItemId = old('rkas_item_id');
@@ -168,7 +170,7 @@ class TransaksiBkuController extends Controller
 
         return view('transaksi-bku.create', compact(
             'npsn', 'nextSeqPenerimaan', 'nextSeqPengeluaran', 'pickerInitial',
-            'kegiatans', 'kodeRekenings'
+            'kegiatans', 'kodeRekenings', 'templates'
         ));
     }
 

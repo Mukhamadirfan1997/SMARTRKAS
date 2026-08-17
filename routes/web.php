@@ -21,6 +21,7 @@ use App\Http\Controllers\SumberDanaController;
 use App\Http\Controllers\TahunAnggaranController;
 use App\Http\Controllers\TelegramPengaturanController;
 use App\Http\Controllers\TransaksiBkuController;
+use App\Http\Controllers\TransaksiTemplateController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -83,6 +84,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('transaksi-bku/hapus-semua', [TransaksiBkuController::class, 'destroyAll'])->name('transaksi-bku.hapus-semua');
     Route::get('transaksi-bku/{transaksiBku}/cetak-kwitansi', [TransaksiBkuController::class, 'cetakKwitansi'])->name('transaksi-bku.cetak-kwitansi');
     Route::post('transaksi-bku/cetak-kwitansi-batch', [TransaksiBkuController::class, 'cetakKwitansiBatch'])->name('transaksi-bku.cetak-kwitansi-batch');
+
+    Route::get('transaksi-template', [TransaksiTemplateController::class, 'index'])->name('transaksi-template.index');
+    Route::post('transaksi-template', [TransaksiTemplateController::class, 'store'])->name('transaksi-template.store');
+    Route::delete('transaksi-template/{transaksiTemplate}', [TransaksiTemplateController::class, 'destroy'])->name('transaksi-template.destroy');
+    Route::get('transaksi-template/{transaksiTemplate}/apply', [TransaksiTemplateController::class, 'apply'])->name('transaksi-template.apply');
 
     Route::get('nota-bku', [NotaBkuController::class, 'index'])->name('nota-bku.index');
     Route::get('nota-bku/items', [NotaBkuController::class, 'items'])->name('nota-bku.items');

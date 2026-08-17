@@ -29,6 +29,23 @@
                 <form method="POST" action="{{ route('transaksi-bku.store') }}" id="form-bku" novalidate>
                     @csrf
 
+                    @if($templates->isNotEmpty())
+                    <div id="template-banner" class="mb-5 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-3">
+                        <svg class="w-5 h-5 text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+                        <div class="flex-1">
+                            <span class="text-sm font-medium text-indigo-800">Pakai Template?</span>
+                            <span class="text-xs text-indigo-600 ml-1">Isi form otomatis dari template yang sudah disimpan</span>
+                        </div>
+                        <select id="template-select" class="form-select text-sm py-1.5" onchange="applyTemplate(this.value)">
+                            <option value="">— Pilih Template —</option>
+                            @foreach($templates as $tpl)
+                                <option value="{{ $tpl->id }}" data-apply-url="{{ route('transaksi-template.apply', $tpl) }}">{{ $tpl->nama_template }}</option>
+                            @endforeach
+                        </select>
+                        <a href="{{ route('transaksi-template.index') }}" class="text-xs text-indigo-500 underline whitespace-nowrap" target="_blank">Kelola</a>
+                    </div>
+                    @endif
+
                     {{-- Section 1: Info Dasar --}}
                     <div class="mb-2">
                         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Informasi Transaksi</h3>
@@ -366,6 +383,12 @@
                     });
                 }
                 updateTotal();
+                if (window._templateAutoCheck && itemList.querySelector('.item-row[data-id="' + window._templateAutoCheck + '"]')) {
+                    var row = itemList.querySelector('.item-row[data-id="' + window._templateAutoCheck + '"]');
+                    row.querySelector('.item-check').checked = true;
+                    row.querySelector('.item-check').dispatchEvent(new Event('change'));
+                    window._templateAutoCheck = null;
+                }
             }
 
             function hiddenWrap(id) {
@@ -596,6 +619,19 @@
             });
             document.getElementById('btn-tambah-item').addEventListener('click', addManualRow);
 
+            const bulanNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+            function autoLengkapiBulanUraian() {
+                var uraianEl = document.getElementById('uraian');
+                var tanggalEl = document.getElementById('tanggal');
+                if (!uraianEl || !tanggalEl || !tanggalEl.value) return;
+                var namaBulan = bulanNames[new Date(tanggalEl.value + 'T00:00:00').getMonth()];
+                if (!namaBulan) return;
+                var currentVal = uraianEl.value.trim();
+                if (currentVal.toLowerCase().indexOf(namaBulan.toLowerCase()) !== -1) return;
+                uraianEl.value = currentVal ? (currentVal + ' Bulan ' + namaBulan) : ('Bulan ' + namaBulan);
+            }
+
             formEl.addEventListener('submit', function(event) {
                 if (jenisSelect.value === 'pengeluaran') {
                     if (!kegiatanSelect.value || !kodeRekeningSelect.value) {
@@ -618,6 +654,7 @@
                     alert('Isi jumlah nominal (Rp) terlebih dahulu.');
                     return;
                 }
+                autoLengkapiBulanUraian();
                 if (jumlahInput.value) {
                     jumlahInput.value = parseRupiah(jumlahInput.value);
                 }
@@ -632,6 +669,76 @@
             }
             recalcOverrideAndBukti();
             initializing = false;
+
+            var tplSelect = document.getElementById('template-select');
+            var urlTplId = new URLSearchParams(window.location.search).get('template_id');
+            if (tplSelect && urlTplId) {
+                tplSelect.value = urlTplId;
+                applyTemplate(urlTplId);
+                window.history.replaceState({}, '', window.location.pathname);
+            } else if (tplSelect && tplSelect.value) {
+                applyTemplate(tplSelect.value);
+            }
         });
+
+        function applyTemplate(templateId) {
+            if (!templateId) return;
+            var opt = document.querySelector('#template-select option[value="' + templateId + '"]');
+            if (!opt) return;
+            var applyUrl = opt.getAttribute('data-apply-url');
+            if (!applyUrl) return;
+
+            fetch(applyUrl)
+                .then(function(r) { return r.json(); })
+                .then(function(tpl) {
+                    var kegSearch = document.getElementById('kegiatan_search');
+                    var kegHidden = document.getElementById('kegiatan_id');
+                    var rekSearch = document.getElementById('kode_rekening_search');
+                    var rekHidden = document.getElementById('kode_rekening_id');
+
+                    if (tpl.kegiatan_id && kegHidden) {
+                        kegHidden.value = tpl.kegiatan_id;
+                        if (kegSearch) kegSearch.value = tpl.kegiatan_nama;
+                        document.dispatchEvent(new CustomEvent('entitypicker:change', { detail: { id: 'kegiatan_id', value: tpl.kegiatan_id } }));
+                    }
+                    if (tpl.kode_rekening_id && rekHidden) {
+                        rekHidden.value = tpl.kode_rekening_id;
+                        if (rekSearch) rekSearch.value = tpl.kode_rekening_nama;
+                        document.dispatchEvent(new CustomEvent('entitypicker:change', { detail: { id: 'kode_rekening_id', value: tpl.kode_rekening_id } }));
+                    }
+
+                    if (tpl.item_ditemukan && tpl.item) {
+                        window._templateAutoCheck = tpl.item.id;
+                        setTimeout(function() {
+                            window._templateAutoCheck = null;
+                        }, 3000);
+                    }
+
+                    var tokoEl = document.getElementById('toko_penerima');
+                    if (tokoEl && tpl.toko_penerima) tokoEl.value = tpl.toko_penerima;
+
+                    var metodeEl = document.getElementById('metode_pengadaan');
+                    if (metodeEl && tpl.metode_pengadaan) {
+                        metodeEl.value = tpl.metode_pengadaan;
+                        metodeEl.dispatchEvent(new Event('change'));
+                    }
+
+                    var uraianEl = document.getElementById('uraian');
+                    if (uraianEl && tpl.uraian_dasar) {
+                        uraianEl.value = tpl.uraian_dasar;
+                    }
+
+                    document.getElementById('template-select').value = '';
+
+                    var msg = 'Template "' + tpl.nama_template + '" diterapkan.';
+                    if (!tpl.item_ditemukan) {
+                        msg += ' Item RKAS tidak ditemukan di tahun aktif — silakan pilih manual.';
+                    }
+                    alert(msg);
+                })
+                .catch(function() {
+                    alert('Gagal memuat template. Coba lagi.');
+                });
+        }
     </script>
 </x-app-layout>

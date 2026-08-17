@@ -555,6 +555,19 @@
                 });
             }
 
+            const bulanNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+            function autoLengkapiBulanUraian() {
+                var uraianEl = document.getElementById('uraian');
+                var tanggalEl = document.getElementById('tanggal');
+                if (!uraianEl || !tanggalEl || !tanggalEl.value) return;
+                var namaBulan = bulanNames[new Date(tanggalEl.value + 'T00:00:00').getMonth()];
+                if (!namaBulan) return;
+                var currentVal = uraianEl.value.trim();
+                if (currentVal.toLowerCase().indexOf(namaBulan.toLowerCase()) !== -1) return;
+                uraianEl.value = currentVal ? (currentVal + ' Bulan ' + namaBulan) : ('Bulan ' + namaBulan);
+            }
+
             formEl.addEventListener('submit', function(event) {
                 if (jenisSelect.value === 'pengeluaran') {
                     if (!isNota && selectedCount() === 0) {
@@ -567,6 +580,7 @@
                     alert('Isi jumlah nominal (Rp) terlebih dahulu.');
                     return;
                 }
+                autoLengkapiBulanUraian();
                 if (jumlahInput.value) {
                     jumlahInput.value = parseRupiah(jumlahInput.value);
                 }
