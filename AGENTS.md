@@ -2392,3 +2392,28 @@ Tambahkan fitur "Template Transaksi Berulang": simpan pola transaksi BKU sebagai
 
 ## Test Status
 - PHPStan level 6: `[OK] No errors`. PHPUnit `OK (414 tests, 1251 assertions)`. Commit `43001ab`.
+
+---
+
+# Sesi 17 Agu 2026 — Fix Bug: Dropdown Searchable Kegiatan/Rekening Tidak Muncul di Dashboard & BKU
+
+## Goal
+Perbaiki bug yang dilaporkan user: dropdown searchable untuk Program/Kode Rekening (Dashboard) dan Kegiatan/Rekening (BKU create/edit) tidak menampilkan hasil saat diketik.
+
+## Root Cause
+`.card` CSS class (`resources/css/app.css:275`) punya `overflow-hidden`. Dropdown hasil di `_search-picker.blade.php` memakai `position: absolute` di dalam `<div class="relative">`. Karena picker berada di dalam `.card` (Dashboard: `<div class="card mb-6">` wrapper form filter; BKU create: `<div class="card">` wrapper form), overflow-hidden memotong dropdown → tidak pernah terlihat.
+
+## Fix
+Hapus `overflow-hidden` dari `.card`. `border-radius: 1rem` (dari `rounded-2xl`) sudah menangani tampilan visual sudut membulat berkat background + border card sendiri. `overflow-hidden` tidak diperlukan untuk konten yang sudah punya padding (`card-body` = `p-6`).
+
+## Changes
+- `resources/css/app.css:275` — `.card` dari `@apply ... overflow-hidden` → hapus `overflow-hidden`.
+- `AGENTS.md` — tambah sesi ini.
+
+## Verifikasi
+- `php artisan view:cache` OK.
+- `npm run build` OK (CSS di-recompile: `app-CQef_afV.css`).
+- PHPUnit `OK (414 tests, 1251 assertions)` — tidak ada regression.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`. PHPUnit `OK (414 tests, 1251 assertions)`.
