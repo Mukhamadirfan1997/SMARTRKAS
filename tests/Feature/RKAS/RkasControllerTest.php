@@ -834,4 +834,69 @@ class RkasControllerTest extends TestCase
         $response->assertSee('sisa 0 dus', false);
         $response->assertDontSee('-13 dus');
     }
+
+    /**
+     * Skenario user: item "Token Listrik/PLN", Jan rencana 103500 realisasi 0,
+     * Feb rencana 103500 realisasi 203500. Filter bulan Feb:
+     * - Per-bulan: realisasi 203500 > rencana 103500 → 197%
+     * - Kumulatif: rencana 207000 − realisasi 203500 = 3500 → 98%
+     * Badge harus "Normal (98%)", BUKAN "Over Budget (197%)".
+     */
+    public function test_index_sisa_dan_badge_pakai_kumulatif_bukan_per_bulan(): void
+    {
+        $item = RkasItem::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'program_id' => $this->program->id,
+            'kode_rekening_id' => $this->rekening->id,
+            'no_urut' => 1,
+            'uraian' => 'Token Listrik/PLN',
+            'tarif' => 10000,
+            'satuan' => 'kwh',
+        ]);
+
+        RkasItemBulan::create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 103500,
+        ]);
+
+        RkasItemBulan::create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 2,
+            'rencana' => 103500,
+        ]);
+
+        // Bulan 1: tidak ada realisasi
+        // Bulan 2: realisasi 203500 (melebihi rencana Feb 103500)
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahun->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumber->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 203500,
+            'no_bukti' => 'BPU200/20519260/02/2026',
+            'tanggal' => '2026-02-10',
+            'metode_pengadaan' => 'non_siplah',
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/rkas?bulan=2');
+        $response->assertOk();
+
+        // Rencana per-bulan Feb tetap tampil
+        $response->assertSee('Rp 103.500');
+        // Realisasi per-bulan Feb tetap tampil
+        $response->assertSee('Rp 203.500');
+
+        // Sisa kumulatif: Rp 3.500 (bukan −Rp 100.000 per-bulan)
+        // Muncul di 2 tempat: badge per-item DAN summary card "Sisa Anggaran"
+        $response->assertSee('Rp 3.500');
+        // Ringkasan Capaian summary card juga kumulatif: tidak ada "Rp -100.000"
+        $response->assertDontSee('Rp -100.000');
+
+        // Badge kumulatif: Hampir Habis 98% (≥90%), BUKAN Over Budget 197%
+        $response->assertSee('Hampir Habis (98%)');
+        $response->assertDontSee('Over Budget');
+    }
 }

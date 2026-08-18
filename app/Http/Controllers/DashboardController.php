@@ -79,11 +79,11 @@ class DashboardController extends Controller
             if ($filteredIds->isNotEmpty()) {
                 if ($bulan) {
                     $totalRencana = (float) RkasItemBulan::whereIn('rkas_item_id', $filteredIds)
-                        ->where('bulan', $bulan)
+                        ->where('bulan', '<=', $bulan)
                         ->sum('rencana');
                     $totalRealisasi = (float) RealisasiQuery::base()
                         ->whereIn('rb.rkas_item_id', $filteredIds)
-                        ->where('rb.bulan', $bulan)
+                        ->where('rb.bulan', '<=', $bulan)
                         ->sum('rb.jumlah');
                 } else {
                     $totalRencana = (float) RkasItem::whereIn('id', $filteredIds)->sum('jumlah');
@@ -230,12 +230,24 @@ class DashboardController extends Controller
                     $item->dynamic_rencana = (float) $item->jumlah;
                 }
 
-                $item->dynamic_sisa = $item->dynamic_rencana - $item->dynamic_realisasi;
-                $item->persentase = $item->dynamic_rencana > 0 ? ($item->dynamic_realisasi / $item->dynamic_rencana) * 100 : 0;
+                // Sisa & persentase selalu kumulatif (konsisten dgn guard BKU)
+                if ($bulan) {
+                    $realisasiKumulatif = $item->realisasiKumulatifSd($bulan);
+                    $rencanaKumulatif = (float) RkasItemBulan::query()
+                        ->where('rkas_item_id', $item->id)
+                        ->where('bulan', '<=', $bulan)
+                        ->sum('rencana');
+                    $item->dynamic_sisa = $rencanaKumulatif - $realisasiKumulatif;
+                    $item->persentase = $rencanaKumulatif > 0 ? ($realisasiKumulatif / $rencanaKumulatif) * 100 : 0;
+                } else {
+                    $item->dynamic_sisa = $item->dynamic_rencana - $item->dynamic_realisasi;
+                    $item->persentase = $item->dynamic_rencana > 0 ? ($item->dynamic_realisasi / $item->dynamic_rencana) * 100 : 0;
+                }
 
+                // Volume rencana & realisasi tetap per-bulan (informasi), volume sisa kumulatif
                 $item->dynamic_rencana_volume = $item->tarif > 0 ? round($item->dynamic_rencana / $item->tarif, 2) : 0;
                 $item->dynamic_realisasi_volume = $item->tarif > 0 ? round($item->dynamic_realisasi / $item->tarif, 2) : 0;
-                $item->dynamic_sisa_volume = $item->dynamic_rencana_volume - $item->dynamic_realisasi_volume;
+                $item->dynamic_sisa_volume = $item->tarif > 0 ? round($item->dynamic_sisa / $item->tarif, 2) : 0;
             }
         }
 

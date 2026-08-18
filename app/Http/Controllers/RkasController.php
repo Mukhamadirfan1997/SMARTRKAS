@@ -84,11 +84,11 @@ class RkasController extends Controller
 
             if ($bulan) {
                 $totalJumlah = (float) RkasItemBulan::whereIn('rkas_item_id', $filteredIds())
-                    ->where('bulan', $bulan)
+                    ->where('bulan', '<=', $bulan)
                     ->sum('rencana');
                 $totalRealisasi = (float) RealisasiQuery::base()
                     ->whereIn('rb.rkas_item_id', $filteredIds())
-                    ->where('rb.bulan', $bulan)
+                    ->where('rb.bulan', '<=', $bulan)
                     ->sum('rb.jumlah');
             } else {
                 $totalJumlah = (float) RkasItem::whereIn('id', $filteredIds())->sum('jumlah');

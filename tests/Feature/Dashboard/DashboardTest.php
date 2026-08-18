@@ -246,6 +246,54 @@ class DashboardTest extends TestCase
             ->assertSee('Over Budget (150%)');
     }
 
+    /**
+     * Item dengan 2 bulan: Jan rencana 103500 realisasi 0, Feb rencana 103500 realisasi 203500.
+     * Per-bulan Feb: realisasi 203500 > rencana 103500 (197%).
+     * Kumulatif: rencana 207000 - realisasi 203500 = sisa 3500 (98%).
+     * Badge harus "Normal", BUKAN "Over Budget" — sama dgn guard BKU yang lolos.
+     */
+    public function test_dashboard_sisa_dan_badge_pakai_kumulatif_bukan_per_bulan(): void
+    {
+        $item = $this->makeItem(['tarif' => 10000, 'satuan' => 'kwh']);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 1,
+            'rencana' => 103500,
+        ]);
+
+        RkasItemBulan::factory()->create([
+            'rkas_item_id' => $item->id,
+            'bulan' => 2,
+            'rencana' => 103500,
+        ]);
+
+        // Bulan 1: tidak ada realisasi
+        // Bulan 2: realisasi 203500 (lebih besar drpd rencana Feb 103500)
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'rkas_item_id' => $item->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 203500,
+        ]);
+
+        $response = $this->actingAs($this->user)->get('/dashboard?bulan=2');
+        $response->assertOk();
+
+        // Realisasi per-bulan Feb tetap tampil: Rp 203.500
+        $response->assertSee('Rp 203.500');
+
+        // Sisa kumulatif: Rp 3.500 (bukan −Rp 100.000 per-bulan)
+        $response->assertSee('Rp 3.500');
+        $response->assertDontSee('Rp -100.000');
+
+        // Badge kumulatif: Hampir Habis 98%, BUKAN Over Budget 197%
+        $response->assertSee('Hampir Habis (98%)');
+        $response->assertDontSee('Over Budget');
+    }
+
     // =================== RECENT TRANSACTIONS (incl. NOTA) ===================
 
     public function test_dashboard_transaksi_terkini_menampilkan_transaksi_nota(): void

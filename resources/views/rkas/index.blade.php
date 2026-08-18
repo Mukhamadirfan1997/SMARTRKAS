@@ -252,11 +252,24 @@
                                 $rencanaBulan = $bulan ? (float) ($item->bulanRencana->first()?->rencana ?? 0) : null;
                                 $rencana = $rencanaBulan ?? (float) $item->jumlah;
                                 $realisasi = $item->transaksiBkus->sum('jumlah') + $item->notaBkuItems->sum('subtotal');
-                                $sisa = $rencana - $realisasi;
-                                $persen = $rencana > 0 ? ($realisasi / $rencana) * 100 : 0;
+                                // Sisa & persentase kumulatif (konsisten dgn guard BKU)
+                                if ($bulan) {
+                                    $realisasiKumulatif = $item->realisasiKumulatifSd($bulan);
+                                    $rencanaKumulatif = (float) \App\Models\RkasItemBulan::query()
+                                        ->where('rkas_item_id', $item->id)
+                                        ->where('bulan', '<=', $bulan)
+                                        ->sum('rencana');
+                                    $sisa = $rencanaKumulatif - $realisasiKumulatif;
+                                    $persen = $rencanaKumulatif > 0 ? ($realisasiKumulatif / $rencanaKumulatif) * 100 : 0;
+                                } else {
+                                    $sisa = $rencana - $realisasi;
+                                    $persen = $rencana > 0 ? ($realisasi / $rencana) * 100 : 0;
+                                }
+                                // Volume rencana & realisasi tetap per-bulan (informasi)
                                 $rencanaVolume = ($rencana > 0 && $item->tarif > 0) ? round($rencana / $item->tarif, 2) : null;
                                 $realisasiVolume = ($realisasi > 0 && $item->tarif > 0) ? round($realisasi / $item->tarif, 2) : 0;
-                                $sisaVolume = $rencanaVolume !== null ? $rencanaVolume - $realisasiVolume : null;
+                                // Volume sisa kumulatif (konsisten dgn sisa nominal)
+                                $sisaVolume = ($rencanaVolume !== null && $item->tarif > 0) ? round($sisa / $item->tarif, 2) : null;
                                 $satuan = $item->satuan ?: 'item';
                                 $subRencana = ($rencanaVolume !== null && $rencanaVolume > 0 && $item->tarif > 0)
                                     ? number_format($rencanaVolume, 0, ',', '.') . ' ' . $satuan . ' × Rp ' . number_format($item->tarif, 0, ',', '.')
