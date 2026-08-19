@@ -2457,3 +2457,62 @@ statusId: 'kegiatan_status',      // ← benar
 
 ## Test Status
 - PHPStan level 6: `[OK] No errors`. PHPUnit `OK (414 tests, 1251 assertions)`. Tidak ada perubahan logika PHP/app — hanya view + versi.
+
+---
+
+# Sesi 18 Agu 2026 — Fix Ringkasan Capaian & Badge Konsisten Kumulatif (v0.6.3)
+
+## Goal
+Perbaiki badge "Sisa" & "Status" di Dashboard dan Data RKAS supaya pakai **kumulatif** (rencana s.d. bulan filter − realisasi s.d. bulan filter), konsisten dgn guard BKU. Serta summary card "Ringkasan Capaian" juga kumulatif.
+
+## Root Cause
+Ketika `$bulan` filter aktif, controller menghitung rencana & realisasi hanya dari **satu bulan itu saja** — badge per-item (DynamicSisa/Persentase), summary card (Total Rencana/Realisasi/Sisa), dan guard BKU (`sisaKumulatifSd`) pakai angka berbeda → kontradiksi.
+
+## Changes
+- `app/Http/Controllers/DashboardController.php:80-87` — `totalRencana`/`totalRealisasi` summary card → `where('bulan', '<=', $bulan)` (kumulatif).
+- `app/Http/Controllers/RkasController.php:85-92` — `totalJumlah`/`totalRealisasi` summary card → `where('bulan', '<=', $bulan)` (kumulatif).
+- `tests/Feature/RKAS/RkasControllerTest.php` — `test_index_sisa_dan_badge_pakai_kumulatif_bukan_per_bulan`: badge "Hampir Habis (98%)" (bukan "Normal"); assertDontSee('Rp -100.000').
+
+## Build & Reinstall v0.6.3
+- Bump 0.6.2 → **0.6.3** di 5 file (`config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` blok `name="smartrkas"` saja).
+- Build: NSIS `SmartRKAS_0.6.3_x64-setup.exe` (61.3MB) + MSI `SmartRKAS_0.6.3_x64_en-US.msi` (93.9MB).
+- Reinstall: uninstall v0.6.1 (`uninstall.exe /S` exit 0) → force-remove `C:\Users\yudhi\AppData\Local\SmartRKAS` → install v0.6.3 `/S` exit 0 → exe ProductVersion **0.6.3**, `php\php.exe` + `php\extras\ssl\cacert.pem` terbundle.
+- App jalan → server `php -S 127.0.0.1:63200` (semua `-d` TLS + opcache off terpasang; router TANPA prefix `\\?\`) → `/login` **200** (len 11272).
+- Kill app → 0 orphan processes (job object bekerja).
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.3 — 2 asset state `uploaded` (NSIS 61.3MB + MSI 93.9MB), bukan draft. Notes: fix badge kumulatif + ringkasan capaian.
+
+## Test Status
+- PHPUnit `OK (416 tests, 1264 assertions)`, PHPStan level 6 `[OK] No errors`.
+- Commit `202299c` → push `master`.
+- Bump 0.6.2 → **0.6.3** (5 file). Build NSIS + MSI sukses.
+
+---
+
+# STATUS AKHIR — Sesi 18 Agu 2026 (tutup sesi)
+
+## Versi Terakhir
+- **v0.6.3** (commit `202299c`, push `master`, rilis GitHub).
+- Rilis GitHub: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.3 — 2 asset (NSIS 61.3MB + MSI 93.9MB).
+
+## Kondisi Repo
+- Working tree bersih (hanya AGENTS.md yang di-update sesi ini, belum di-commit).
+- `origin/master` = `202299c` (sama dgn HEAD, sudah push).
+- **Semua fitur sudah di-build & dirilis** — tidak ada commit lokal yang tertinggal.
+- Tidak ada proses build/server yang berjalan.
+
+## Test Suite
+- PHPUnit `OK (416 tests, 1264 assertions)`.
+- PHPStan level 6 `[OK] No errors`.
+- `php artisan view:cache` OK.
+- `npm run build` OK.
+
+## Fitur yang Sudah Rilis (v0.6.0 s.d. v0.6.3)
+- Import Revisi/PAK (terima hasil pergeseran dari ARKAS via import).
+- Template Transaksi (simpan & pakai ulang pola BKU).
+- Guard realisasi lintas-bulan (item ber-realisasi tidak bisa diturunkan).
+- Dropdown searchable Program/Rekening (picker compact di filter RKAS).
+- Badge kumulatif s.d. bulan filter (konsisten dgn guard BKU).
+- Ringkasan Capaian & Realisasi per Jenis Belanja di Data RKAS.
+- Fix volume sisa item dari nota multi-item.
+- Fix JS syntax error di searchable picker.
+- Sidebar group Pengaturan dropdown.
