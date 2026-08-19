@@ -2488,15 +2488,38 @@ Ketika `$bulan` filter aktif, controller menghitung rencana & realisasi hanya da
 
 ---
 
-# STATUS AKHIR — Sesi 18 Agu 2026 (tutup sesi)
+# Sesi 19 Agu 2026 — Notifikasi Telegram Otomatis + UX Fix Template + Release v0.6.4
+
+## Goal
+Tambahkan notifikasi Telegram otomatis (kwitansi reminder + realisasi warning), perbaiki UX template BKU, dan dokumentasi di halaman Telegram & Tentang. Rilis ke GitHub.
+
+## Summary
+- 2 command Artisan baru: `telegram:kwitansi-reminder` (Senin 08:00, transaksi tanpa kwitansi) + `telegram:realisasi-warning` (tgl 25/bulan, threshold 50%).
+- UX fix: info "Item yang tersimpan" + warning modal "Simpan Template" di BKU index.
+- Dokumentasi: card "Notifikasi Otomatis" di `telegram.blade.php`, poin "Notifikasi Telegram" di `tentang.blade.php`.
+- Full suite `OK (416 tests, 1264 assertions)`, PHPStan level 6 clean, `view:cache` OK.
+- Build: NSIS 58.5MB + MSI 89.6MB. Reinstall v0.6.4 terverifikasi: exe 0.6.4, php+cacert bundled, `/login` 200, error log tidak bertambah, 0 orphan.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.4
+
+## Changes
+- `app/Console/Commands/TelegramKwitansiReminder.php` (BARU) — `telegram:kwitansi-reminder`, hitung `TransaksiBku` tahun aktif tanpa kwitansi, kirim ke user dgn `hasTelegramDelivery()`.
+- `app/Console/Commands/TelegramRealisasiWarning.php` (BARU) — `telegram:realisasi-warning {--threshold=50} {--month=10}`, cek realisasi via `RealisasiQuery::base()`, kirim peringatan jika di bawah threshold menjelang akhir tahun.
+- `routes/console.php` — 2 jadwal baru: kwitansi-reminder `cron('0 8 * * 1')`, realisasi-warning `cron('0 9 25 * *')`.
+- `resources/views/pengaturan/telegram.blade.php` — alert info di-update (sebutkan notifikasi otomatis); card baru "Notifikasi Otomatis" (2 panel grid: Pengingat Cetak Kwitansi + Peringatan Realisasi Rendah) + warning "Start bot".
+- `resources/views/pengaturan/tentang.blade.php` — poin 6 (Notifikasi Telegram) ditambah di "Petunjuk Penggunaan Singkat".
+- `resources/views/transaksi-bku/index.blade.php` — UX fix modal "Simpan Template": tambah info "Item yang tersimpan" (no_bukti, uraian item, kegiatan) + warning "Pastikan data sudah benar".
+
+---
+
+# STATUS AKHIR — Sesi 19 Agu 2026 (v0.6.4)
 
 ## Versi Terakhir
-- **v0.6.3** (commit `202299c`, push `master`, rilis GitHub).
-- Rilis GitHub: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.3 — 2 asset (NSIS 61.3MB + MSI 93.9MB).
+- **v0.6.4** (commit `841309d`, push `master`, rilis GitHub).
+- Rilis GitHub: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.4 — 2 asset (NSIS 58.5MB + MSI 89.6MB).
 
 ## Kondisi Repo
-- Working tree bersih (hanya AGENTS.md yang di-update sesi ini, belum di-commit).
-- `origin/master` = `202299c` (sama dgn HEAD, sudah push).
+- Working tree bersih.
+- `origin/master` = `841309d` (sama dgn HEAD, sudah push).
 - **Semua fitur sudah di-build & dirilis** — tidak ada commit lokal yang tertinggal.
 - Tidak ada proses build/server yang berjalan.
 
@@ -2506,7 +2529,7 @@ Ketika `$bulan` filter aktif, controller menghitung rencana & realisasi hanya da
 - `php artisan view:cache` OK.
 - `npm run build` OK.
 
-## Fitur yang Sudah Rilis (v0.6.0 s.d. v0.6.3)
+## Fitur yang Sudah Rilis (v0.6.0 s.d. v0.6.4)
 - Import Revisi/PAK (terima hasil pergeseran dari ARKAS via import).
 - Template Transaksi (simpan & pakai ulang pola BKU).
 - Guard realisasi lintas-bulan (item ber-realisasi tidak bisa diturunkan).
@@ -2516,3 +2539,4 @@ Ketika `$bulan` filter aktif, controller menghitung rencana & realisasi hanya da
 - Fix volume sisa item dari nota multi-item.
 - Fix JS syntax error di searchable picker.
 - Sidebar group Pengaturan dropdown.
+- **Notifikasi Telegram Otomatis** (kwitansi reminder + realisasi warning).
