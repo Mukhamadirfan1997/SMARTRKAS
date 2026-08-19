@@ -19,10 +19,9 @@ final class NomorDokumen
      * No bukti transaksi BKU (BBU penerimaan / BPU pengeluaran),
      * format: {PREFIX}{seq:3} / {NPSN} / {MM} / {YYYY}.
      *
-     * Nomor berjalan PER BULAN: meneruskan dari nomor tertinggi yang pernah
-     * dipakai di bulan tsb (aktif + soft-deleted). Nomor teratas yang dihapus
-     * (soft-delete) boleh dipakai ulang; nomor yang tidak pernah ada di tengah
-     * TIDAK diisi — mencegah "BPU001 muncul lagi" setelah BPU011-017.
+     * Nomor berjalan PER TAHUN: meneruskan dari nomor tertinggi yang pernah
+     * dipakai di tahun tsb (aktif + soft-deleted, semua bulan). Nomor tidak
+     * pernah di-reuse — gap tidak diisi.
      */
     public static function noBukti(string $jenis, string $tanggal): string
     {
@@ -31,7 +30,7 @@ final class NomorDokumen
         $year = Carbon::parse($tanggal)->format('Y');
         $npsn = PengaturanSekolah::get()->npsn ?? '00000000';
 
-        $seq = self::nextSeq($prefix, $npsn, $month, $year);
+        $seq = self::nextSeq($prefix, $npsn, $year);
 
         do {
             $candidate = $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT)
@@ -46,35 +45,30 @@ final class NomorDokumen
      * Nomor urut berikutnya utk tiap bulan 1..12 (tahun berjalan), dipakai view
      * create sbg preview field no_bukti agar konsisten dengan yang disimpan server.
      *
-     * @return array<int, int> bulan => seq berikutnya (1..12)
+     * @return array<int, int> bulan => seq berikutnya (semua bulan = value sama)
      */
     public static function nextSeqPerBulan(string $jenis): array
     {
         $prefix = strtolower($jenis) === 'penerimaan' ? 'BBU' : 'BPU';
         $npsn = PengaturanSekolah::get()->npsn ?? '00000000';
         $year = (string) Carbon::now()->year;
-        $result = [];
+        $next = self::nextSeq($prefix, $npsn, $year);
 
+        $result = [];
         for ($month = 1; $month <= 12; $month++) {
-            $result[$month] = self::nextSeq(
-                $prefix,
-                $npsn,
-                str_pad((string) $month, 2, '0', STR_PAD_LEFT),
-                $year
-            );
+            $result[$month] = $next;
         }
 
         return $result;
     }
 
     /**
-     * Nomor urut terkecil "berikutnya" utk kombinasi (prefix, npsn, bulan, tahun).
-     * Jika nomor teratas masih aktif -> max + 1; jika nomor teratas soft-deleted
-     * -> reuse nomor tersebut. Gap nomor yang tidak pernah ada tidak pernah diisi.
+     * Nomor urut berikutnya utk kombinasi (prefix, npsn, tahun) — semua bulan.
+     * Selalu return max + 1 (tidak reuse karena nomor sudah mencakup bulan).
      */
-    private static function nextSeq(string $prefix, string $npsn, string $month, string $year): int
+    private static function nextSeq(string $prefix, string $npsn, string $year): int
     {
-        $pattern = $prefix . '%/' . $npsn . '/' . $month . '/' . $year;
+        $pattern = $prefix . '%/' . $npsn . '/%/' . $year;
 
         /** @var Collection<int, string> $noBuktis */
         $noBuktis = TransaksiBku::withTrashed()
@@ -85,14 +79,7 @@ final class NomorDokumen
             ->map(static fn (string $b): int => (int) substr($b, 3, 3))
             ->max();
 
-        if ($maxAll === null) {
-            return 1;
-        }
-
-        $maxStr = $prefix . str_pad((string) $maxAll, 3, '0', STR_PAD_LEFT)
-            . '/' . $npsn . '/' . $month . '/' . $year;
-
-        return TransaksiBku::where('no_bukti', $maxStr)->exists() ? $maxAll + 1 : $maxAll;
+        return $maxAll === null ? 1 : $maxAll + 1;
     }
 
     /**
