@@ -18,3 +18,5 @@ Schedule::call(function () {
         ->delete();
 })->weekly()->sundays()->at('03:00');
 Schedule::command('kwitansi:clean 2')->monthly()->at('04:00');
+Schedule::command('telegram:kwitansi-reminder')->weekly()->mondays()->at('08:00');
+Schedule::command('telegram:realisasi-warning')->monthlyOn(25, '09:00');

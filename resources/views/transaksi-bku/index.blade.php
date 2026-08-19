@@ -257,7 +257,7 @@
                             <td class="text-center">
                                 <div class="flex items-center justify-center gap-1">
                                     @if($transaksi->rkasItem && strtolower($transaksi->jenis) === 'pengeluaran' && empty($transaksi->nota_bku_id))
-                                        <button type="button" class="btn btn-info btn-sm" title="Simpan sebagai Template" onclick="showSaveTemplate('{{ $transaksi->id }}', '{{ addslashes($transaksi->no_bukti) }}')">
+                                        <button type="button" class="btn btn-info btn-sm" title="Simpan sebagai Template" onclick="showSaveTemplate('{{ $transaksi->id }}', '{{ addslashes($transaksi->no_bukti) }}', '{{ addslashes($transaksi->rkasItem?->uraian ?? '-') }}', '{{ addslashes(($transaksi->rkasItem?->program?->kode ?? '') . ' ' . ($transaksi->rkasItem?->program?->nama ?? '-')) }}')">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
                                         </button>
                                     @endif
@@ -339,10 +339,22 @@
                     <label for="template-nama" class="form-label">Nama Template</label>
                     <input type="text" name="nama_template" id="template-nama" class="form-input" placeholder="Contoh: Belanja ATK Rutin Bulanan" required maxlength="255">
                 </div>
-                <div class="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span>Ref: <span id="template-no-bukti" class="font-mono"></span></span>
+                <div class="bg-slate-50 rounded-lg p-3 mb-4 text-sm border border-slate-200">
+                    <div class="flex items-center gap-2 text-slate-500 mb-1">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>No. Bukti: <span id="template-no-bukti" class="font-mono font-semibold text-slate-700"></span></span>
+                    </div>
+                    <div class="text-slate-600">
+                        <span class="text-slate-400">Item:</span> <span id="template-item-name" class="font-medium"></span>
+                    </div>
+                    <div class="text-slate-600">
+                        <span class="text-slate-400">Kegiatan:</span> <span id="template-kegiatan-name" class="font-medium"></span>
+                    </div>
                 </div>
+                <p class="text-xs text-amber-600 mb-4 flex items-start gap-1.5">
+                    <svg class="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    Pastikan item & kegiatan di atas benar. Template akan menyimpan data ini untuk dipakai ulang.
+                </p>
                 <div class="flex justify-end gap-2">
                     <button type="button" class="btn btn-secondary btn-sm" onclick="closeModalTemplate()">Batal</button>
                     <button type="submit" class="btn-primary">Simpan Template</button>
@@ -386,9 +398,11 @@
             document.getElementById('hapus-semua-alasan').value = note;
             document.getElementById('form-hapus-semua').submit();
         }
-        function showSaveTemplate(transaksiId, noBukti) {
+        function showSaveTemplate(transaksiId, noBukti, itemName, kegiatanName) {
             document.getElementById('template-transaksi-id').value = transaksiId;
             document.getElementById('template-no-bukti').textContent = noBukti;
+            document.getElementById('template-item-name').textContent = itemName;
+            document.getElementById('template-kegiatan-name').textContent = kegiatanName;
             document.getElementById('template-nama').value = '';
             document.getElementById('modal-save-template').classList.remove('hidden');
             document.getElementById('template-nama').focus();

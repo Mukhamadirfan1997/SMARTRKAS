@@ -20,8 +20,7 @@
     <div class="alert-info mb-6">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         <div>
-            Fitur ini mengirimkan <strong>kode pemulihan password</strong> ke chat Telegram Anda setiap kali kode dibuat baru
-            (menu <em>Kode Pemulihan</em>). Kode tetap ditampilkan sekali di layar — Telegram hanyalah cadangan.
+            Selain kode pemulihan, SmartRKAS juga mengirim <strong>notifikasi otomatis</strong> via Telegram untuk membantu Anda memantau anggaran. Lihat detailnya di kartu <em>Notifikasi Otomatis</em> di bawah.
         </div>
     </div>
 
@@ -47,7 +46,45 @@
 
     <div class="card mb-6">
         <div class="card-header">
-            <span class="card-title">Pengaturan Pengiriman</span>
+            <span class="card-title">Notifikasi Otomatis</span>
+        </div>
+        <div class="card-body text-sm text-slate-600 leading-relaxed space-y-4">
+            <p>Ketika Bot Telegram aktif, SmartRKAS secara otomatis mengirim pengingat berikut:</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/60">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-lg">📋</span>
+                        <span class="font-semibold text-slate-800">Pengingat Cetak Kwitansi</span>
+                    </div>
+                    <ul class="list-disc list-inside space-y-1 text-sm text-slate-600">
+                        <li>Dikirim <strong>setiap Senin jam 08:00</strong>.</li>
+                        <li>Memberitahu jumlah transaksi pengeluaran yang <strong>belum dicetak kwitansinya</strong>.</li>
+                        <li>Contoh: "Masih ada 3 transaksi pengeluaran yang belum dicetak kwitansinya."</li>
+                    </ul>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/60">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-lg">⚠️</span>
+                        <span class="font-semibold text-slate-800">Peringatan Realisasi Rendah</span>
+                    </div>
+                    <ul class="list-disc list-inside space-y-1 text-sm text-slate-600">
+                        <li>Dikirim <strong>tanggal 25 tiap bulan</strong> (mulai Oktober).</li>
+                        <li>Memberitahu jika realisasi anggaran masih <strong>di bawah 50%</strong>.</li>
+                        <li>Termasuk sisa bulan dan nominal anggaran yang belum terpakai.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <p class="text-xs text-amber-700 leading-relaxed">
+                    <strong>Penting:</strong> Notifikasi hanya dikirim jika Bot Telegram aktif (token + ID sudah terisi dengan benar).
+                    Pastikan Anda sudah menekan <strong>Start</strong> pada bot di Telegram agar pesan dapat diterima.
+                </p>
+            </div>
+        </div>
+    </div>
         </div>
         <div class="card-body space-y-4">
             <form method="POST" action="{{ route('pengaturan.telegram.update') }}" class="space-y-4">
