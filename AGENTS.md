@@ -2678,3 +2678,28 @@ User minta sistem memberi pengingat tiap 2 jam agar user istirahat sejenak (seri
 
 ## Test Status
 - PHPUnit full suite `OK (433 tests, 1309 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+
+---
+
+# Sesi 21 Agu 2026 — Release v0.6.7 (Backup UX + Jam Kerja Scheduler + Jam Realtime + Pengingat Istirahat)
+
+## Goal
+Build & rilis v0.6.7: fix jam backup UTC + pangkas isi backup + loading state tombol (`635601f`), jadwal malam ke jam kerja + jam realtime header (`ff7ea32`), pengingat istirahat 2 jam modal popup + tunda 15 menit (`b329d41`) + animasi (`7b6b26b`). User: "jika sudah lolos silahkan build dan rilis seperti biasa".
+
+## Build
+- Bump 0.6.6 -> **0.6.7** di 5 file. **PELAJARAN BARU**: `Set-Content -Encoding UTF8` di PowerShell 5.1 menambahkan **BOM** di awal file (diff jadi 2+/2- per file; BOM bisa mematahkan parse Cargo.toml/JSON) -> revert, ulangi dengan Edit tool + `[System.IO.File]::WriteAllText(..., UTF8Encoding($false))`. Hasil final: 5 file, tepat 1+/1- per file, BOM check semua False.
+- `npm run build` OK (app-CEI5vHHi.css / app-CA7a7cYK.js). `tauri build --bundles nsis,msi`: compile 4m10s -> NSIS `SmartRKAS_0.6.7_x64-setup.exe` (58.6MB) + MSI `SmartRKAS_0.6.7_x64_en-US.msi` (89.5MB).
+
+## Reinstall & Verifikasi Instalasi Nyata
+- Kill app v0.6.6 (CloseMainWindow tidak merespon -> Stop-Process -Force; job object mematikan anak php bersih; sisa php.exe hanya milik XAMPP/VS Code). Uninstall `/S` exit bersih -> folder `%LOCALAPPDATA%\SmartRKAS` hilang, **DB Roaming utuh** (1.826.816 bytes). Install v0.6.7 `/S` -> exe ProductVersion **0.6.7**, php bundle + cacert.pem ada.
+- App jalan -> server `php -S 127.0.0.1:59524`, `/login` = **200**.
+- **Kejanggalan yang ternyata bukan masalah**: cmdline proses mengandung `\\?\` -> setelah diperiksa, prefix itu HANYA di path executable php.exe (cara Rust spawn, normal); SEMUA argumen (router server.php, curl.cainfo, openssl.cafile, error_log) bersih tanpa prefix. Jangan panik hanya karena grep kasar.
+- Fitur baru terverifikasi terbundle: break-reminder-modal + realtime-clock di layout, config 0.6.7, jadwal `->daily()->at('20:15'/'20:00')` di routes/console.php terpasang (catatan: jadwal ditulis fluent `daily()->at()`, BUKAN string cron mentah -> test ScheduleTimesTest membaca ekspresi cron hasil resolve, bukan source).
+- `php-server-error.log` tetap 4 baris (fatal lama era `\\?\` 08-Agu), TIDAK ada error baru.
+
+## Release
+- Commit bump + AGENTS -> push `master`.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.7 (2 asset NSIS + MSI).
+
+## Test Status
+- PHPUnit full suite `OK (433 tests, 1309 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK.
