@@ -63,6 +63,15 @@
                     @endisset
                 </div>
                 <div class="flex items-center gap-3">
+                    <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800" title="Waktu berjalan">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div class="leading-tight text-right">
+                            <div id="realtime-clock" class="text-sm font-semibold text-slate-700 dark:text-slate-200 tabular-nums">--:--:--</div>
+                            <div id="realtime-date" class="text-[10px] text-slate-400 dark:text-slate-500">&mdash;</div>
+                        </div>
+                    </div>
                     <button id="dark-mode-toggle" onclick="toggleDarkMode()" class="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-150" title="Toggle dark mode">
                         <svg class="w-5 h-5 dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
@@ -123,6 +132,21 @@
                 document.documentElement.classList.toggle('dark');
                 localStorage.setItem('dark-mode', document.documentElement.classList.contains('dark'));
             };
+        })();
+        (function() {
+            var clockEl = document.getElementById('realtime-clock');
+            var dateEl = document.getElementById('realtime-date');
+            if (!clockEl) return;
+            var pad = function(n) { return String(n).padStart(2, '0'); };
+            function tickClock() {
+                var now = new Date();
+                clockEl.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+                if (dateEl) {
+                    dateEl.textContent = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
+                }
+            }
+            tickClock();
+            setInterval(tickClock, 1000);
         })();
         </script>
 

@@ -54,6 +54,15 @@ class DashboardTest extends TestCase
         $this->get('/dashboard')->assertRedirect('/login');
     }
 
+    public function test_layout_shows_realtime_clock(): void
+    {
+        $this->actingAs($this->user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('id="realtime-clock"', false)
+            ->assertSee('id="realtime-date"', false);
+    }
+
     // =================== STAT CARDS ===================
 
     public function test_dashboard_shows_stat_card_values(): void

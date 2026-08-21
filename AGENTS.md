@@ -2630,3 +2630,25 @@ User melaporkan "saya cek tidak terjadi apa apa" setelah klik Backup Sekarang. V
 
 ## Test Status
 - Tidak ada perubahan kode pada sesi ini (murni verifikasi + dokumentasi) → suite tetap `OK (424 tests, 1284 assertions)`, PHPStan level 6 `[OK] No errors`.
+
+---
+
+# Sesi 21 Agu 2026 — Jam Jadwal ke Jam Kerja + Jam Realtime di Header (commit lokal)
+
+## Goal
+(1) User minta cleanup backup digeser ke jam 20:00 karena scheduler desktop hanya jalan selama app terbuka (jadwal 01:00-04:00 nyaris tidak pernah tereksekusi). Disetujui user via question tool: SEMUA jadwal malam dipindah ke jam kerja. (2) Tambah jam realtime di header atas semua halaman agar user tidak lupa waktu saat bekerja. Lokasi disetujui user: header atas (bukan hanya dashboard).
+
+## Changes
+- `routes/console.php` — jadwal baru (semua WIB): `backup:clean` harian **20:00**, `backup:run` harian **20:15**, `audit:clean 90` Minggu **20:30**, hapus failed_jobs >30 hari Minggu **20:35**, `kwitansi:clean 2` bulanan tanggal 1 **20:40**. Telegram reminder TETAP (Senin 08:00, tgl 25 jam 09:00 — sudah jam kerja). Komentar di file menjelaskan alasan desktop.
+- `resources/views/layouts/app.blade.php` — pill jam realtime di `.top-header` sisi kanan (sebelum tombol dark mode), `hidden sm:flex` (sembunyi di layar sempit): ikon jam + `#realtime-clock` (HH:MM:SS, tabular-nums) + `#realtime-date` (hari, tgl, bulan singkat id-ID). JS IIFE baru di blok script bawah: format manual padStart (bukan toLocaleTimeString id-ID yang memakai titik "20.15.30"), tick tiap 1 detik.
+- `tests/Feature/Console/ScheduleTimesTest.php` (BARU, 5 test) — ekspresi cron persis per jadwal (`0 20 * * *`, `15 20 * * *`, `30 20 * * 0`, `40 20 1 * *`) + guard umum: tidak ada jadwal dengan jam < 07:00 (regex `^(\d+) (\d+) ` pada expression).
+- `tests/Feature/Dashboard/DashboardTest.php` — +1 test `test_layout_shows_realtime_clock` (assertSee raw `id="realtime-clock"` / `id="realtime-date"`).
+
+## Catatan Teknis
+- PHPUnit `--filter 'A|B'`: karakter pipe dipecah shell tool walau sudah di-quote → jalankan dua perintah terpisah.
+- Jam memakai waktu mesin klien (desktop = komputer user sendiri, jadi selalu benar); bukan waktu server.
+- Perubahan routes/console.php + view HANYA aktif di desktop setelah build installer baru (routes & view ter-bundle).
+
+## Test Status
+- PHPUnit full suite `OK (432 tests, 1304 assertions)` (naik dari 426/1290), PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+- Commit lokal; BELUM push; BELUM bump versi; BELUM build installer v0.6.7 (menunggu konfirmasi user).
