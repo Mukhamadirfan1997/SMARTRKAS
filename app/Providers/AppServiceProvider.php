@@ -12,7 +12,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        \Spatie\Backup\Tasks\Backup\DbDumperFactory::extend('sqlite', function () {
+            return new \App\Support\PdoSqliteDumper;
+        });
     }
 
     /**

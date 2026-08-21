@@ -52,16 +52,37 @@ class BackupPageTest extends TestCase
             ->assertSee('Belum ada backup');
     }
 
-    public function test_run_triggers_backup_command(): void
+    public function test_run_shows_success_when_backup_succeeds(): void
     {
-        $artisan = Artisan::spy();
+        Artisan::shouldReceive('call')->once()->andReturn(0);
 
         $this->actingAs($this->user)
             ->post('/pengaturan/backup/now')
             ->assertRedirect()
-            ->assertSessionHas('success');
+            ->assertSessionHas('success')
+            ->assertSessionMissing('error');
+    }
 
-        $artisan->shouldHaveReceived('call');
+    public function test_run_shows_error_when_backup_fails(): void
+    {
+        Artisan::shouldReceive('call')->once()->andReturn(1);
+
+        $this->actingAs($this->user)
+            ->post('/pengaturan/backup/now')
+            ->assertRedirect()
+            ->assertSessionHas('error')
+            ->assertSessionMissing('success');
+    }
+
+    public function test_run_shows_error_when_artisan_throws(): void
+    {
+        Artisan::shouldReceive('call')->once()->andThrow(new \RuntimeException('Disk full'));
+
+        $this->actingAs($this->user)
+            ->post('/pengaturan/backup/now')
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Backup gagal: Disk full')
+            ->assertSessionMissing('success');
     }
 
     public function test_backup_file_can_be_downloaded(): void

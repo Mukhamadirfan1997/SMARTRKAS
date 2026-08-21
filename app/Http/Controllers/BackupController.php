@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BackupController extends Controller
@@ -41,8 +42,10 @@ class BackupController extends Controller
 
     public function run(): RedirectResponse
     {
+        $output = new BufferedOutput;
+
         try {
-            Artisan::call('backup:run');
+            $exitCode = Artisan::call('backup:run', [], $output);
         } catch (\Throwable $e) {
             AuditLog::record('backup', 'run', [
                 'status' => 'failed',
@@ -50,6 +53,17 @@ class BackupController extends Controller
             ]);
 
             return back()->with('error', 'Backup gagal: '.$e->getMessage());
+        }
+
+        if ($exitCode !== 0) {
+            $error = $output->fetch();
+
+            AuditLog::record('backup', 'run', [
+                'status' => 'failed',
+                'error' => $error,
+            ]);
+
+            return back()->with('error', 'Backup gagal. Periksa Riwayat Aktivitas untuk detail error.');
         }
 
         AuditLog::record('backup', 'run', ['status' => 'success']);

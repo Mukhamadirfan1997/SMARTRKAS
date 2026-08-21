@@ -58,7 +58,7 @@ class AuditLogCoverageTest extends TestCase
 
     public function test_backup_run_is_logged(): void
     {
-        Artisan::spy();
+        Artisan::shouldReceive('call')->once()->andReturn(0);
 
         $this->actingAs($this->user)
             ->post('/pengaturan/backup/now')

@@ -2540,3 +2540,42 @@ Tambahkan notifikasi Telegram otomatis (kwitansi reminder + realisasi warning), 
 - Fix JS syntax error di searchable picker.
 - Sidebar group Pengaturan dropdown.
 - **Notifikasi Telegram Otomatis** (kwitansi reminder + realisasi warning).
+
+---
+
+# Sesi 20 Agu 2026 — Fix Backup Gagal: Custom SQLite Dumper (PDO) + Cek Exit Code Controller
+
+## Goal
+Perbaiki bug "Backup Sekarang" menampilkan flash sukses tapi tidak ada file .zip yang tercipta. Dua root cause: (1) spatie/db-dumper mengeksekusi `sqlite3.exe` CLI yang tidak ada di PATH (desktop bundle), (2) `BackupCommand::handle()` menangkap exception internal + return exit code integer, sehingga controller yang hanya `catch \Throwable` tidak pernah terpukul — selalu jatuh ke jalur sukses.
+
+## Root Cause 1 — `sqlite3.exe` tidak ada
+- Spatie `Sqlite` dumper memanggil `sqlite3 --bail` via `Process::fromShellCommandline`. Exit code 255, stderr: "sqlite3: not found".
+- Bundle PHP desktop tidak menyertakan `sqlite3.exe` (hanya `php.exe` + extension DLL).
+- ZipArchive `Class not found` di log lama = gejala secondary (backup tidak pernah sampai tahap zip karena dump gagal duluan).
+
+## Root Cause 2 — Controller abaikan exit code
+- `BackupCommand::handle()` (line 77-101): `try { ... } catch { return static::FAILURE; }` — menangkap exception + return int.
+- `Artisan::call()` mengembalikan integer exit code, TIDAK melempar exception.
+- `BackupController::run()` hanya `catch \Throwable` → tidak pernah terpukul → selalu flash "berhasil".
+
+## Changes
+- **`app/Support/PdoSqliteDumper.php`** (BARU) — extends `Spatie\DbDumper\Databases\Sqlite`, override `dumpToFile()`: `PRAGMA wal_checkpoint(TRUNCATE)` via PDO + `copy()` file .sqlite ke dump target. Zero dependency ke CLI tool.
+- **`app/Providers/AppServiceProvider.php`** — `register()`: `DbDumperFactory::extend('sqlite', fn() => new PdoSqliteDumper)`.
+- **`app/Http/Controllers/BackupController.php`** — `run()`: tangkap `BufferedOutput`, `$exitCode = Artisan::call('backup:run', [], $output)`, cek `$exitCode !== 0` → flash error + AuditLog `status=failed`. Import `BufferedOutput`.
+- **`tests/Feature/Backup/BackupPageTest.php`** — 3 test baru: exit 0 → success flash, exit 1 → error flash, RuntimeException → error flash. Hapus test lama `test_run_triggers_backup_command`.
+- **`tests/Feature/Audit/AuditLogCoverageTest.php`** — `test_backup_run_is_logged`: `Artisan::spy()` → `Artisan::shouldReceive('call')->once()->andReturn(0)`.
+- **`tests/Unit/PdoSqliteDumperTest.php`** (BARU) — 2 test: dump valid (PDO copy + verifikasi isi tabel) + source missing (throw RuntimeException).
+
+## Verifikasi E2E
+- `php artisan backup:run --only-db` → `Successfully copied zip to disk named local... Backup completed!`
+- File `.zip` = `storage/app/private/SmartRKAS/2026-08-20-13-59-31.zip` (130KB) — path konsisten dengan `BackupController::index()`.
+- `php artisan backup:run` (full) → DB dump sukses, zipping timeout karena 55K+ file di `base_path()` (wajar di dev; di desktop install lebih cepat).
+
+## Catatan
+- `PdoSqliteDumper::dumpToFile()` menghasilkan copy biner SQLite (bukan SQL dump .sql). Spatie hanya menambahkan hasil dump ke zip — isi tidak harus SQL text.
+- `PRAGMA wal_checkpoint(TRUNCATE)` bersifat best-effort; bila gagal (locked), copy tetap berjalan.
+- `config('backup.backup.name')` = `SmartRKAS` (dari `APP_NAME` di .env) → backup dir = `storage/app/private/SmartRKAS/`.
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (424 tests, 1284 assertions)`.
