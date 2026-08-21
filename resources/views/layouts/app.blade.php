@@ -116,8 +116,8 @@
 
         </div>
 
-        <div id="break-reminder-modal" class="fixed inset-0 z-[70] items-center justify-center bg-slate-900/50 p-4" style="display:none">
-            <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-800">
+        <div id="break-reminder-modal" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 opacity-0 pointer-events-none transition-opacity duration-200 ease-out">
+            <div id="break-reminder-card" class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-800 scale-90 transition-transform duration-200 ease-out">
                 <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
                     <svg class="h-7 w-7 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -164,7 +164,8 @@
         })();
         (function() {
             var modal = document.getElementById('break-reminder-modal');
-            if (!modal) return;
+            var card = document.getElementById('break-reminder-card');
+            if (!modal || !card) return;
             var KEY = 'smartrkas-break-reminder-at';
             var TWO_HOURS = 2 * 60 * 60 * 1000;
             var FOUR_HOURS = 4 * 60 * 60 * 1000;
@@ -183,19 +184,22 @@
             function show() {
                 if (shown) return;
                 shown = true;
-                modal.style.display = 'flex';
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                card.classList.remove('scale-90');
             }
-            function hide() {
+            function close() {
                 shown = false;
-                modal.style.display = 'none';
-                markNow();
+                modal.classList.add('opacity-0', 'pointer-events-none');
+                card.classList.add('scale-90');
             }
 
-            document.getElementById('break-reminder-ok').addEventListener('click', hide);
+            document.getElementById('break-reminder-ok').addEventListener('click', function() {
+                markNow();
+                close();
+            });
             document.getElementById('break-reminder-snooze').addEventListener('click', function() {
                 try { localStorage.setItem(KEY, String(Date.now() - TWO_HOURS + 15 * 60 * 1000)); } catch (e) {}
-                shown = false;
-                modal.style.display = 'none';
+                close();
             });
 
             if (!lastAt()) {
