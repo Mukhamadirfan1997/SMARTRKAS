@@ -63,6 +63,17 @@ class DashboardTest extends TestCase
             ->assertSee('id="realtime-date"', false);
     }
 
+    public function test_layout_shows_break_reminder_modal(): void
+    {
+        $this->actingAs($this->user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('id="break-reminder-modal"', false)
+            ->assertSee('Waktunya Istirahat Sejenak', false)
+            ->assertSee('id="break-reminder-ok"', false)
+            ->assertSee('Tunda 15 Menit', false);
+    }
+
     // =================== STAT CARDS ===================
 
     public function test_dashboard_shows_stat_card_values(): void

@@ -116,6 +116,20 @@
 
         </div>
 
+        <div id="break-reminder-modal" class="fixed inset-0 z-[70] items-center justify-center bg-slate-900/50 p-4" style="display:none">
+            <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl dark:bg-slate-800">
+                <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                    <svg class="h-7 w-7 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100">Waktunya Istirahat Sejenak</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">Anda sudah bekerja kurang lebih 2 jam. Berdirilah sebentar, regangkan badan, dan biarkan mata beristirahat agar tetap segar dan fokus.</p>
+                <button id="break-reminder-ok" type="button" class="btn-primary mt-5 w-full">Baik, Saya Istirahat Sebentar</button>
+                <button id="break-reminder-snooze" type="button" class="mt-2 w-full text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">Tunda 15 Menit</button>
+            </div>
+        </div>
+
         <script>
         (function() {
             if (localStorage.getItem('sidebar-collapsed') === 'true') {
@@ -147,6 +161,52 @@
             }
             tickClock();
             setInterval(tickClock, 1000);
+        })();
+        (function() {
+            var modal = document.getElementById('break-reminder-modal');
+            if (!modal) return;
+            var KEY = 'smartrkas-break-reminder-at';
+            var TWO_HOURS = 2 * 60 * 60 * 1000;
+            var FOUR_HOURS = 4 * 60 * 60 * 1000;
+            var shown = false;
+
+            function lastAt() {
+                return parseInt(localStorage.getItem(KEY) || '0', 10);
+            }
+            function markNow() {
+                try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+            }
+            function due() {
+                var elapsed = Date.now() - lastAt();
+                return elapsed >= TWO_HOURS && elapsed < FOUR_HOURS;
+            }
+            function show() {
+                if (shown) return;
+                shown = true;
+                modal.style.display = 'flex';
+            }
+            function hide() {
+                shown = false;
+                modal.style.display = 'none';
+                markNow();
+            }
+
+            document.getElementById('break-reminder-ok').addEventListener('click', hide);
+            document.getElementById('break-reminder-snooze').addEventListener('click', function() {
+                try { localStorage.setItem(KEY, String(Date.now() - TWO_HOURS + 15 * 60 * 1000)); } catch (e) {}
+                shown = false;
+                modal.style.display = 'none';
+            });
+
+            if (!lastAt()) {
+                markNow();
+            } else if (due()) {
+                show();
+            } else if (Date.now() - lastAt() >= FOUR_HOURS) {
+                markNow();
+            }
+
+            setInterval(function() { if (!shown && due()) show(); }, 60000);
         })();
         </script>
 

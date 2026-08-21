@@ -2652,3 +2652,29 @@ User melaporkan "saya cek tidak terjadi apa apa" setelah klik Backup Sekarang. V
 ## Test Status
 - PHPUnit full suite `OK (432 tests, 1304 assertions)` (naik dari 426/1290), PHPStan level 6 `[OK] No errors`, `view:cache` OK.
 - Commit lokal; BELUM push; BELUM bump versi; BELUM build installer v0.6.7 (menunggu konfirmasi user).
+
+---
+
+# Sesi 21 Agu 2026 — Pengingat Istirahat 2 Jam (Modal Popup + Snooze 15 Menit) (commit lokal)
+
+## Goal
+User minta sistem memberi pengingat tiap 2 jam agar user istirahat sejenak (sering lupa istirahat saat bekerja). Disetujui via question tool: bentuk = **modal popup wajib klik** (pola Stretchly/Time Out), dengan opsi tolak = **tunda 15 menit**.
+
+## Keputusan Desain (konfirmasi user)
+- Bentuk: modal popup (layar diredupkan + kartu tengah), BUKAN toast/banner — pasti terlihat.
+- Opsi tolak: tombol "Tunda 15 Menit" → pengingat muncul lagi 15 menit kemudian; tombol utama "Baik, Saya Istirahat Sebentar" → hitung ulang 2 jam penuh.
+
+## Implementasi
+- **Client-side murni** (JS di `layouts/app.blade.php`), bukan scheduler server — pengingat harus muncul saat user sedang memakai app. Hitungan disimpan di **localStorage** (`smartrkas-break-reminder-at`) agar TETAP JALAN lintas navigasi halaman (setInterval polos akan ke-reset tiap pindah halaman karena Laravel Blade = full page load).
+- Markup modal `#break-reminder-modal` sebelum blok script bawah layout; z-[70] (di atas page-loader z-50); ikon jam emerald; dark mode support.
+- Logika JS: first run → simpan baseline tanpa tampil; elapsed 2-4 jam → tampil; elapsed >= 4 jam (app ditinggal semalaman) → reset diam-diam TANPA tampil (user baru kembali, bukan sedang kerja); cek interval tiap 60 detik.
+- Snooze: set timestamp = now − 2 jam + 15 menit → due() lagi tepat 15 menit kemudian.
+- Test: `DashboardTest::test_layout_shows_break_reminder_modal` (modal, judul, tombol OK, "Tunda 15 Menit").
+
+## Catatan Teknis
+- localStorage disabled → try/catch, degradasi aman (pengingat tidak tampil, tidak error).
+- Modal hanya di layout auth (`layouts/app.blade.php`); halaman guest (login) tidak perlu.
+- Aktif di desktop setelah build installer baru (view ter-bundle).
+
+## Test Status
+- PHPUnit full suite `OK (433 tests, 1309 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK.
