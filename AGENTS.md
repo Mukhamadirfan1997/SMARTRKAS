@@ -2579,3 +2579,23 @@ Perbaiki bug "Backup Sekarang" menampilkan flash sukses tapi tidak ada file .zip
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (424 tests, 1284 assertions)`.
+
+---
+
+# Sesi 20 Agu 2026 — Release v0.6.6 (Fix Backup Gagal Senyap)
+
+## Goal
+Bawa fix backup ke installer & rilis ke GitHub karena backup adalah jaring pengaman data yang kritis — fix harus segera sampai user, bukan digabung sambil menunggu fitur lain.
+
+## Summary
+- 2 commit: `19cd344` (fix + AGENTS) + `a0819e6` (bump v0.6.6). Push `master`.
+- Build: NSIS 58.6MB + MSI 89.7MB.
+- Clean-install v0.6.6 → `/login` **200** (len 11272) → 0 orphan processes.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.6
+
+## Changes (release ini)
+- Bump v0.6.5 → 0.6.6: `config/app.php`, `.env.example`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (blok `name = "smartrkas"` saja).
+
+## Test Status
+- PHPStan level 6: `[OK] No errors`.
+- Full suite: `OK (424 tests, 1284 assertions)`.
