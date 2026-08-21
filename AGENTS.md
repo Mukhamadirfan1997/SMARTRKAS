@@ -2599,3 +2599,34 @@ Bawa fix backup ke installer & rilis ke GitHub karena backup adalah jaring penga
 ## Test Status
 - PHPStan level 6: `[OK] No errors`.
 - Full suite: `OK (424 tests, 1284 assertions)`.
+
+---
+
+# Sesi 21 Agu 2026 — Verifikasi Fix Backup di Instalasi: FIX BERFUNGSI (3 backup sukses) + Akar Persepsi "Tidak Terjadi Apa Apa"
+
+## Goal
+User melaporkan "saya cek tidak terjadi apa apa" setelah klik Backup Sekarang. Verifikasi independen apakah fix backup (PdoSqliteDumper + cek exit code, rilis v0.6.6) benar-benar berjalan di instalasi.
+
+## Kesimpulan: FIX BERFUNGSI — backup SUKSES, persepsi "tidak terjadi apa apa" = masalah UX feedback
+- **Bukti 1 — file zip tercipta**: 3 zip di `%APPDATA%\id.smartrkas.desktop\storage\app\private\SmartRKAS\`: `2026-08-21-10-52-28.zip`, `2026-08-21-10-52-56.zip`, `2026-08-21-10-53-19.zip` (masing-masing ~41MB).
+- **Bukti 2 — dump DB VALID**: entri `db-dumps\pdosqlitedumper-sqlite-database.sql` di dalam zip = **1.818.624 bytes**, header `SQLite format 3` → salinan DB produksi utuh (85 transaksi aktif terverifikasi di DB asli).
+- **Bukti 3 — audit_log**: 3x `backup.run {"status":"success"}` hari ini (10:52:56 / 10:53:19 / 10:53:42) — exit code check bekerja.
+- **Bukti 4 — laravel.log**: hari ini TIDAK ada error (hanya DEBUG mail-log notifikasi sukses). Bandingkan **kemarin (20 Agu) 08:44 & 13:40**: `production.ERROR: The dump process failed with a none successful exitcode` tapi audit_log tetap "success" → itu perilaku kode LAMA (controller abaikan exit code). Berarti v0.6.6 baru terpasang antara kemarin 13:40 dan hari ini 10:52; kegagalan user kemarin = versi lama.
+- `php-server-error.log` tidak bertambah (masih 4 baris era `\\?\` 8 Agu).
+
+## Akar persepsi "tidak terjadi apa apa" (UX, bukan bug backup)
+1. **Backup sinkron ~23–27 detik per klik** (`Artisan::call('backup:run')` memblokir request POST; zip 41MB karena source include base_path instalasi — app+vendor+php bundle, bukan hanya DB).
+2. **Tombol tanpa loading state**: `backup.blade.php:70-76` form POST polos, tidak ada disabled/spinner → selama ~25 detik halaman tampak diam → user klik lagi (3 klik = 3 zip berurutan ~25 detik, terbukti dari timestamp).
+3. Flash sukses (`session('success')`, view baris 8-18) BARUT muncul setelah round-trip selesai; kalau user menutup/navigasi sebelum selesai, tidak ada umpan balik sama sekali.
+
+## Rekomendasi backlog (BELUM dikerjakan, butuh persetujuan)
+- UX: tombol "Backup Sekarang" disabled + teks "Memproses..." saat submit (JS kecil), supaya user tahu sedang jalan.
+- Opsional: pangkas source backup agar hanya DB (+storage penting), bukan seluruh base_path instalasi → zip jauh lebih kecil & proses lebih cepat.
+
+## Metode verifikasi (reproducible)
+- Versi exe: `(Get-Item $exe).VersionInfo.ProductVersion` → 0.6.6.
+- Isi zip: `[System.IO.Compression.ZipFile]::OpenRead()` → cek entri `db-dumps*` (HATI-HATI: `-like '*pdosqlitedumper*'` match 2 entri — dump + file PdoSqliteDumper.php ikut ter-backup; filter `db-dumps*` saja).
+- audit_log: PDO sqlite langsung ke DB Roaming via script temp `%TEMP%\opencode\check-audit.php` (jangan `php -r` inline — quoting PowerShell pecah, sesuai pelajaran lama).
+
+## Test Status
+- Tidak ada perubahan kode pada sesi ini (murni verifikasi + dokumentasi) → suite tetap `OK (424 tests, 1284 assertions)`, PHPStan level 6 `[OK] No errors`.

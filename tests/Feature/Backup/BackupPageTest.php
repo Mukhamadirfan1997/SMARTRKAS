@@ -52,6 +52,34 @@ class BackupPageTest extends TestCase
             ->assertSee('Belum ada backup');
     }
 
+    public function test_index_has_backup_button_with_loading_state_hook(): void
+    {
+        Storage::fake('local');
+
+        $this->actingAs($this->user)
+            ->get('/pengaturan/backup')
+            ->assertOk()
+            ->assertSee('id="form-backup-now"', false)
+            ->assertSee('id="btn-backup-now"', false);
+    }
+
+    public function test_index_renders_backup_times_in_app_timezone(): void
+    {
+        Storage::fake('local');
+        $file = 'SmartRKAS/backup-2026-01-10.zip';
+        Storage::disk('local')->put($file, 'data');
+
+        // 2026-01-10 02:00 UTC == 09:00 WIB
+        $epoch = \Carbon\Carbon::create(2026, 1, 10, 2, 0, 0, 'UTC')->getTimestamp();
+        touch(Storage::disk('local')->path($file), $epoch);
+
+        $this->actingAs($this->user)
+            ->get('/pengaturan/backup')
+            ->assertOk()
+            ->assertSee('10/01/2026 09:00')
+            ->assertDontSee('10/01/2026 02:00');
+    }
+
     public function test_run_shows_success_when_backup_succeeds(): void
     {
         Artisan::shouldReceive('call')->once()->andReturn(0);

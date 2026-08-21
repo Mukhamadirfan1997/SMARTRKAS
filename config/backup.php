@@ -13,19 +13,26 @@ return [
             'files' => [
                 /*
                  * The list of directories and files that will be included in the backup.
+                 *
+                 * Hanya data pengguna: file di storage/app (kwitansi PDF, export Excel,
+                 * file import). Database tetap dibackup otomatis via db-dumps.
+                 * Kode aplikasi/vendor/PHP bundle TIDAK ikut (bisa didapat ulang dari
+                 * installer) -> zip jauh lebih kecil & proses hitungan detik.
                  */
                 'include' => [
-                    base_path(),
+                    storage_path('app'),
                 ],
 
                 /*
                  * These directories and files will be excluded from the backup.
                  *
                  * Directories used by the backup process will automatically be excluded.
+                 * app/private = lokasi zip backup itu sendiri (disk "local") — dikecualikan
+                 * agar backup tidak membawa backup lama (efek bola salju).
                  */
                 'exclude' => [
-                    base_path('vendor'),
-                    base_path('node_modules'),
+                    storage_path('app/private'),
+                    storage_path('app/backup-temp'),
                 ],
 
                 /*
@@ -36,14 +43,14 @@ return [
                 /*
                  * Determines if it should avoid unreadable folders.
                  */
-                'ignore_unreadable_directories' => false,
+                'ignore_unreadable_directories' => true,
 
                 /*
                  * This path is used to make directories in resulting zip-file relative
                  * Set to `null` to include complete absolute path
                  * Example: base_path()
                  */
-                'relative_path' => null,
+                'relative_path' => storage_path('app'),
             ],
 
             /*

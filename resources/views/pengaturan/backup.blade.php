@@ -43,7 +43,7 @@
             <div class="stat-label">Backup Terakhir</div>
             <div class="mt-2">
                 @if($latest)
-                    <span class="badge badge-green">{{ \Carbon\Carbon::createFromTimestamp($latest['mtime'])->format('d M Y H:i') }}</span>
+                    <span class="badge badge-green">{{ \Carbon\Carbon::createFromTimestamp($latest['mtime'], config('app.timezone'))->format('d M Y H:i') }}</span>
                 @else
                     <span class="badge badge-gray">Belum ada</span>
                 @endif
@@ -67,9 +67,9 @@
         </div>
         <div class="card-body flex flex-wrap items-center justify-between gap-4">
             <p class="text-sm text-slate-600">Buat arsip lengkap aplikasi (database + file) secara manual tanpa menunggu jadwal otomatis.</p>
-            <form method="POST" action="{{ route('pengaturan.backup.now') }}">
+            <form method="POST" action="{{ route('pengaturan.backup.now') }}" id="form-backup-now">
                 @csrf
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="btn-backup-now">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
                     Backup Sekarang
                 </button>
@@ -101,7 +101,7 @@
                                 <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
                                 {{ $backup['name'] }}
                             </td>
-                            <td>{{ \Carbon\Carbon::createFromTimestamp($backup['mtime'])->format('d/m/Y H:i') }}</td>
+                            <td>{{ \Carbon\Carbon::createFromTimestamp($backup['mtime'], config('app.timezone'))->format('d/m/Y H:i') }}</td>
                             <td>
                                 <span class="badge badge-gray text-xs">{{ number_format($backup['size'] / 1048576, 2) }} MB</span>
                             </td>
@@ -122,3 +122,27 @@
         </div>
     </div>
 </x-app-layout>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var form = document.getElementById('form-backup-now');
+        var btn = document.getElementById('btn-backup-now');
+
+        if (! form || ! btn) {
+            return;
+        }
+
+        form.addEventListener('submit', function () {
+            if (btn.disabled) {
+                return;
+            }
+
+            btn.disabled = true;
+            btn.classList.add('opacity-70', 'cursor-wait');
+            btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">' +
+                '<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>' +
+                '<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>' +
+                '</svg> Memproses...';
+        });
+    });
+</script>
