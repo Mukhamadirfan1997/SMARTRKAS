@@ -2808,4 +2808,6 @@ Selesaikan Tahap 3 dari 3 fitur Monitoring Kepatuhan Juknis BOSP: halaman monito
 - `php-server-error.log`: 756 -> **756 bytes** (TIDAK bertambah; isi lama fatal era `\\?\` 08-Agu).
 
 ## Release & Push v0.6.8
-(lihat bagian lanjutan bila sudah dieksekusi)
+- Secret scan diff bersih -> commit `87c486d` (bump 5 file + AGENTS.md) -> push `master` (`b7184f8..87c486d`; stderr "NativeCommandError" = noise PowerShell, push sukses).
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.8 — 2 asset state `uploaded`, `isDraft=false, isPrerelease=false` (NSIS 61.5MB on-disk + MSI 94.2MB). Notes via `--notes-file` temp (hindari globbing PowerShell).
+- App v0.6.8 DIBIARKAN BERJALAN (server port 57427) untuk uji manual user (halaman Monitoring Juknis via menu Laporan).
