@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -38,5 +39,16 @@ class MasterKodeRekening extends Model
     public function rkasItems(): HasMany
     {
         return $this->hasMany(RkasItem::class, 'kode_rekening_id');
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\KategoriJuknis, $this> */
+    public function kategoriJuknis(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            KategoriJuknis::class,
+            'kode_rekening_kategori_juknis',
+            'kode_rekening_id',
+            'kategori_juknis_id',
+        );
     }
 }

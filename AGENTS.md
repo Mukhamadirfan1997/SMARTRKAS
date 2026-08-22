@@ -2703,3 +2703,31 @@ Build & rilis v0.6.7: fix jam backup UTC + pangkas isi backup + loading state to
 
 ## Test Status
 - PHPUnit full suite `OK (433 tests, 1309 assertions)`, PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+
+---
+
+# Sesi 22 Agu 2026 — Fitur Baru: Monitoring Kepatuhan Juknis BOSP — TAHAP 1 (Migrasi + Model) — commit lokal
+
+## Goal
+Tahap 1 dari 3 fitur Monitoring Kepatuhan Juknis BOSP: tabel `kategori_juknis` + pivot `kode_rekening_kategori_juknis`, model `KategoriJuknis` + relasi dua arah, factory, smoke test relasi. Tahap 2 = halaman pengaturan kategori + centang kode rekening; Tahap 3 = halaman monitoring (persentase via `RealisasiQuery` thd pagu tahunan).
+
+## Changes
+- `database/migrations/2026_08_22_000029_create_kategori_juknis_tables.php` (BARU):
+  - `kategori_juknis`: uuid PK, `nama` string UNIQUE, `arah` enum(`maksimal`,`minimal`) (batas atas vs batas bawah), `batas_persen` decimal(5,2), `berlaku_untuk` string(50) nullable (mis. negeri/swasta), timestamps, index `arah`.
+  - Pivot `kode_rekening_kategori_juknis`: FK `master_kode_rekening` + FK `kategori_juknis`, keduanya `cascadeOnDelete`; unique gabungan dgn **nama eksplisit** `krek_kategori_juknis_unique` (nama default Laravel 72 char > batas identifier MySQL 64).
+- `app/Models/KategoriJuknis.php` (BARU) — HasUuids+HasFactory, `$fillable`, cast `batas_persen=float`; relasi `kodeRekenings(): BelongsToMany` (pivot table + FK eksplisit). Relasi BelongsToMany PERTAMA di codebase.
+- `app/Models/MasterKodeRekening.php` — tambah relasi `kategoriJuknis(): BelongsToMany` (satu kode rekening bisa banyak kategori).
+- `database/factories/KategoriJuknisFactory.php` (BARU) + state helper `maksimal(float)` / `minimal(float)` utk test Tahap 2-3.
+- **Tanpa seeder** — sesuai kesepakatan "default tidak ditandai, tidak ditebak otomatis": tabel mulai kosong, user isi manual dari halaman pengaturan (Tahap 2).
+
+## Smoke Test (`tests/Feature/Juknis/KategoriJuknisTest.php`, 7 test)
+UUID PK (regex uuid v4-format), relasi dua arah attach/detach, satu rekening banyak kategori (m2m), pivot unique tolak pasangan duplikat (`UniqueConstraintViolationException`), cascade hapus pivot saat kategori/rekening dihapus, cast `batas_persen` float + `berlaku_untuk` nullable.
+- PHPStan note: `assertIsString($kategori->id)` ditolak PHPStan (`method.alreadyNarrowedType` karena `@property string $id`) → cukup assert panjang 36 + regex UUID.
+
+## Verifikasi
+- Round-trip migrasi di sqlite file scratch: `migrate --force` (000029 DONE) → `migrate:rollback --step=1` → kedua tabel hilang (`hasTable` false×2) → up/down VALID.
+- Dev DB (`database/database.sqlite`) sudah dimigrasi ke 000029 (tabel + kolom + index unique terverifikasi via tinker probe).
+- PHPUnit full suite `OK (440 tests, 1329 assertions)` (naik dari 433/1309), PHPStan level 6 `[OK] No errors`.
+
+## Status
+- Commit lokal; BELUM push/build/rilis. Menunggu laporan Tahap 1 disetujui user sebelum Tahap 2 (halaman pengaturan kategori + centang kode rekening) dan Tahap 3 (halaman monitoring, hitung % via RealisasiQuery thd pagu tahunan).
