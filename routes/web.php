@@ -12,6 +12,7 @@ use App\Http\Controllers\KategoriJuknisController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MasterKodeRekeningController;
 use App\Http\Controllers\MasterProgramController;
+use App\Http\Controllers\MonitoringJuknisController;
 use App\Http\Controllers\NotaBkuController;
 use App\Http\Controllers\PengaturanSekolahController;
 use App\Http\Controllers\ProfileController;
@@ -37,6 +38,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('laporan', [LaporanController::class, 'index'])->name('laporan.index');
+    Route::get('laporan/monitoring-juknis', [MonitoringJuknisController::class, 'index'])->name('laporan.monitoring-juknis');
 
     Route::get('exports/{exportJob}/download', [ExportController::class, 'download'])->name('exports.download');
     Route::get('exports/{exportJob}/status', [ExportController::class, 'status'])->name('exports.status');

@@ -44,10 +44,25 @@
             <span class="nav-text">Template Transaksi</span>
         </a>
 
-        <a href="{{ route('laporan.index') }}" class="sidebar-link {{ request()->routeIs('laporan.*') ? 'active' : '' }}">
-            <svg aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-            <span class="nav-text">Laporan</span>
-        </a>
+        <div x-data="{ open: {{ request()->routeIs('laporan.*') ? 'true' : 'false' }} }">
+            <button @click="open = !open" class="sidebar-dropdown-btn" :class="{ 'open': open, 'active': {{ request()->routeIs('laporan.*') ? 'true' : 'false' }} }">
+                <div class="flex items-center gap-3">
+                    <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                    <span class="nav-text">Laporan</span>
+                </div>
+                <svg aria-hidden="true" class="chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="sidebar-submenu" x-show="open" x-transition>
+                <a href="{{ route('laporan.index') }}" class="{{ request()->routeIs('laporan.index') ? 'text-white bg-white/5' : '' }}">
+                    <svg aria-hidden="true" class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg>
+                    <span class="nav-text">Semua Laporan</span>
+                </a>
+                <a href="{{ route('laporan.monitoring-juknis') }}" class="{{ request()->routeIs('laporan.monitoring-juknis') ? 'text-white bg-white/5' : '' }}">
+                    <svg aria-hidden="true" class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg>
+                    <span class="nav-text">Monitoring Juknis</span>
+                </a>
+            </div>
+        </div>
 
         <div class="sidebar-section-label">Pengaturan</div>
 
