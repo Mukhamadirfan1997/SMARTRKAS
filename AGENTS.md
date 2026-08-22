@@ -2763,3 +2763,49 @@ Tahap 2 dari 3: halaman pengaturan kategori Juknis BOSP (CRUD) + halaman pemetaa
 
 ## Status
 - Commit lokal; BELUM push/build/rilis. Menunggu konfirmasi user sebelum Tahap 3 (halaman monitoring: persentase realisasi per kategori via RealisasiQuery thd pagu tahunan item yang ter-mapping, badge patuh/melanggar sesuai arah maksimal/minimal).
+
+---
+
+# Sesi 22 Agu 2026 — Monitoring Juknis BOSP TAHAP 3 (Halaman Monitoring) + Release v0.6.8
+
+## Goal
+Selesaikan Tahap 3 dari 3 fitur Monitoring Kepatuhan Juknis BOSP: halaman monitoring dengan donut chart per kategori ter-mapping (persentase thd Total Pagu), toggle basis Rencana/Realisasi (realisasi via RealisasiQuery, termasuk nota multi-item), bonus donut Proporsi Antar Jenis Belanja, alert kode rekening belum dikategorikan. Lalu (permintaan user): commit -> bump versi -> build installer -> reinstall -> rilis GitHub v0.6.8.
+
+## Summary
+- Commit `39625a5` (5 file, +689/-4): controller + view + route + sidebar + 8 test baru.
+- Full suite `OK (460 tests, 1408 assertions)` (naik dari 452/1378), PHPStan level 6 `[OK] No errors`, `view:cache` OK.
+- Bump 0.6.7 -> **0.6.8** (5 file: config/app.php, .env.example, src-tauri/tauri.conf.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock blok name="smartrkas" saja; diff tepat 1+/1- per file, BOM check semua False).
+
+## Changes
+- `app/Http/Controllers/MonitoringJuknisController.php` (BARU):
+  - `index(Request)`: basis = request('basis', 'rencana') in [rencana, realisasi]; tahun = input tahun -> fallback `TahunAnggaran::getActive()`; `$totalPagu` = sum rkas_item.jumlah tahun tsb; `$kategoriCards` = KategoriJuknis::whereHas('kodeRekenings') dgn nominal (rencana: RkasItem whereIn kode_rekening_id; realisasi: `RealisasiQuery::base()` alias rb join rkas_item on rb.rkas_item_id); persen = nominal / totalPagu * 100; status via `statusFor()`; `jumlah_rekening` = count rekening ter-mapping.
+  - `private const EPSILON = 0.000001`; `statusFor()`: arah maksimal -> persen <= batas + EPSILON ? 'sesuai' : 'melebihi'; arah minimal -> persen >= batas - EPSILON ? 'sesuai' : 'kurang'. TEPAT di batas = sesuai.
+  - `jenisBelanjaBreakdown()`: RealisasiQuery/RkasItem join master_kode_rekening as mkr + jenis_belanja as jb, `COALESCE(jb.nama,'Tidak Terkategori')`, groupBy label (jalan di sqlite & mysql).
+  - `belumDikategorikanCount()`: distinct kode_rekening_id dgn nominal pada basis aktif yang TIDAK ada di pivot kode_rekening_kategori_juknis; guard when($mappedIds->isNotEmpty()) sebelum whereNotIn.
+  - Bug fix saat review sendiri: view memakai `$card['jumlah_rekening']` tapi push awal tidak menyertakan key itu -> ditambah `'jumlah_rekening' => count($rekeningIds)`.
+- `resources/views/laporan/monitoring-juknis.blade.php` (BARU): x-app-layout; filter GET (select tahun auto-submit onchange + hidden basis); grid 2 kartu atas (Total Pagu stat-card blue + kartu toggle basis segmented pakai `request()->fullUrlWithQuery(['basis'=>...])`); alert-warning tanpa tahun anggaran; alert-info "N kode rekening ... belum dikategorikan" -> link `pengaturan.kategori-juknis.pemetaan`; empty-state tanpa kategori ter-mapping; kartu kategori grid md:2 xl:3 dengan canvas `id="juknis-donut-{index}"`, persen overlay tengah (warna match status), kotak Nominal + jumlah kode rekening, pesan status per arah; bonus card "Proporsi Antar Jenis Belanja" canvas `id="jenis-belanja-donut"` + legend dot `.jb-dot[data-index]`; Chart.js CDN + payload `@json($donutDataJs)`/`$jenisDataJs`.
+  - Fix: view awalnya memakai `nonce="{{ csp_nonce() }}"` — helper TIDAK ADA di codebase (dashboard pakai `<script>` polos) -> dihapus; warna teks persen arah minimal disamakan amber (#f59e0b) dengan donut.
+- `routes/web.php`: `GET laporan/monitoring-juknis` name `laporan.monitoring-juknis` (setelah laporan.index) + import controller.
+- `resources/views/layouts/navigation.blade.php`: link "Laporan" jadi dropdown Alpine (Semua Laporan + Monitoring Juknis), pola sama dropdown Pengaturan (sidebar-dropdown-btn/sidebar-submenu/chevron).
+- `tests/Feature/Juknis/MonitoringJuknisTest.php` (BARU, 8 test / 30 assertions): guest redirect; sidebar menampilkan link; **tepat di batas maksimal 20% = sesuai** (200rb mapped / 1jt total pagu — sekaligus bukti kode tak-termap 800rb TIDAK bocor ke kategori); melebihi batas; minimal tercapai (100% >= 15%); toggle basis mengubah nominal rencana(200rb) -> realisasi(100rb transaksi pengeluaran); **realisasi nota multi-item ikut dihitung** (nota_bku_item subtotal 100rb + SYARAT minimal 1 transaksi aktif nota_bku_id terisi — sesuai whereExists RealisasiQuery); tanpa tahun anggaran menampilkan peringatan.
+  - Catatan test: seed migrasi 000030 (Honor/Pemeliharaan/Buku) selalu ada di RefreshDatabase tapi TIDAK dipetakan -> tidak muncul sbg kartu; nama kategori uji dibuat unik agar tidak bentrok UNIQUE dgn seed.
+
+## Verifikasi
+- `vendor\bin\phpunit --filter MonitoringJuknisTest` -> OK (8 tests, 30 assertions) langsung hijau.
+- Full suite -> OK (460 tests, 1408 assertions); PHPStan level 6 [OK] No errors; view:cache OK.
+- Commit `39625a5` diverifikasi via git log + diff-tree (5 file).
+
+## Build & Release v0.6.8
+- `npm run build` OK (60 modules, app-BDxLy3Fi.css / app-CA7a7cYK.js).
+- `tauri build --bundles nsis,msi` via background process (log `%TEMP%\opencode\build-v068.log`): compile **11m33s** -> NSIS `SmartRKAS_0.6.8_x64-setup.exe` (**58.7MB**) + MSI `SmartRKAS_0.6.8_x64_en-US.msi` (**89.9MB**). SOP anti-build-rangkap dicek dulu (0 proses cargo/rustc/tauri sebelum mulai).
+
+## Reinstall & Verifikasi Instalasi Nyata v0.6.8
+- Kill app v0.6.7 (`Stop-Process -Force`; job object mematikan anak php bersih — 0 orphan php instalasi). Uninstall `/S` exit 0 -> folder `%LOCALAPPDATA%\SmartRKAS` hilang, **DB Roaming utuh** (1.74MB). Install NSIS v0.6.8 `/S` exit 0 -> exe ProductVersion **0.6.8**, `php\php.exe` + `php\extras\ssl\cacert.pem` (182KB) terbundle.
+- App jalan -> server `php -S 127.0.0.1:57427` (TEPAT 1 server), `/login` = **200/200/200** (11272 bytes).
+- Argumen router terverifikasi presisi: `-S 127.0.0.1:<port> C:\...\server.php` — TANPA prefix `\\?\`. Prefix `\\?\` di cmdline HANYA pada path executable php.exe itu sendiri (cara Rust spawn, normal) — jangan panik karena grep kasar (pelajaran sama sesi v0.6.7).
+- Cmdline server memuat semua fix TLS/opcache: `-d opcache.enable=0 -d log_errors=1 -d error_log=<data-dir>\php-server-error.log -d curl.cainfo=<install>\php\extras\ssl\cacert.pem -d openssl.cafile=<sama>`.
+- Fitur baru terverifikasi terbundle: `MonitoringJuknisController.php` (ada string `statusFor`), view `laporan/monitoring-juknis.blade.php`, `config/app.php` versi 0.6.8.
+- `php-server-error.log`: 756 -> **756 bytes** (TIDAK bertambah; isi lama fatal era `\\?\` 08-Agu).
+
+## Release & Push v0.6.8
+(lihat bagian lanjutan bila sudah dieksekusi)
