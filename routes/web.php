@@ -8,6 +8,7 @@ use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportRkasController;
 use App\Http\Controllers\ImportRevisiController;
 use App\Http\Controllers\JenisBelanjaController;
+use App\Http\Controllers\KategoriJuknisController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\MasterKodeRekeningController;
 use App\Http\Controllers\MasterProgramController;
@@ -123,6 +124,17 @@ Route::middleware(['auth'])->group(function () {
     Route::post('master-kode-rekening/import', [MasterKodeRekeningController::class, 'import'])->name('master-kode-rekening.import');
     Route::post('master-kode-rekening/hapus-semua', [MasterKodeRekeningController::class, 'destroyAll'])->name('master-kode-rekening.hapus-semua');
     Route::resource('master-kode-rekening', MasterKodeRekeningController::class)->except(['show']);
+
+    // Kategori Juknis BOSP (route statis "pemetaan" DI ATAS route param agar tidak tertelan {kategoriJuknis})
+    Route::prefix('pengaturan/kategori-juknis')->name('pengaturan.kategori-juknis.')->group(function (): void {
+        Route::get('pemetaan', [KategoriJuknisController::class, 'pemetaan'])->name('pemetaan');
+        Route::post('pemetaan', [KategoriJuknisController::class, 'simpanPemetaan'])->name('simpan-pemetaan');
+        Route::get('/', [KategoriJuknisController::class, 'index'])->name('index');
+        Route::post('/', [KategoriJuknisController::class, 'store'])->name('store');
+        Route::get('/{kategoriJuknis}/edit', [KategoriJuknisController::class, 'edit'])->name('edit');
+        Route::put('/{kategoriJuknis}', [KategoriJuknisController::class, 'update'])->name('update');
+        Route::delete('/{kategoriJuknis}', [KategoriJuknisController::class, 'destroy'])->name('destroy');
+    });
 });
 
 require __DIR__.'/auth.php';

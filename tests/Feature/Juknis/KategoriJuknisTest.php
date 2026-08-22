@@ -99,7 +99,7 @@ class KategoriJuknisTest extends TestCase
     public function test_batas_persen_tercast_float_dan_berlaku_untuk_nullable(): void
     {
         $kategori = KategoriJuknis::factory()->create([
-            'nama' => 'Honor',
+            'nama' => 'Honor Uji Cast',
             'arah' => 'maksimal',
             'batas_persen' => '50.00',
             'berlaku_untuk' => null,

@@ -2731,3 +2731,35 @@ UUID PK (regex uuid v4-format), relasi dua arah attach/detach, satu rekening ban
 
 ## Status
 - Commit lokal; BELUM push/build/rilis. Menunggu laporan Tahap 1 disetujui user sebelum Tahap 2 (halaman pengaturan kategori + centang kode rekening) dan Tahap 3 (halaman monitoring, hitung % via RealisasiQuery thd pagu tahunan).
+
+---
+
+# Sesi 22 Agu 2026 - Monitoring Kepatuhan Juknis BOSP - TAHAP 2 (Halaman Pengaturan Kategori + Pemetaan Kode Rekening) - commit lokal
+
+## Goal
+Tahap 2 dari 3: halaman pengaturan kategori Juknis BOSP (CRUD) + halaman pemetaan kode rekening -> kategori (checkbox multi-pilih per baris). Seed 3 kategori default (Honor/Pemeliharaan/Buku) via MIGRASI (bukan DatabaseSeeder - desktop upgrade hanya jalan `migrate --force`, precedent migrasi 000026).
+
+## Changes
+- `database/migrations/2026_08_22_000030_seed_default_kategori_juknis.php` (BARU, idempoten): seed `Honor` (maksimal 20%), `Pemeliharaan` (maksimal 20%), `Buku` (minimal 10%) via DB facade + `Str::uuid()` (firstOrCreate by nama). down() hanya menghapus kategori yang BELUM dipakai di pivot (aman utk data user).
+- `app/Http/Controllers/KategoriJuknisController.php` (BARU): index (withCount kodeRekenings), store/edit/update/destroy (validasi nama unique/arah in maksimal,minimal/batas 0-100/berlaku_untuk nullable max 50; AuditLog `kategori_juknis` create/update/delete), pemetaan (GET, search q di kode/nama, paginate(50)->withQueryString(), eager-load jenisBelanja+kategoriJuknis), simpanPemetaan (POST, DB::transaction sync per baris dari hidden `rows[]`; AuditLog aksi `update_pemetaan` berisi jumlah rekening diperbarui).
+- `routes/web.php` - grup prefix `pengaturan/kategori-juknis` name `pengaturan.kategori-juknis.*`: index/store/edit/update/destroy + `pemetaan` & `simpan-pemetaan` (static routes SEBELUM param `{kategoriJuknis}`). Import controller.
+- Views `resources/views/pengaturan/kategori-juknis/`: index (form tambah kiri lg:col-span-1 + daftar kanan lg:col-span-2, badge arah Minimal>= green / Maksimal<= red, batas number_format id), edit (max-w-2xl), pemetaan (search form terpisah, POST form membungkus tabel dgn hidden rows[] per baris + checkbox map[rid][kid], paginasi DI LUAR post-form, alert-info aturan "menyimpan hanya memperbarui baris yang tampil").
+- `resources/views/layouts/navigation.blade.php` - link "Kategori Juknis BOSP" di dropdown Pengaturan (setelah Profil Sekolah, highlight aktif) + kondisi routeIs ditambah `pengaturan.kategori-juknis.*`.
+- Test baru `tests/Feature/Juknis/KategoriJuknisPageTest.php` (12 test, 50 assertions).
+
+## Keputusan desain pemetaan (dikonfirmasi via reasoning, konsisten kebutuhan)
+- Hidden input `rows[]` = id SEMUA baris tampil -> uncheck semua checkbox pada satu baris tetap tersinkron (pemetaan dilepas); baris di halaman lain paginasi TIDAK disentuh.
+- Simpan hanya memperbarui baris yang tampil (paginasi 50 + search) -> aman untuk 276+ rekening.
+
+## Bug yang di-fix saat pengerjaan
+- **Route model binding**: parameter metode awalnya `$kategoriJukni` tidak match `{kategoriJuknis}` -> binding gagal. Di-rename `$kategoriJuknis` di edit/update/destroy.
+- **BOM UTF-8**: replace via PowerShell `Set-Content -Encoding UTF8` menambahkan BOM (EF BB BF) sebelum `<?php` -> fatal "Namespace declaration statement has to be the very first statement". Write tool pun MEMPERTAHANKAN BOM file lama saat overwrite. Fix definitif: strip char U+FEFF lalu `[System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))`. Verifikasi byte pertama = 3C (`<`). (Pelajaran sama dgn sesi v0.6.7.)
+- Test Tahap 1 lama `KategoriJuknisTest::test_batas_persen_tercast_float...` pakai nama 'Honor' -> bentrok UNIQUE dgn seed 000030 -> diganti 'Honor Uji Cast'.
+
+## Verifikasi
+- `vendor\bin\phpunit --filter KategoriJuknisPageTest` -> OK (12 tests, 50 assertions); `--filter Juknis` -> OK (19 tests, 69 assertions).
+- Full suite -> **OK (452 tests, 1378 assertions)** (naik dari 440/1329), PHPStan level 6 `[OK] No errors`, `php artisan view:cache` OK.
+- Dev DB (`database/database.sqlite`) dimigrasi ke 000030 DONE (3 kategori default ada).
+
+## Status
+- Commit lokal; BELUM push/build/rilis. Menunggu konfirmasi user sebelum Tahap 3 (halaman monitoring: persentase realisasi per kategori via RealisasiQuery thd pagu tahunan item yang ter-mapping, badge patuh/melanggar sesuai arah maksimal/minimal).
