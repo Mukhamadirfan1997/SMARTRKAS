@@ -325,10 +325,9 @@ class TransaksiBkuController extends Controller
         $validated['override_note'] = $isOverriding ? $overrideNote : null;
         unset($validated['override_anggaran']);
 
-        // Mutasi internal kas<->bank (tarik tunai) hanya berlaku utk penerimaan;
-        // pengeluaran selalu NULL. Pencairan/SP2D = NULL.
-        $validated['kategori_arus'] = ($jenis === 'penerimaan' && ($validated['kategori_arus'] ?? null) === 'mutasi')
-            ? 'mutasi' : null;
+        // Penerimaan di BKU SELALU tarik tunai (mutasi kas<->bank); pencairan/
+        // SP2D dicatat lewat modul Data Pencairan terpisah (bukan lewat BKU).
+        $validated['kategori_arus'] = ($jenis === 'penerimaan') ? 'mutasi' : null;
 
         $transaksi = TransaksiBku::create($validated);
 
@@ -466,13 +465,9 @@ class TransaksiBkuController extends Controller
             $validated['sumber_dana_id'] = $inputSumberDana;
         }
 
-        // Hanya sentuh kategori_arus bila form mengirim field-nya (form edit
-        // penerimaan baru selalu mengirim); jalur lain tidak mereset nilai lama.
-        if ($request->has('kategori_arus')) {
-            $rawKategori = $request->input('kategori_arus');
-            $validated['kategori_arus'] = ($jenis === 'penerimaan' && is_string($rawKategori) && trim($rawKategori) === 'mutasi')
-                ? 'mutasi' : null;
-        }
+        // Penerimaan di BKU SELALU tarik tunai (mutasi kas<->bank); pencairan/
+        // SP2D dicatat lewat modul Data Pencairan terpisah (bukan lewat BKU).
+        $validated['kategori_arus'] = ($jenis === 'penerimaan') ? 'mutasi' : null;
 
         if ($jenis === 'pengeluaran' && !empty($rkasItemId)) {
             $rkasItem = RkasItem::with('bulanRencana')->findOrFail($rkasItemId);

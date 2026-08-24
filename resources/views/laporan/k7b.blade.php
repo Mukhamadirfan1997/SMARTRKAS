@@ -101,6 +101,11 @@
                         <div class="text-[11px] text-emerald-600 mt-0.5">
                             Penerimaan (D): Rp {{ number_format($totalPenerimaanD, 0, ',', '.') }} | Pengeluaran (K): Rp {{ number_format($totalPengeluaranK, 0, ',', '.') }}
                         </div>
+                        @if(($totalPencairan ?? 0) > 0)
+                            <div class="text-[11px] text-emerald-500 mt-1">
+                                Termasuk pencairan SP2D s.d. bulan ini: Rp {{ number_format($totalPencairan, 0, ',', '.') }}
+                            </div>
+                        @endif
                     </div>
 
                     {{-- Form Uang Kertas --}}
@@ -155,6 +160,7 @@
                             <label for="input_saldo_bank" class="form-label text-xs">3. Saldo Rekening Bank (Rp)</label>
                             <input type="text" id="input_saldo_bank" name="saldo_bank" value="{{ number_format($saldoBank, 0, ',', '.') }}" class="form-input text-sm font-bold font-mono text-slate-800" placeholder="0">
                             <p class="text-[11px] text-slate-400 mt-1">Sesuai saldo pada mutasi Rekening Koran Bank.</p>
+                            <p class="text-[11px] text-slate-400">Estimasi dari pencairan &minus; tarik tunai: Rp {{ number_format($estimasiSaldoBank ?? 0, 0, ',', '.') }}</p>
                         </div>
 
                         <div>

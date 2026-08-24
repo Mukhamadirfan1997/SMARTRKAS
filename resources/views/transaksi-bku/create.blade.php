@@ -167,21 +167,8 @@
                     <input type="hidden" name="volume" id="volume" value="{{ old('volume') }}">
                     <input type="hidden" name="satuan" id="satuan" value="{{ old('satuan') }}">
 
-                    {{-- Jenis penerimaan: pencairan/SP2D vs tarik tunai (mutasi internal kas<->bank) --}}
-                    <div class="mb-5 hidden" id="row_kategori_arus">
-                        <label class="form-label">Jenis Penerimaan</label>
-                        <div class="flex flex-col sm:flex-row gap-3">
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="kategori_arus" value="" class="rounded-full border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('kategori_arus') !== 'mutasi' ? 'checked' : '' }}>
-                                <span class="text-sm text-slate-700">Pencairan / SP2D</span>
-                            </label>
-                            <label class="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="kategori_arus" value="mutasi" class="rounded-full border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('kategori_arus') === 'mutasi' ? 'checked' : '' }}>
-                                <span class="text-sm text-slate-700">Tarik Tunai</span>
-                            </label>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-1">Pilih <strong>Tarik Tunai</strong> bila uang ditarik dari rekening bank ke brankas sekolah — nominal tidak dihitung sebagai pendapatan di Formulir K7b.</p>
-                    </div>
+                    {{-- Penerimaan di BKU selalu tarik tunai (mutasi kas<->bank);
+                         pencairan/SP2D dicatat lewat modul Data Pencairan terpisah. --}}
 
                     <div class="mb-5 hidden" id="row_jumlah">
                         <label for="jumlah" class="form-label">Jumlah Nominal (Rp)</label>
@@ -293,8 +280,6 @@
             const rowKalkulator = document.getElementById('row_kalkulator');
             const rowJumlah = document.getElementById('row_jumlah');
             const rowSumberDana = document.getElementById('row_sumber_dana');
-            const rowKategoriArus = document.getElementById('row_kategori_arus');
-            const kategoriArusRadios = document.querySelectorAll('input[name="kategori_arus"]');
             const rowMetodePengadaan = document.getElementById('row_metode_pengadaan');
             const metodePengadaanSelect = document.getElementById('metode_pengadaan');
             const rowNoInvoiceSiplah = document.getElementById('row_no_invoice_siplah');
@@ -573,7 +558,6 @@
                     rowKalkulator.style.display = 'none';
                     rowJumlah.classList.remove('hidden');
                     rowSumberDana.classList.remove('hidden');
-                    rowKategoriArus.classList.remove('hidden');
                     rowMetodePengadaan.style.display = 'none';
                     volumeInput.value = '';
                     volumeHidden.value = '';
@@ -589,7 +573,6 @@
                     rowKalkulator.style.display = 'none';
                     rowJumlah.classList.add('hidden');
                     rowSumberDana.classList.add('hidden');
-                    rowKategoriArus.classList.add('hidden');
                     rowMetodePengadaan.style.display = 'block';
                 }
                 recalcOverrideAndBukti();
@@ -670,15 +653,10 @@
                 uraianEl.value = currentVal ? (currentVal + ' Bulan ' + namaBulan) : ('Bulan ' + namaBulan);
             }
 
-            function getSelectedKategoriArus() {
-                var checkedRadio = document.querySelector('input[name="kategori_arus"]:checked');
-                return checkedRadio ? checkedRadio.value : '';
-            }
-
             function syncMutasiUraian() {
                 var uraianEl = document.getElementById('uraian');
                 if (!uraianEl || !tanggalInput.value) return;
-                if (getSelectedKategoriArus() !== 'mutasi') return;
+                if (jenisSelect.value !== 'penerimaan') return;
                 var namaBulan = bulanNames[new Date(tanggalInput.value + 'T00:00:00').getMonth()];
                 if (!namaBulan) return;
                 var currentVal = uraianEl.value.trim();
@@ -686,14 +664,6 @@
                     uraianEl.value = 'Tarik tunai bulan ' + namaBulan;
                 }
             }
-
-            kategoriArusRadios.forEach(function(radio) {
-                radio.addEventListener('change', function() {
-                    if (radio.checked && radio.value === 'mutasi') {
-                        syncMutasiUraian();
-                    }
-                });
-            });
 
             formEl.addEventListener('submit', function(event) {
                 if (jenisSelect.value === 'pengeluaran') {

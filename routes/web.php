@@ -15,6 +15,7 @@ use App\Http\Controllers\MasterProgramController;
 use App\Http\Controllers\MonitoringJuknisController;
 use App\Http\Controllers\NotaBkuController;
 use App\Http\Controllers\PengaturanSekolahController;
+use App\Http\Controllers\PencairanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecoveryCodeController;
 use App\Http\Controllers\RkasController;
@@ -92,6 +93,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('transaksi-template', [TransaksiTemplateController::class, 'store'])->name('transaksi-template.store');
     Route::delete('transaksi-template/{transaksiTemplate}', [TransaksiTemplateController::class, 'destroy'])->name('transaksi-template.destroy');
     Route::get('transaksi-template/{transaksiTemplate}/apply', [TransaksiTemplateController::class, 'apply'])->name('transaksi-template.apply');
+
+    Route::get('pencairan', [PencairanController::class, 'index'])->name('pencairan.index');
+    Route::post('pencairan', [PencairanController::class, 'store'])->name('pencairan.store');
+    Route::get('pencairan/{pencairan}/edit', [PencairanController::class, 'edit'])->name('pencairan.edit');
+    Route::put('pencairan/{pencairan}', [PencairanController::class, 'update'])->name('pencairan.update');
+    Route::delete('pencairan/{pencairan}', [PencairanController::class, 'destroy'])->name('pencairan.destroy');
 
     Route::get('nota-bku', [NotaBkuController::class, 'index'])->name('nota-bku.index');
     Route::get('nota-bku/items', [NotaBkuController::class, 'items'])->name('nota-bku.items');

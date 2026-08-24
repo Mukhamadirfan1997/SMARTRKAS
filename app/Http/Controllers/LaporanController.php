@@ -11,6 +11,7 @@ use App\Models\ExportJob;
 use App\Models\KasPenutupan;
 use App\Models\MasterProgram;
 use App\Models\PengaturanSekolah;
+use App\Models\Pencairan;
 use App\Models\RkasItem;
 use App\Models\RkasItemBulan;
 use App\Models\SumberDana;
@@ -1041,13 +1042,18 @@ class LaporanController extends Controller
             ->where('tahun_anggaran_id', $tahunAnggaran->id)
             ->when($sumberDanaId, fn($q2) => $q2->where('sumber_dana_id', $sumberDanaId));
 
-        // Saldo awal periode register: kumulatif s.d. sebelum bulan "dari" (non-mutasi).
+        // Saldo awal periode register: kumulatif s.d. sebelum bulan "dari" (non-mutasi)
+        // + total pencairan SP2D s.d. bulan yang sama (uang masuk rekening bank).
         $saldoAwalRecord = TransaksiBku::query()
             ->tap(fn($q) => $scope($q))
             ->where('bulan', '<', $dari)
             ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus, '') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
             ->first();
-        $runningSaldo = (float) ($saldoAwalRecord?->getAttribute('saldo') ?? 0);
+        $pencairanAwal = (float) Pencairan::where('tahun_anggaran_id', $tahunAnggaran->id)
+            ->when($sumberDanaId, fn($q2) => $q2->where('sumber_dana_id', $sumberDanaId))
+            ->where('bulan', '<', $dari)
+            ->sum('nominal');
+        $runningSaldo = (float) ($saldoAwalRecord?->getAttribute('saldo') ?? 0) + $pencairanAwal;
 
         $rows = [];
         for ($m = $dari; $m <= $sampai; $m++) {
@@ -1058,7 +1064,12 @@ class LaporanController extends Controller
                 ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
                 ->first();
 
-            $penerimaan = (float) ($totals?->getAttribute('total_penerimaan') ?? 0);
+            $penerimaanBku = (float) ($totals?->getAttribute('total_penerimaan') ?? 0);
+            $pencairanBulan = (float) Pencairan::where('tahun_anggaran_id', $tahunAnggaran->id)
+                ->when($sumberDanaId, fn($q2) => $q2->where('sumber_dana_id', $sumberDanaId))
+                ->where('bulan', $m)
+                ->sum('nominal');
+            $penerimaan = $penerimaanBku + $pencairanBulan;
             $pengeluaran = (float) ($totals?->getAttribute('total_pengeluaran') ?? 0);
             $sisa = $runningSaldo + $penerimaan - $pengeluaran;
 
@@ -1197,8 +1208,31 @@ class LaporanController extends Controller
             ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
             ->first();
 
-        $penerimaanBulanIni = $monthTotals ? (float) $monthTotals->getAttribute('total_penerimaan') : 0.0;
+        $pencairanScope = fn($q) => $q->where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+            ->when($sumberDanaId, fn($q2) => $q2->where('sumber_dana_id', $sumberDanaId));
+
+        // Pencairan SP2D (modul Data Pencairan) = uang masuk ke rekening BANK,
+        // sehingga dihitung sebagai penerimaan pada Total Penerimaan (D).
+        $pencairanSdBulanLalu = (float) Pencairan::query()->tap(fn($q) => $pencairanScope($q))->where('bulan', '<', $bulan)->sum('nominal');
+        $pencairanBulanIni = (float) Pencairan::query()->tap(fn($q) => $pencairanScope($q))->where('bulan', $bulan)->sum('nominal');
+
+        // Estimasi isi rekening bank s.d. bulan terpilih = total pencairan -
+        // total tarik tunai (mutasi brankas). Dipakai sbg default kolom (3)
+        // saat user belum mengisi & belum ada opname tersimpan.
+        $tarikTunaiSdBulan = (float) TransaksiBku::query()
+            ->tap(fn($q) => $q->where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+                ->when($sumberDanaId, fn($q2) => $q2->where('sumber_dana_id', $sumberDanaId)))
+            ->where('jenis', 'penerimaan')
+            ->where('kategori_arus', 'mutasi')
+            ->where('bulan', '<=', $bulan)
+            ->sum('jumlah');
+        $totalPencairan = $pencairanSdBulanLalu + $pencairanBulanIni;
+        $estimasiSaldoBank = max(0.0, $totalPencairan - $tarikTunaiSdBulan);
+
+        $penerimaanBulanIni = ($monthTotals ? (float) $monthTotals->getAttribute('total_penerimaan') : 0.0) + $pencairanBulanIni;
         $totalPengeluaranK = $monthTotals ? (float) $monthTotals->getAttribute('total_pengeluaran') : 0.0;
+        // Saldo awal periode = kas & bank s.d. bulan lalu (termasuk pencairan).
+        $saldoAwal += $pencairanSdBulanLalu;
         $totalPenerimaanD = $saldoAwal + $penerimaanBulanIni;
         $saldoBkuA = $totalPenerimaanD - $totalPengeluaranK;
 
@@ -1282,8 +1316,10 @@ class LaporanController extends Controller
             // Nilai tersimpan periode ini (hasil opname sebelumnya).
             $saldoBank = (float) $kasPenutupan->saldo_bank;
         } else {
-            // Default: bila lembaran kas belum diinput, saldo bank = sisa saldo BKU
-            $saldoBank = $subtotalFisikKas > 0 ? max(0.0, $saldoBkuA - $subtotalFisikKas) : $saldoBkuA;
+            // Default bila belum ada opname tersimpan: bila lembaran kas sudah
+            // diisi, sisanya diasumsikan berada di rekening; bila belum diisi,
+            // pakai estimasi mutasi rekening (pencairan - tarik tunai).
+            $saldoBank = $subtotalFisikKas > 0 ? max(0.0, $saldoBkuA - $subtotalFisikKas) : $estimasiSaldoBank;
         }
 
         // Total Kas (1 + 2 + 3 = B)
@@ -1311,7 +1347,8 @@ class LaporanController extends Controller
             'saldoAwal', 'penerimaanBulanIni', 'totalPenerimaanD', 'totalPengeluaranK', 'saldoBkuA',
             'rincianKertas', 'subtotalKertas', 'rincianLogam', 'subtotalLogam', 'subtotalFisikKas',
             'saldoBank', 'totalKasB', 'perbedaan', 'penjelasanPerbedaan',
-            'skBupatiKepsek', 'skBupatiBendahara', 'tahunList', 'sumberDanaList'
+            'skBupatiKepsek', 'skBupatiBendahara', 'tahunList', 'sumberDanaList',
+            'totalPencairan', 'estimasiSaldoBank'
         );
     }
 }

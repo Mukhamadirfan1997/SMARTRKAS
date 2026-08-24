@@ -4,6 +4,7 @@ namespace Tests\Feature\Laporan;
 
 use App\Models\KasPenutupan;
 use App\Models\PengaturanSekolah;
+use App\Models\Pencairan;
 use App\Models\RkasItem;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
@@ -342,6 +343,79 @@ class LaporanK7Test extends TestCase
         $response->assertDontSee('10.000.000');
     }
 
+    public function test_k7b_pencairan_sp2d_dihitung_penerimaan(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        // Pencairan SP2D Januari Rp 10.000.000 (modul Data Pencairan).
+        Pencairan::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => null,
+            'bulan' => 1,
+            'nominal' => 10000000,
+            'tanggal' => '2026-01-10',
+            'created_by' => $this->user->id,
+        ]);
+
+        // Tarik tunai dari bank = mutasi internal, TIDAK dihitung penerimaan.
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'kategori_arus' => 'mutasi',
+            'rkas_item_id' => null,
+            'jumlah' => 4000000,
+            'tanggal' => '2026-01-05',
+            'uraian' => 'Tarik Tunai dari Bank',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('10.000.000');
+        $response->assertSee('Termasuk pencairan SP2D');
+    }
+
+    public function test_k7b_saldo_bank_default_diestimasi_dari_pencairan_minus_tarik_tunai(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        Pencairan::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => null,
+            'bulan' => 1,
+            'nominal' => 10000000,
+            'tanggal' => '2026-01-10',
+            'created_by' => $this->user->id,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'kategori_arus' => 'mutasi',
+            'rkas_item_id' => null,
+            'jumlah' => 4000000,
+            'tanggal' => '2026-01-05',
+            'uraian' => 'Tarik Tunai dari Bank',
+        ]);
+
+        // Tanpa input denominasi/saldo_bank dan tanpa opname tersimpan:
+        // saldo bank default = pencairan (10jt) - tarik tunai s.d. bulan (4jt).
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('value="6.000.000"', false);
+    }
+
     public function test_simpan_k7b_menyimpan_penutupan_dan_mengisi_ulang_form(): void
     {
         $this->tahunAnggaran->update(['tahun' => 2026]);
@@ -454,6 +528,45 @@ class LaporanK7Test extends TestCase
             'tahun' => 2026,
             'dari' => 1,
             'sampai' => 3,
+        ]));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString(
+            'Register_Penutupan_Kas_K7b-SDN_Toyaning_I-2026.pdf',
+            (string) $response->headers->get('Content-Disposition')
+        );
+    }
+
+    public function test_register_pdf_menyertakan_pencairan_tanpa_error(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        Pencairan::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => null,
+            'bulan' => 1,
+            'nominal' => 5000000,
+            'tanggal' => '2026-01-10',
+            'created_by' => $this->user->id,
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'rkas_item_id' => null,
+            'jumlah' => 1000000,
+            'tanggal' => '2026-02-10',
+        ]);
+
+        // Smoke: register multi-bulan dengan pencairan harus tetap render PDF.
+        // (Isi angka tidak bisa di-assert karena stream PDF terkompresi.)
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b.register', [
+            'tahun' => 2026,
+            'dari' => 1,
+            'sampai' => 2,
         ]));
 
         $response->assertOk();

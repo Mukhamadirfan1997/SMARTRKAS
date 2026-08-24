@@ -1301,19 +1301,15 @@ class TransaksiBkuTest extends TestCase
         $response->assertSee($this->sumber->nama, false);
     }
 
-    public function test_create_page_menampilkan_radio_jenis_penerimaan(): void
+    public function test_create_page_tidak_lagi_menyediakan_opsi_pencairan(): void
     {
         $response = $this->actingAs($this->user)->get('/transaksi-bku/create');
 
         $response->assertOk();
-        $response->assertSee('id="row_kategori_arus"', false);
-        $response->assertSee('name="kategori_arus"', false);
-        $response->assertSee('value="mutasi"', false);
-        $response->assertSee('Pencairan / SP2D', false);
-        $response->assertSee('Tarik Tunai', false);
-        // Default: Pencairan tercentang, mutasi tidak
-        $this->assertMatchesRegularExpression('/value=""[^>]*\schecked/', $response->getContent());
-        $this->assertDoesNotMatchRegularExpression('/value="mutasi"[^>]*\schecked/', $response->getContent());
+        // Radio jenis penerimaan dihapus — BKU penerimaan selalu tarik tunai.
+        $response->assertDontSee('id="row_kategori_arus"', false);
+        $response->assertDontSee('name="kategori_arus"', false);
+        $response->assertDontSee('Pencairan / SP2D', false);
     }
 
     public function test_store_tarik_tunai_dengan_kategori_mutasi_tidak_menambah_penerimaan_k7b(): void
@@ -1349,7 +1345,7 @@ class TransaksiBkuTest extends TestCase
         $this->assertSame((float) $saldoSebelum, (float) $saldoSesudah);
     }
 
-    public function test_update_tarik_tunai_bisa_diubah_jadi_pencairan(): void
+    public function test_update_penerimaan_selalu_tarik_tunai_mutasi(): void
     {
         $tx = \App\Models\TransaksiBku::factory()->create([
             'tanggal' => '2026-01-05',
@@ -1360,22 +1356,48 @@ class TransaksiBkuTest extends TestCase
             'uraian' => 'Tarik tunai bulan Januari',
         ]);
 
+        // Form BKU tidak lagi menyediakan opsi pencairan; kategori_arus
+        // di-hardcode server-side menjadi mutasi untuk semua penerimaan.
         $response = $this->actingAs($this->user)->put("/transaksi-bku/{$tx->id}", [
             'tanggal' => '2026-01-05',
             'jenis' => 'penerimaan',
             'no_bukti' => $tx->no_bukti,
-            'jumlah' => '500.000',
-            'kategori_arus' => '',
+            'jumlah' => '750.000',
             'sumber_dana_id' => $this->sumber->id,
             'toko_penerima' => $tx->toko_penerima,
             'metode_pengadaan' => 'non_siplah',
-            'uraian' => 'Pencairan BOSP bulan Januari',
+            'uraian' => 'Tarik tunai bulan Januari',
         ]);
 
         $response->assertRedirect('/transaksi-bku');
         $this->assertDatabaseHas('transaksi_bku', [
             'id' => $tx->id,
-            'kategori_arus' => null,
+            'jenis' => 'penerimaan',
+            'kategori_arus' => 'mutasi',
+            'jumlah' => 750000,
+        ]);
+    }
+
+    public function test_store_penerimaan_tanpa_kategori_arus_tetap_mutasi(): void
+    {
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-05',
+            'jenis' => 'penerimaan',
+            'jumlah' => '1.000.000',
+            'volume' => '',
+            'satuan' => '',
+            'rkas_item_id' => '',
+            'sumber_dana_id' => $this->sumber->id,
+            'toko_penerima' => 'Bank',
+            'metode_pengadaan' => 'non_siplah',
+            'uraian' => 'Tarik tunai bulan Januari',
+        ]);
+
+        $response->assertRedirect('/transaksi-bku');
+        $this->assertDatabaseHas('transaksi_bku', [
+            'jenis' => 'penerimaan',
+            'kategori_arus' => 'mutasi',
+            'jumlah' => 1000000,
         ]);
     }
 }
