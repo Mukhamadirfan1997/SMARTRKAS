@@ -86,6 +86,12 @@
                     <span class="text-xs text-slate-500 font-normal">Kalkulator Realtime</span>
                 </div>
                 <div class="card-body p-4 space-y-5">
+                    <form method="POST" action="{{ route('laporan.k7b.simpan') }}" id="form-simpan-k7b" class="space-y-5">
+                        @csrf
+                        <input type="hidden" name="bulan" value="{{ $bulan }}">
+                        @if($tahunAnggaranAktif)<input type="hidden" name="tahun_anggaran_id" value="{{ $tahunAnggaranAktif->id }}">@endif
+                        <input type="hidden" name="sumber_dana_id" value="{{ $sumberDanaId }}">
+                        <input type="hidden" name="tanggal_penutupan" id="tanggal_penutupan_simpan" value="{{ $tanggalPenutupanInput }}">
                     {{-- Status Saldo BKU --}}
                     <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                         <div class="text-xs text-emerald-700 font-medium">Saldo BKU Sistem (A)</div>
@@ -147,13 +153,13 @@
                     <div class="space-y-3 pt-3 border-t border-slate-200">
                         <div>
                             <label for="input_saldo_bank" class="form-label text-xs">3. Saldo Rekening Bank (Rp)</label>
-                            <input type="text" id="input_saldo_bank" value="{{ number_format($saldoBank, 0, ',', '.') }}" class="form-input text-sm font-bold font-mono text-slate-800" placeholder="0">
+                            <input type="text" id="input_saldo_bank" name="saldo_bank" value="{{ number_format($saldoBank, 0, ',', '.') }}" class="form-input text-sm font-bold font-mono text-slate-800" placeholder="0">
                             <p class="text-[11px] text-slate-400 mt-1">Sesuai saldo pada mutasi Rekening Koran Bank.</p>
                         </div>
 
                         <div>
                             <label for="input_penjelasan" class="form-label text-xs">Penjelasan Perbedaan</label>
-                            <input type="text" id="input_penjelasan" value="{{ $penjelasanPerbedaan }}" class="form-input text-xs" placeholder="NIHIL">
+                            <input type="text" id="input_penjelasan" name="catatan" value="{{ $penjelasanPerbedaan }}" class="form-input text-xs" placeholder="NIHIL">
                         </div>
 
                         <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 text-xs">
@@ -161,14 +167,23 @@
                                 <span class="text-slate-600">Total Kas & Bank (B = 1+2+3):</span>
                                 <span class="font-bold font-mono text-slate-800" id="display-total-b">Rp {{ number_format($totalKasB, 2, ',', '.') }}</span>
                             </div>
-                            <div class="flex justify-between font-bold pt-1 border-t border-slate-200" id="row-selisih">
-                                <span class="text-slate-700">Perbedaan (A - B):</span>
-                                <span class="font-mono {{ abs($perbedaan) < 0.01 ? 'text-emerald-700' : 'text-red-600' }}" id="display-perbedaan">
-                                    Rp {{ number_format($perbedaan, 2, ',', '.') }}
-                                </span>
-                            </div>
+                        <div class="flex justify-between font-bold pt-1 border-t border-slate-200" id="row-selisih">
+                            <span class="text-slate-700">Perbedaan (A - B):</span>
+                            <span class="font-mono {{ abs($perbedaan) < 0.01 ? 'text-emerald-700' : 'text-red-600' }}" id="display-perbedaan">
+                                Rp {{ number_format($perbedaan, 2, ',', '.') }}
+                            </span>
                         </div>
                     </div>
+
+                    <div class="pt-2 space-y-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-full justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                            Simpan Penutupan Kas
+                        </button>
+                        <p class="text-[11px] text-slate-400 text-center">Tersimpan per bulan &amp; dipakai ulang otomatis saat halaman dibuka kembali.</p>
+                    </div>
+                    </form>
+                </div>
                 </div>
             </div>
         </div>
@@ -181,6 +196,10 @@
                     Pratinjau Lembar Cetak
                 </div>
                 <div class="flex items-center gap-2">
+                    <a href="{{ route('laporan.k7b.register', request()->query()) }}" target="_blank" class="btn btn-secondary btn-sm">
+                        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 00-2-2H5a2 2 0 00-2 2m14 0h2a2 2 0 012 2v6a2 2 0 01-2 2h-2a2 2 0 01-2-2V9a2 2 0 012-2z"/></svg>
+                        Register PDF
+                    </a>
                     <button type="button" onclick="window.print()" class="btn btn-secondary btn-sm">
                         <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                         Cetak Langsung
@@ -347,6 +366,8 @@
             var lastLalu = new Date(tahun, bulan - 1, 0);
             if (tglIni) tglIni.value = lastIni.getFullYear() + '-' + pad(lastIni.getMonth() + 1) + '-' + pad(lastIni.getDate());
             if (tglLalu) tglLalu.value = lastLalu.getFullYear() + '-' + pad(lastLalu.getMonth() + 1) + '-' + pad(lastLalu.getDate());
+            var tglSimpan = document.getElementById('tanggal_penutupan_simpan');
+            if (tglSimpan && tglIni) tglSimpan.value = tglIni.value;
         }
     </script>
     <script>

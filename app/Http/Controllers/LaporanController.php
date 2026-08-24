@@ -6,7 +6,9 @@ use App\Exports\BkuExport;
 use App\Exports\RekapKuartalExport;
 use App\Exports\RekapRekeningExport;
 use App\Exports\RekapSiplahExport;
+use App\Models\AuditLog;
 use App\Models\ExportJob;
+use App\Models\KasPenutupan;
 use App\Models\MasterProgram;
 use App\Models\PengaturanSekolah;
 use App\Models\RkasItem;
@@ -14,6 +16,7 @@ use App\Models\RkasItemBulan;
 use App\Models\SumberDana;
 use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
+use App\Support\NumberParser;
 use App\Support\RealisasiQuery;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -934,6 +937,177 @@ class LaporanController extends Controller
     }
 
     /**
+     * Simpan hasil opname penutupan kas bulan tertentu (Formulir BOS-K7b).
+     * Satu baris per (tahun_anggaran, bulan, sumber_dana) — upsert manual karena
+     * sumber_dana_id bisa NULL (NULL tidak cocok dengan '=' di SQL).
+     */
+    public function simpanK7b(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $tahunAnggaranAktif = TahunAnggaran::getActive();
+        if ($tahunAnggaranAktif === null) {
+            return back()->with('error', 'Tidak ada tahun anggaran aktif.');
+        }
+
+        $rules = [];
+        foreach (array_keys(KasPenutupan::daftarKertas()) as $key) {
+            $rules['kertas_' . $key] = ['required', 'integer', 'min:0'];
+        }
+        foreach (array_keys(KasPenutupan::daftarLogam()) as $key) {
+            $rules['logam_' . $key] = ['required', 'integer', 'min:0'];
+        }
+        $rules['saldo_bank'] = ['required'];
+        $rules['tanggal_penutupan'] = ['nullable', 'date'];
+        $rules['catatan'] = ['nullable', 'string', 'max:500'];
+
+        $validated = $request->validate($rules);
+
+        $bulan = max(1, min(12, (int) $request->input('bulan', now()->month)));
+        $sumberDanaId = $request->input('sumber_dana_id');
+
+        $payload = [
+            'tanggal_penutupan' => $validated['tanggal_penutupan'] ?? null,
+            'saldo_bank' => (float) NumberParser::rupiah((string) $validated['saldo_bank']),
+            'catatan' => $validated['catatan'] ?? null,
+            'created_by' => auth()->id(),
+        ];
+        foreach (KasPenutupan::daftarKertas() as $key => $nominal) {
+            $payload[$key] = max(0, (int) $validated['kertas_' . $key]);
+        }
+        foreach (KasPenutupan::daftarLogam() as $key => $nominal) {
+            $payload[$key] = max(0, (int) $validated['logam_' . $key]);
+        }
+
+        // Lookup manual (bukan updateOrCreate) — NULL sumber_dana_id tidak cocok dengan '='.
+        $penutupan = KasPenutupan::where('tahun_anggaran_id', $tahunAnggaranAktif->id)
+            ->where('bulan', $bulan)
+            ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId), fn($q) => $q->whereNull('sumber_dana_id'))
+            ->first();
+
+        if ($penutupan === null) {
+            $penutupan = new KasPenutupan;
+            $penutupan->tahun_anggaran_id = $tahunAnggaranAktif->id;
+            $penutupan->bulan = $bulan;
+            $penutupan->sumber_dana_id = $sumberDanaId;
+            $aksi = 'create';
+        } else {
+            $aksi = 'update';
+        }
+        $penutupan->fill($payload);
+        $penutupan->save();
+
+        AuditLog::record('kas_penutupan', $aksi, [
+            'bulan' => $bulan,
+            'sumber_dana_id' => $sumberDanaId,
+            'subtotal_fisik' => $penutupan->subtotalFisik(),
+            'saldo_bank' => (float) $penutupan->saldo_bank,
+            'total_riil' => $penutupan->totalRiil(),
+        ]);
+
+        $namaBulan = Carbon::createFromDate((int) now()->year, $bulan, 1)->translatedFormat('F');
+
+        return redirect()
+            ->route('laporan.k7b', array_filter([
+                'bulan' => $bulan,
+                'tahun_anggaran_id' => $tahunAnggaranAktif->id,
+                'sumber_dana_id' => $sumberDanaId,
+            ]))
+            ->with('success', 'Data penutupan kas bulan ' . $namaBulan . ' berhasil disimpan.');
+    }
+
+    /**
+     * Register Penutupan Kas multi-bulan (Formulir BOS-K7b lanjutan):
+     * rekap A/D/K/Sisa per bulan + hasil opname fisik & bank yang tersimpan.
+     * Output PDF landscape.
+     */
+    public function registerK7b(Request $request): mixed
+    {
+        $tahunParam = $request->input('tahun_anggaran_id');
+        $tahunAnggaran = $tahunParam !== null && $tahunParam !== ''
+            ? TahunAnggaran::find($tahunParam)
+            : TahunAnggaran::getActive();
+
+        if ($tahunAnggaran === null) {
+            return redirect()->route('laporan.index')->with('error', 'Tidak ada tahun anggaran aktif.');
+        }
+
+        $dari = max(1, min(12, (int) $request->input('dari', 1)));
+        $sampai = max(1, min(12, (int) $request->input('sampai', 12)));
+        if ($sampai < $dari) {
+            [$dari, $sampai] = [$sampai, $dari];
+        }
+        $sumberDanaId = $request->input('sumber_dana_id');
+
+        $scope = fn($q) => $q
+            ->where('tahun_anggaran_id', $tahunAnggaran->id)
+            ->when($sumberDanaId, fn($q2) => $q2->where('sumber_dana_id', $sumberDanaId));
+
+        // Saldo awal periode register: kumulatif s.d. sebelum bulan "dari" (non-mutasi).
+        $saldoAwalRecord = TransaksiBku::query()
+            ->tap(fn($q) => $scope($q))
+            ->where('bulan', '<', $dari)
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus, '') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
+            ->first();
+        $runningSaldo = (float) ($saldoAwalRecord?->getAttribute('saldo') ?? 0);
+
+        $rows = [];
+        for ($m = $dari; $m <= $sampai; $m++) {
+            $totals = TransaksiBku::query()
+                ->tap(fn($q) => $scope($q))
+                ->where('bulan', $m)
+                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus, '') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
+                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
+                ->first();
+
+            $penerimaan = (float) ($totals?->getAttribute('total_penerimaan') ?? 0);
+            $pengeluaran = (float) ($totals?->getAttribute('total_pengeluaran') ?? 0);
+            $sisa = $runningSaldo + $penerimaan - $pengeluaran;
+
+            // Lookup manual (NULL-safe sumber_dana_id).
+            $penutupan = KasPenutupan::where('tahun_anggaran_id', $tahunAnggaran->id)
+                ->where('bulan', $m)
+                ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId), fn($q) => $q->whereNull('sumber_dana_id'))
+                ->first();
+
+            $adaOpname = $penutupan !== null;
+
+            $rows[] = [
+                'bulan' => $m,
+                'label' => Carbon::createFromDate((int) $tahunAnggaran->tahun, $m, 1)->translatedFormat('F Y'),
+                'tanggal' => $penutupan?->tanggal_penutupan,
+                'awal' => $runningSaldo,
+                'penerimaan' => $penerimaan,
+                'pengeluaran' => $pengeluaran,
+                'sisa' => $sisa,
+                'fisik' => $adaOpname ? $penutupan->subtotalFisik() : null,
+                'bank' => $adaOpname ? (float) $penutupan->saldo_bank : null,
+                'riil' => $adaOpname ? $penutupan->totalRiil() : null,
+                'perbedaan' => $adaOpname ? round($sisa - $penutupan->totalRiil(), 2) : null,
+            ];
+
+            $runningSaldo = $sisa;
+        }
+
+        $sumberDana = filled($sumberDanaId) ? SumberDana::find($sumberDanaId) : null;
+
+        $data = [
+            'profil' => PengaturanSekolah::get(),
+            'tahunAnggaran' => $tahunAnggaran,
+            'sumberDanaLabel' => $sumberDana !== null ? $sumberDana->nama : 'Semua Sumber Dana',
+            'dari' => $dari,
+            'sampai' => $sampai,
+            'rows' => collect($rows),
+        ];
+
+        $pdf = Pdf::loadView('laporan.k7b-register-pdf', $data)->setPaper('a4', 'landscape');
+
+        return $this->streamPdf($pdf, sprintf(
+            'Register_Penutupan_Kas_K7b-%s-%d.pdf',
+            str_replace(' ', '_', (string) ($data['profil']->nama ?? 'Sekolah')),
+            $tahunAnggaran->tahun
+        ));
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function prepareK7Data(Request $request): array
@@ -944,6 +1118,14 @@ class LaporanController extends Controller
         $sumberDanaId = $request->input('sumber_dana_id');
         $profil = PengaturanSekolah::get();
         $tahun = $tahunAnggaranAktif !== null ? (int) $tahunAnggaranAktif->tahun : (int) date('Y');
+
+        // Data penutupan kas tersimpan untuk periode terpilih (fallback nilai form).
+        // Lookup manual (bukan updateOrCreate-style firstOrNew) karena sumber_dana_id
+        // bisa NULL dan NULL tidak cocok dengan '=' di SQL.
+        $kasPenutupan = KasPenutupan::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+            ->where('bulan', $bulan)
+            ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId), fn($q) => $q->whereNull('sumber_dana_id'))
+            ->first();
 
         // Tanggal Penutupan Kas Bulan ini & Bulan lalu
         $lastDayOfMonth = Carbon::create($tahun, $bulan, 1)->endOfMonth();
@@ -974,7 +1156,9 @@ class LaporanController extends Controller
 
         $tanggalPenutupanCarbon = $rawTanggalPenutupan !== null
             ? Carbon::parse($rawTanggalPenutupan)
-            : $lastDayOfMonth;
+            : ($kasPenutupan !== null && filled($kasPenutupan->tanggal_penutupan)
+                ? Carbon::parse($kasPenutupan->tanggal_penutupan)
+                : $lastDayOfMonth);
         $tanggalPenutupanLaluCarbon = $rawTanggalPenutupanLalu !== null
             ? Carbon::parse($rawTanggalPenutupanLalu)
             : $prevMonthLastDay;
@@ -995,17 +1179,21 @@ class LaporanController extends Controller
         $hariPenutupan = $hariIndonesia[$tanggalPenutupanCarbon->format('l')] ?? '';
 
         // BKU Calculations
+        // Semantik resmi K7b: kas + bank digabung. Tarik tunai (kategori_arus =
+        // 'mutasi') hanyalah perpindahan brankas -> rekening (atau sebaliknya),
+        // jadi TIDAK dihitung sebagai penerimaan; saldo awal & D keduanya
+        // mengecualikannya agar Sisa Saldo (A = Awal + D - K) mencakup bank.
         $saldoAwalRecord = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', '<', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
-            ->selectRaw("SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END) as saldo")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus, '') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
             ->first();
         $saldoAwal = $saldoAwalRecord ? (float) $saldoAwalRecord->getAttribute('saldo') : 0.0;
 
         $monthTotals = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
-            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus, '') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
             ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
             ->first();
 
@@ -1015,20 +1203,28 @@ class LaporanController extends Controller
         $saldoBkuA = $totalPenerimaanD - $totalPengeluaranK;
 
         // Rincian Pecahan Uang Kertas
+        // Kunci = nama kolom persis (lembar_*/keping_*) agar name input form
+        // (kertas_{{ $key }}) selalu cocok dengan rules validasi simpanK7b()
+        // yang dibangun dari KasPenutupan::daftarKertas()/daftarLogam().
         $denominasiKertas = [
-            '100000' => ['label' => '100.000', 'nominal' => 100000],
-            '50000' => ['label' => '50.000', 'nominal' => 50000],
-            '20000' => ['label' => '20.000', 'nominal' => 20000],
-            '10000' => ['label' => '10.000', 'nominal' => 10000],
-            '5000' => ['label' => '5.000', 'nominal' => 5000],
-            '2000' => ['label' => '2.000', 'nominal' => 2000],
-            '1000' => ['label' => '1.000', 'nominal' => 1000],
+            'lembar_100000' => ['label' => '100.000', 'nominal' => 100000],
+            'lembar_50000' => ['label' => '50.000', 'nominal' => 50000],
+            'lembar_20000' => ['label' => '20.000', 'nominal' => 20000],
+            'lembar_10000' => ['label' => '10.000', 'nominal' => 10000],
+            'lembar_5000' => ['label' => '5.000', 'nominal' => 5000],
+            'lembar_2000' => ['label' => '2.000', 'nominal' => 2000],
+            'lembar_1000' => ['label' => '1.000', 'nominal' => 1000],
         ];
 
         $rincianKertas = [];
         $subtotalKertas = 0.0;
         foreach ($denominasiKertas as $key => $d) {
-            $lembar = max(0, (int) $request->input('kertas_' . $key, 0));
+            // Prioritas: input form (live) > data tersimpan periode ini > 0.
+            if ($request->has('kertas_' . $key)) {
+                $lembar = max(0, (int) $request->input('kertas_' . $key, 0));
+            } else {
+                $lembar = $kasPenutupan !== null ? max(0, (int) $kasPenutupan->getAttribute($key)) : 0;
+            }
             $total = $lembar * $d['nominal'];
             $subtotalKertas += $total;
             $rincianKertas[$key] = [
@@ -1041,16 +1237,20 @@ class LaporanController extends Controller
 
         // Rincian Pecahan Uang Logam
         $denominasiLogam = [
-            '500' => ['label' => '500', 'nominal' => 500],
-            '200' => ['label' => '200', 'nominal' => 200],
-            '100' => ['label' => '100', 'nominal' => 100],
-            '50' => ['label' => '50', 'nominal' => 50],
+            'keping_500' => ['label' => '500', 'nominal' => 500],
+            'keping_200' => ['label' => '200', 'nominal' => 200],
+            'keping_100' => ['label' => '100', 'nominal' => 100],
+            'keping_50' => ['label' => '50', 'nominal' => 50],
         ];
 
         $rincianLogam = [];
         $subtotalLogam = 0.0;
         foreach ($denominasiLogam as $key => $d) {
-            $keping = max(0, (int) $request->input('logam_' . $key, 0));
+            if ($request->has('logam_' . $key)) {
+                $keping = max(0, (int) $request->input('logam_' . $key, 0));
+            } else {
+                $keping = $kasPenutupan !== null ? max(0, (int) $kasPenutupan->getAttribute($key)) : 0;
+            }
             $total = $keping * $d['nominal'];
             $subtotalLogam += $total;
             $rincianLogam[$key] = [
@@ -1069,6 +1269,9 @@ class LaporanController extends Controller
         if ($rawSaldoBank !== null && $rawSaldoBank !== '') {
             $cleanBank = is_string($rawSaldoBank) ? str_replace(['.', ','], ['', '.'], $rawSaldoBank) : $rawSaldoBank;
             $saldoBank = (float) $cleanBank;
+        } elseif ($kasPenutupan !== null) {
+            // Nilai tersimpan periode ini (hasil opname sebelumnya).
+            $saldoBank = (float) $kasPenutupan->saldo_bank;
         } else {
             // Default: bila lembaran kas belum diinput, saldo bank = sisa saldo BKU
             $saldoBank = $subtotalFisikKas > 0 ? max(0.0, $saldoBkuA - $subtotalFisikKas) : $saldoBkuA;
@@ -1094,7 +1297,7 @@ class LaporanController extends Controller
         $sumberDanaList = SumberDana::orderBy('kode')->get();
 
         return compact(
-            'profil', 'tahunAnggaranAktif', 'tahun', 'bulan', 'sumberDanaId',
+            'profil', 'tahunAnggaranAktif', 'tahun', 'bulan', 'sumberDanaId', 'kasPenutupan',
             'tanggalPenutupan', 'tanggalPenutupanInput', 'tanggalPenutupanLalu', 'tanggalPenutupanLaluInput', 'hariPenutupan',
             'saldoAwal', 'penerimaanBulanIni', 'totalPenerimaanD', 'totalPengeluaranK', 'saldoBkuA',
             'rincianKertas', 'subtotalKertas', 'rincianLogam', 'subtotalLogam', 'subtotalFisikKas',

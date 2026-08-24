@@ -106,7 +106,7 @@
         <tr style="font-weight: bold;">
             <td class="col-label">Perbedaan Antara Saldo KAS dan Kas Umum</td>
             <td class="col-sep">:</td>
-            <td class="col-val">RP {{ number_format($perbedaan, 0, ',', '.') }}</td>
+            <td class="col-val">Rp {{ number_format($perbedaan, 0, ',', '.') }}</td>
         </tr>
     </table>
 

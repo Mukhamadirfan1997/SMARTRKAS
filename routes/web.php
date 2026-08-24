@@ -112,6 +112,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('laporan/rekap-kuartal/preview', [LaporanController::class, 'rekapKuartalWeb'])->name('laporan.rekap-kuartal.preview');
     Route::get('laporan/rekap-siplah/preview', [LaporanController::class, 'rekapSiplahWeb'])->name('laporan.rekap-siplah.preview');
     Route::get('laporan/k7b', [LaporanController::class, 'k7b'])->name('laporan.k7b');
+    Route::post('laporan/k7b/simpan', [LaporanController::class, 'simpanK7b'])->name('laporan.k7b.simpan');
+    Route::get('laporan/k7b-register', [LaporanController::class, 'registerK7b'])->name('laporan.k7b.register');
     Route::get('laporan/k7c', [LaporanController::class, 'k7c'])->name('laporan.k7c');
 
     Route::resource('tahun-anggaran', TahunAnggaranController::class)->except(['show']);

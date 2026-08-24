@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $metode_pengadaan
  * @property string|null $no_invoice_siplah
  * @property string|null $uraian
+ * @property string|null $kategori_arus
  * @property string|null $override_note
  * @property int $tahap
  * @property bool $status_lunas
@@ -66,6 +67,7 @@ class TransaksiBku extends Model
         'metode_pengadaan',
         'no_invoice_siplah',
         'uraian',
+        'kategori_arus',
         'override_note',
         'tahap',
         'status_lunas',
@@ -151,5 +153,15 @@ class TransaksiBku extends Model
         $realisasi = $item->realisasiKumulatifSd($bulan);
 
         return $this->masihOverBudgetCache = $realisasi > $rencana;
+    }
+
+    /**
+     * Mutasi internal kas <-> bank (mis. tarik tunai): bernilai netral (0)
+     * dalam perhitungan penerimaan BKU dan Formulir BOS-K7b.
+     */
+    public function isMutasi(): bool
+    {
+        return strtolower((string) $this->jenis) === 'penerimaan'
+            && $this->kategori_arus === 'mutasi';
     }
 }

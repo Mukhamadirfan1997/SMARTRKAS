@@ -3440,3 +3440,49 @@ Commit fitur Formulir BOS-K7b/K7c (yang sebelumnya terverifikasi tapi belum di-c
 - Fix kode belum masuk instalasi v0.6.9 (butuh build baru); backfill data sudah aktif seketika di app jalan.
 - Backup pra-backfill: %TEMP%\opencode\backup-sebelum-backfill.sqlite (1.87MB).
 - User setuju "Commit saja dulu" via question tool; BELUM push/build/rilis - bump versi + build installer menyusul bila diminta.
+
+---
+
+# Sesi 24 Agu 2026 - Saldo Bank Formulir K7b/K7c + Mutasi Tarik Tunai Netral + Persistensi Opname Kas (commit lokal)
+
+## Goal
+
+Implementasi saldo bank pada Formulir BOS-K7b/K7c sesuai panduan resmi (keputusan user: "Ya, ikuti panduan resmi"): tarik tunai = MUTASI netral, Sisa Saldo = Awal + D - K mencakup kas+bank, Perbedaan = Kas Fisik + Bank vs Sisa Buku. Plus persistensi opname kas per bulan (kas_penutupan) dan Register Penutupan Kas multi-bulan PDF landscape.
+
+## Summary
+
+- Full suite OK (482 tests, 1496 assertions) (+7 dari baseline 475), PHPStan level 6 [OK] No errors, view:cache OK.
+- Backfill produksi: 6 baris tarik tunai lama -> kategori_arus='mutasi' via migrasi 000031 (juga menangkap typo "Tari Tunai").
+- Fix bug produksi KRITIS ditemukan saat verifikasi: nama field form denominasi TIDAK COCOK dengan rule validasi -> simpan dari UI nyata SELALU gagal validasi secara diam-diam.
+
+## Changes
+
+- Migration 000031 add_kategori_arus_and_kas_penutupan_table: kolom transaksi_bku.kategori_arus string(20) nullable + backfill mutasi; tabel kas_penutupan (uuid, tahun_anggaran_id restrict, bulan, sumber_dana_id nullable nullOnDelete, tanggal_penutupan date nullable, lembar_100000..lembar_1000, keping_500..keping_50, saldo_bank decimal(15,2), catatan, created_by, unique kas_penutupan_periode_unique [tahun_anggaran_id, bulan, sumber_dana_id]).
+- app/Models/TransaksiBku.php: kategori_arus fillable/@property + isMutasi() helper (penerimaan && kategori_arus==='mutasi').
+- TransaksiBkuController: saldo berjalan & total penerimaan BKU kini EXCLUDE mutasi (netral); validasi kategori_arus store/update ('nullable|in:mutasi', hanya diset utk penerimaan, pengeluaran selalu NULL); update() hanya menyentuh nilai bila form mengirim field.
+- create/edit.blade.php: radio "Jenis Penerimaan" (Pencairan/SP2D vs Tarik Tunai) tampil utk penerimaan saja + JS auto-sinkron uraian.
+- app/Models/KasPenutupan.php (BARU): daftarKertas()/daftarLogam() (kolom berprefiks 'lembar_*'/'keping_*'), subtotalFisik(), totalRiil() (= fisik + saldo_bank); cast 'tanggal_penutupan' => 'date' (WAJIB - tanpa ini toDateString() di test fatal).
+- LaporanController (+237): prepareK7Data() baca input saldo_bank (fallback record tersimpan -> hitungan komputasi), lookup KasPenutupan utk repopulasi form (resolveTahunAnggaran + bulan + sumber_dana_id whereNull bila kosong); simpanK7b() upsert per periode dgn payload keys berprefiks; registerK7b() register PDF a4-landscape (saldo awal kumulatif s.d. sebelum bulan "dari", running saldo, non-mutasi saja) + streamPdf.
+- routes/web.php: POST laporan/k7b/simpan (laporan.k7b.simpan), GET laporan/k7b-register (laporan.k7b.register).
+- Views: k7b.blade.php (+37 form simpan + saldo bank + link register), k7b-register-pdf.blade.php (BARU), k7c.blade.php & k7c-pdf.blade.php typo "RP" -> "Rp".
+- Tests: LaporanK7Test +177 baris (15 tests total: persistensi opname, repopulasi, saldo bank, register PDF); TransaksiBkuTest +78 baris (mutasi netral saldo berjalan, validasi kategori_arus).
+
+## Bug Produksi KRITIS (ditemukan & diperbaiki)
+
+- prepareK7Data() awalnya memakai array denominasi keys ANGKA POLOS ('100000', '500') sehingga form browser mengirim name="kertas_100000", padahal simpanK7b() memvalidasi "kertas_lembar_100000" (keys berprefiks dari daftarKertas()) -> POST dari UI nyata SELALU gagal validasi diam-diam (redirect balik tanpa pesan jelas). FIX (Option B): array lokal prepareK7Data() diganti ke keys berprefiks yang sama dengan model -> form otomatis cocok dengan rules. Option A (balik model ke keys polos) ditolak: diff lebih besar + harus revert edit controller.
+- Double-prefix bug terkait: read side prepareK7Data sempat getAttribute('kertas_'.) padahal  sudah berprefiks -> getAttribute().
+- Audit consumer daftarKertas/daftarLogam SEBELUM ubah format key: hanya model sendiri (subtotalFisik/totalRiil pakai \ sebagai nama kolom penuh), simpanK7b, dan JS k7b.blade.php (dataset.key hanya untuk bangun param GET) -> aman.
+
+## Gotcha (pelajaran)
+
+- Eloquent selectRaw("... as x")->value('x') TIDAK reliable di setup ini (nilai mentah/null) -> WAJIB ->first() lalu getAttribute('x') (pola sudah dipakai di controller lain, ikuti pola itu).
+- Model @property docblock harus ikut di-update saat tambah cast date (tanggal_penutupan) -> kalau tidak, PHPStan error method.nonObject di test yang memanggil toDateString().
+- Anotasi generics wajib level 6: /** @use HasFactory<\Database\Factories\XxxFactory> */ + /** @return BelongsTo<RelatedModel, \> */ di tiap relasi (pola konsisten semua model).
+- Nullsafe "?->" di kiri "??" dianggap redundant PHPStan ("Use -> instead") - JANGAN buta ikuti (fatal on null saat runtime); refactor eksplisit: \ = filled(\) ? SumberDana::find(\) : null; lalu ternary !== null.
+- Lookup KasPenutupan repopulasi pakai whereNull('sumber_dana_id') bila filter kosong - test kedua HARUS kirim sumber_dana_id sama seperti POST pertama agar row ketemu.
+
+## Status
+
+- Commit lokal; BELUM push/build/rilis - menunggu konfirmasi user.
+- File xlsm referensi di root tetap untracked, TIDAK di-commit.
+- Instalasi v0.6.9 belum memuat fitur ini; migration 000031 SUDAH diterapkan ke DB produksi Roaming saat backfill.

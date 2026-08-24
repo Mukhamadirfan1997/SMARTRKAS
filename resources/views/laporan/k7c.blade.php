@@ -214,7 +214,7 @@
                     <tr class="font-bold">
                         <td class="py-0.5">Perbedaan Antara Saldo KAS dan Kas Umum</td>
                         <td class="text-center">:</td>
-                        <td class="font-mono" id="pv-perbedaan">RP {{ number_format($perbedaan, 0, ',', '.') }}</td>
+                        <td class="font-mono" id="pv-perbedaan">Rp {{ number_format($perbedaan, 0, ',', '.') }}</td>
                     </tr>
                 </table>
 
@@ -294,7 +294,7 @@
                 let dispPerbedaan = document.getElementById('display-perbedaan');
                 let pvPerbedaan = document.getElementById('pv-perbedaan');
                 dispPerbedaan.innerText = 'Rp ' + formatRupiah(perbedaan);
-                pvPerbedaan.innerText = 'RP ' + Math.round(perbedaan).toLocaleString('id-ID');
+                pvPerbedaan.innerText = 'Rp ' + Math.round(perbedaan).toLocaleString('id-ID');
 
                 if (Math.abs(perbedaan) < 0.01) {
                     dispPerbedaan.className = 'font-mono text-emerald-700';

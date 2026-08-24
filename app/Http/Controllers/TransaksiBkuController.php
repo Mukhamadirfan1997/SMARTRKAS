@@ -87,13 +87,17 @@ class TransaksiBkuController extends Controller
                              ->where('id', '<', $first->id);
                       });
                 })
-                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END), 0) as saldo")
+                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
                 ->value('saldo');
         }
 
+        // Baris mutasi internal kas<->bank (tarik tunai) bernilai netral:
+        // tidak mengubah saldo berjalan, hanya memindahkan uang antar tempat.
         $saldo = $saldoAwal;
         foreach ($transaksis as $transaksi) {
-            $saldo += strtolower($transaksi->jenis) === 'penerimaan' ? $transaksi->jumlah : -$transaksi->jumlah;
+            if (! $transaksi->isMutasi()) {
+                $saldo += strtolower($transaksi->jenis) === 'penerimaan' ? $transaksi->jumlah : -$transaksi->jumlah;
+            }
             $transaksi->saldo_berjalan = $saldo;
         }
 
@@ -102,7 +106,7 @@ class TransaksiBkuController extends Controller
             ->when($bulanQuery, fn (Builder $q) => $q->where('bulan', $bulanQuery))
             ->when($sumberDanaId, fn (Builder $q) => $q->where('sumber_dana_id', $sumberDanaId))
             ->selectRaw("
-                COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as total_penerimaan,
+                COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as total_penerimaan,
                 COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran
             ")->firstOrFail();
         $totalPenerimaan = (float) $totals->getAttribute('total_penerimaan');
@@ -230,6 +234,7 @@ class TransaksiBkuController extends Controller
             'no_bukti' => 'nullable|string|max:255',
             'jenis' => 'required|in:penerimaan,pengeluaran',
             'jumlah' => 'required|numeric|gt:0',
+            'kategori_arus' => 'nullable|in:mutasi',
             'toko_penerima' => 'nullable|string|max:255',
             'metode_pengadaan' => 'nullable|string|in:siplah,non_siplah',
             'no_invoice_siplah' => 'nullable|required_if:metode_pengadaan,siplah|string|max:255',
@@ -319,6 +324,11 @@ class TransaksiBkuController extends Controller
 
         $validated['override_note'] = $isOverriding ? $overrideNote : null;
         unset($validated['override_anggaran']);
+
+        // Mutasi internal kas<->bank (tarik tunai) hanya berlaku utk penerimaan;
+        // pengeluaran selalu NULL. Pencairan/SP2D = NULL.
+        $validated['kategori_arus'] = ($jenis === 'penerimaan' && ($validated['kategori_arus'] ?? null) === 'mutasi')
+            ? 'mutasi' : null;
 
         $transaksi = TransaksiBku::create($validated);
 
@@ -417,6 +427,7 @@ class TransaksiBkuController extends Controller
             'no_bukti' => ['required', Rule::unique('transaksi_bku', 'no_bukti')->ignore($transaksiBku->id)->whereNull('deleted_at')],
             'jenis' => 'required|in:penerimaan,pengeluaran',
             'jumlah' => 'required|numeric|gt:0',
+            'kategori_arus' => 'nullable|in:mutasi',
             'toko_penerima' => 'nullable|string|max:255',
             'metode_pengadaan' => 'nullable|string|in:siplah,non_siplah',
             'no_invoice_siplah' => 'nullable|required_if:metode_pengadaan,siplah|string|max:255',
@@ -453,6 +464,14 @@ class TransaksiBkuController extends Controller
                 ]);
             }
             $validated['sumber_dana_id'] = $inputSumberDana;
+        }
+
+        // Hanya sentuh kategori_arus bila form mengirim field-nya (form edit
+        // penerimaan baru selalu mengirim); jalur lain tidak mereset nilai lama.
+        if ($request->has('kategori_arus')) {
+            $rawKategori = $request->input('kategori_arus');
+            $validated['kategori_arus'] = ($jenis === 'penerimaan' && is_string($rawKategori) && trim($rawKategori) === 'mutasi')
+                ? 'mutasi' : null;
         }
 
         if ($jenis === 'pengeluaran' && !empty($rkasItemId)) {

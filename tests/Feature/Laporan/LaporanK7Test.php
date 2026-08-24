@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Laporan;
 
+use App\Models\KasPenutupan;
 use App\Models\PengaturanSekolah;
 use App\Models\RkasItem;
 use App\Models\SumberDana;
@@ -273,5 +274,181 @@ class LaporanK7Test extends TestCase
         $response->assertOk();
         $response->assertSee('Selasa');
         $response->assertSee('20 Januari 2026');
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function denominasiKosong(int $lembar100Rb = 0): array
+    {
+        return [
+            'kertas_lembar_100000' => $lembar100Rb,
+            'kertas_lembar_50000' => 0,
+            'kertas_lembar_20000' => 0,
+            'kertas_lembar_10000' => 0,
+            'kertas_lembar_5000' => 0,
+            'kertas_lembar_2000' => 0,
+            'kertas_lembar_1000' => 0,
+            'logam_keping_500' => 0,
+            'logam_keping_200' => 0,
+            'logam_keping_100' => 0,
+            'logam_keping_50' => 0,
+        ];
+    }
+
+    public function test_tarik_tunai_mutasi_tidak_dihitung_penerimaan_k7b(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        // Tarik tunai dari bank = mutasi internal (kategori_arus = mutasi).
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'kategori_arus' => 'mutasi',
+            'jumlah' => 10000000,
+            'tanggal' => '2026-01-05',
+            'uraian' => 'Tarik Tunai dari Bank',
+        ]);
+
+        // Penerimaan riil.
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'kategori_arus' => null,
+            'jumlah' => 2000000,
+            'tanggal' => '2026-01-10',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('2.000.000');
+        $response->assertDontSee('10.000.000');
+    }
+
+    public function test_simpan_k7b_menyimpan_penutupan_dan_mengisi_ulang_form(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 5000000,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        $response = $this->actingAs($this->user)->post(route('laporan.k7b.simpan'), array_merge([
+            'bulan' => 1,
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'tanggal_penutupan' => '2026-01-31',
+            'saldo_bank' => '3.000.000',
+            'catatan' => 'NIHIL',
+        ], $this->denominasiKosong(20)));
+
+        $response->assertSessionHas('success');
+
+        $penutupan = KasPenutupan::first();
+        $this->assertNotNull($penutupan);
+        $this->assertSame(1, $penutupan->bulan);
+        $this->assertSame($this->sumberDana->id, $penutupan->sumber_dana_id);
+        $this->assertSame(20, $penutupan->lembar_100000);
+        $this->assertSame(3000000.0, (float) $penutupan->saldo_bank);
+        $this->assertSame('2026-01-31', $penutupan->tanggal_penutupan?->toDateString());
+        $this->assertSame('NIHIL', $penutupan->catatan);
+
+        // Form terisi ulang dari record tersimpan (lookup pakai filter yang sama
+        // dengan saat simpan, termasuk sumber dana).
+        $page = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+            'sumber_dana_id' => $this->sumberDana->id,
+        ]));
+
+        $page->assertOk();
+        $page->assertSee('3.000.000');
+        $page->assertSee('2.000.000,00');
+        $page->assertSee('value="NIHIL"', false);
+    }
+
+    public function test_simpan_k7b_update_tanpa_duplikat_baris(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        $payloadBase = [
+            'bulan' => 1,
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'tanggal_penutupan' => '2026-01-31',
+            'catatan' => null,
+        ];
+
+        $this->actingAs($this->user)->post(route('laporan.k7b.simpan'), array_merge($payloadBase, [
+            'saldo_bank' => '3.000.000',
+        ], $this->denominasiKosong(20)));
+
+        $this->actingAs($this->user)->post(route('laporan.k7b.simpan'), array_merge($payloadBase, [
+            'saldo_bank' => '1.500.000',
+        ], $this->denominasiKosong(25)));
+
+        $this->assertSame(1, KasPenutupan::count());
+
+        $penutupan = KasPenutupan::first();
+        $this->assertSame(25, $penutupan->lembar_100000);
+        $this->assertSame(1500000.0, (float) $penutupan->saldo_bank);
+    }
+
+    public function test_register_pdf_renders_lanskap_multi_bulan(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 5000000,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 2,
+            'jenis' => 'pengeluaran',
+            'jumlah' => 1000000,
+            'tanggal' => '2026-02-10',
+        ]);
+
+        KasPenutupan::create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'tanggal_penutupan' => '2026-01-31',
+            'lembar_100000' => 30,
+            'saldo_bank' => 2000000,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b.register', [
+            'tahun' => 2026,
+            'dari' => 1,
+            'sampai' => 3,
+        ]));
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString(
+            'Register_Penutupan_Kas_K7b-SDN_Toyaning_I-2026.pdf',
+            (string) $response->headers->get('Content-Disposition')
+        );
     }
 }

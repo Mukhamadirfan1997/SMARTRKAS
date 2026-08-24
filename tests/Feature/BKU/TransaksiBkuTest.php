@@ -1300,4 +1300,82 @@ class TransaksiBkuTest extends TestCase
         $response->assertSee('id="sumber_dana_id"', false);
         $response->assertSee($this->sumber->nama, false);
     }
+
+    public function test_create_page_menampilkan_radio_jenis_penerimaan(): void
+    {
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/create');
+
+        $response->assertOk();
+        $response->assertSee('id="row_kategori_arus"', false);
+        $response->assertSee('name="kategori_arus"', false);
+        $response->assertSee('value="mutasi"', false);
+        $response->assertSee('Pencairan / SP2D', false);
+        $response->assertSee('Tarik Tunai', false);
+        // Default: Pencairan tercentang, mutasi tidak
+        $this->assertMatchesRegularExpression('/value=""[^>]*\schecked/', $response->getContent());
+        $this->assertDoesNotMatchRegularExpression('/value="mutasi"[^>]*\schecked/', $response->getContent());
+    }
+
+    public function test_store_tarik_tunai_dengan_kategori_mutasi_tidak_menambah_penerimaan_k7b(): void
+    {
+        $this->withoutExceptionHandling();
+        $saldoSebelum = \App\Models\TransaksiBku::where('jenis', 'penerimaan')
+            ->where(function ($q) {
+                $q->whereNull('kategori_arus')->orWhere('kategori_arus', '!=', 'mutasi');
+            })
+            ->sum('jumlah');
+
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-20',
+            'jenis' => 'penerimaan',
+            'jumlah' => '1.000.000',
+            'kategori_arus' => 'mutasi',
+            'sumber_dana_id' => $this->sumber->id,
+            'uraian' => 'Tarik tunai bulan Januari',
+        ]);
+
+        $response->assertRedirect('/transaksi-bku');
+        $this->assertDatabaseHas('transaksi_bku', [
+            'jenis' => 'penerimaan',
+            'kategori_arus' => 'mutasi',
+            'jumlah' => 1000000,
+        ]);
+        // Total penerimaan non-mutasi tidak berubah (mutasi netral untuk K7b)
+        $saldoSesudah = \App\Models\TransaksiBku::where('jenis', 'penerimaan')
+            ->where(function ($q) {
+                $q->whereNull('kategori_arus')->orWhere('kategori_arus', '!=', 'mutasi');
+            })
+            ->sum('jumlah');
+        $this->assertSame((float) $saldoSebelum, (float) $saldoSesudah);
+    }
+
+    public function test_update_tarik_tunai_bisa_diubah_jadi_pencairan(): void
+    {
+        $tx = \App\Models\TransaksiBku::factory()->create([
+            'tanggal' => '2026-01-05',
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+            'kategori_arus' => 'mutasi',
+            'sumber_dana_id' => $this->sumber->id,
+            'uraian' => 'Tarik tunai bulan Januari',
+        ]);
+
+        $response = $this->actingAs($this->user)->put("/transaksi-bku/{$tx->id}", [
+            'tanggal' => '2026-01-05',
+            'jenis' => 'penerimaan',
+            'no_bukti' => $tx->no_bukti,
+            'jumlah' => '500.000',
+            'kategori_arus' => '',
+            'sumber_dana_id' => $this->sumber->id,
+            'toko_penerima' => $tx->toko_penerima,
+            'metode_pengadaan' => 'non_siplah',
+            'uraian' => 'Pencairan BOSP bulan Januari',
+        ]);
+
+        $response->assertRedirect('/transaksi-bku');
+        $this->assertDatabaseHas('transaksi_bku', [
+            'id' => $tx->id,
+            'kategori_arus' => null,
+        ]);
+    }
 }
