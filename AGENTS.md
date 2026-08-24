@@ -3548,3 +3548,7 @@ Implementasi saldo bank pada Formulir BOS-K7b/K7c sesuai panduan resmi (keputusa
 
 - Commit lokal (monitoring-juknis.blade.php + AGENTS.md ini); BELUM push/build/rilis. xlsm tetap untracked.
 - Backlog tetap: test lemah ~line 122 `LaporanK7Test.php`; Chart.js CDN offline.
+
+## Next (instruksi user)
+
+- **Nanti malam: BUILD TANPA RILIS** — user mau uji manual dulu. Urutan: cek tidak ada build rangkap → `npm run build` → `tauri build --bundles nsis,msi` → reinstall di mesin ini → verifikasi `/login` 200 + fix layout Monitoring Juknis terbundle → serahkan ke user untuk uji manual. Push & `gh release create` MENUNGGU hasil uji user (jangan rilis otomatis).
