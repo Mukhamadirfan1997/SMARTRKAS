@@ -66,6 +66,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 10000000,
@@ -109,6 +110,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 5000000,
@@ -146,6 +148,7 @@ class LaporanK7Test extends TestCase
             'sumber_dana_id' => $this->sumberDana->id,
             'bulan' => 1,
             'jenis' => 'penerimaan',
+            'rkas_item_id' => null,
             'jumlah' => 5000000,
             'tanggal' => '2026-01-05',
         ]);
@@ -184,6 +187,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 1000000,
@@ -207,6 +211,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 1000000,
@@ -233,6 +238,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 1000000,
@@ -257,6 +263,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 1000000,
@@ -307,6 +314,7 @@ class LaporanK7Test extends TestCase
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'kategori_arus' => 'mutasi',
+            'rkas_item_id' => null,
             'jumlah' => 10000000,
             'tanggal' => '2026-01-05',
             'uraian' => 'Tarik Tunai dari Bank',
@@ -319,6 +327,7 @@ class LaporanK7Test extends TestCase
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'kategori_arus' => null,
+            'rkas_item_id' => null,
             'jumlah' => 2000000,
             'tanggal' => '2026-01-10',
         ]);
@@ -340,6 +349,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 5000000,
@@ -414,6 +424,7 @@ class LaporanK7Test extends TestCase
         TransaksiBku::factory()->create([
             'tahun_anggaran_id' => $this->tahunAnggaran->id,
             'sumber_dana_id' => $this->sumberDana->id,
+            'rkas_item_id' => null,
             'bulan' => 1,
             'jenis' => 'penerimaan',
             'jumlah' => 5000000,
@@ -425,6 +436,7 @@ class LaporanK7Test extends TestCase
             'sumber_dana_id' => $this->sumberDana->id,
             'bulan' => 2,
             'jenis' => 'pengeluaran',
+            'rkas_item_id' => null,
             'jumlah' => 1000000,
             'tanggal' => '2026-02-10',
         ]);
@@ -450,5 +462,67 @@ class LaporanK7Test extends TestCase
             'Register_Penutupan_Kas_K7b-SDN_Toyaning_I-2026.pdf',
             (string) $response->headers->get('Content-Disposition')
         );
+    }
+
+    public function test_k7b_memiliki_tombol_k7c_dengan_id(): void
+    {
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+        ]));
+
+        $response->assertOk();
+        // JS memperbarui href tombol ini dengan data live form (updateK7cUrl).
+        $response->assertSee('id="btn-k7c"', false);
+    }
+
+    public function test_k7c_menampilkan_data_live_dari_k7b_via_query_string(): void
+    {
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 8000000,
+            'rkas_item_id' => null,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        // Data live K-7b: kas fisik 5 lembar 100rb + 10 keping 500 = 505.000,
+        // saldo bank 2.500.000 -> dikirim via query string tanpa disimpan.
+        $response = $this->actingAs($this->user)->get(route('laporan.k7c', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+            'kertas_lembar_100000' => 5,
+            'logam_keping_500' => 10,
+            'saldo_bank' => 2500000,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('value="505.000"', false);
+        $response->assertSee('2.500.000');
+    }
+
+    public function test_k7c_menghormati_override_kas_fisik(): void
+    {
+        // Tanpa transaksi -> saldo BKU (A) = 0; kas fisik dipaksa 123456.
+        $web = $this->actingAs($this->user)->get(route('laporan.k7c', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+            'kas_fisik' => '123456',
+        ]));
+
+        $web->assertOk();
+        $web->assertSee('value="123.456"', false);
+
+        $pdf = $this->actingAs($this->user)->get(route('laporan.k7c', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+            'kas_fisik' => '123456',
+            'cetak' => 'pdf',
+        ]));
+
+        $pdf->assertOk();
+        $pdf->assertHeader('Content-Type', 'application/pdf');
     }
 }

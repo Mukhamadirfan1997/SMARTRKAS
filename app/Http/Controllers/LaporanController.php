@@ -1264,6 +1264,15 @@ class LaporanController extends Controller
         // Subtotal Fisik Kas (1 + 2)
         $subtotalFisikKas = $subtotalKertas + $subtotalLogam;
 
+        // Override langsung nilai fisik kas via query string (?kas_fisik=...)
+        // dipakai halaman K-7c yang hanya punya satu input "Saldo Kas Tunai"
+        // (tanpa input denominasi) agar hasil edit di layar ikut ke PDF.
+        $rawKasFisik = $request->input('kas_fisik');
+        if (is_string($rawKasFisik) && trim($rawKasFisik) !== '') {
+            $cleanKas = str_replace(['.', ','], ['', '.'], trim($rawKasFisik));
+            $subtotalFisikKas = max(0.0, (float) $cleanKas);
+        }
+
         // Saldo Bank (3)
         $rawSaldoBank = $request->input('saldo_bank');
         if ($rawSaldoBank !== null && $rawSaldoBank !== '') {

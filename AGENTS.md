@@ -3486,3 +3486,31 @@ Implementasi saldo bank pada Formulir BOS-K7b/K7c sesuai panduan resmi (keputusa
 - Commit lokal; BELUM push/build/rilis - menunggu konfirmasi user.
 - File xlsm referensi di root tetap untracked, TIDAK di-commit.
 - Instalasi v0.6.9 belum memuat fitur ini; migration 000031 SUDAH diterapkan ke DB produksi Roaming saat backfill.
+
+---
+
+# Sesi 25 Agu 2026 — K7c Terima Data Live dari K7b (kas_fisik) + Fix Flaky Full Suite (UNIQUE tahun_anggaran)
+
+## Goal
+
+(1) K7c sebelumnya selalu menampilkan kas fisik Rp 0 padahal K7b sudah diisi — buat K7c menerima data live dari layanan K7b sebelum disimpan penutupan kas. (2) Full suite sempat GAGAL sekali dengan `SQLSTATE[23000]: UNIQUE constraint failed: tahun_anggaran.tahun` di `LaporanK7Test::test_k7b_mengabaikan_tanggal_stale_saat_bulan_filter_tidak_cocok` — diagnosis dan eliminasi permanen.
+
+## Changes
+
+- **`app/Http/Controllers/LaporanController.php`** — `prepareK7Data()`: input `kas_fisik` (string dari URL param GET k7b→k7c) dioverride sebagai kas fisik setelah `$subtotalFisikKas` dihitung dan SEBELUM fallback saldoBank; sanitasi strip `.`/`,` lalu cast float, `max(0.0, ...)` (tidak bisa minus). Tanpa param → perilaku lama utuh (fallback record tersimpan → hitungan komputasi). PDF k7b/k7c & register tidak tersentuh (tetap komputasi penuh).
+- **`resources/views/laporan/k7b.blade.php`** — tombol menuju K7c diberi `id="btn-k7c"` + href disinkronkan di dalam fungsi `updatePdfUrl()` yang sudah ada (dipanggil pada setiap perubahan filter/denominasi), jadi klik K7c selalu membawa snapshot terbaru via query string (`bulan`, `tahun`, `sumber_dana_id`, denominasi `kertas_*`/`logam_*`, `saldo_bank`, plus `kas_fisik`).
+- **`resources/views/laporan/k7c.blade.php`** — `updatePdfUrl()` ikut mengirim/menghapus `kas_fisik`; tampilan berita acara menampilkan nilai live tersebut.
+- **Flaky fix `tests/Feature/Laporan/LaporanK7Test.php`** — semua pemanggilan `TransaksiBku::factory()->create()` yang TIDAK butuh item RKAS (13 tempat) kini eksplisit `'rkas_item_id' => null`. Root cause: test mem-pin tahun TA uji ke 2026 (`$this->tahunAnggaran->update(['tahun' => 2026])`), lalu factory transaksi tanpa override `rkas_item_id` meng-expansion definition → `RkasItemFactory` membuat `TahunAnggaran::factory()` baru dengan `(int) fake()->unique()->year()` yang bisa menggambar 2026 lagi → collision UNIQUE. Faker `unique()` reset per-test sehingga hanya test yang pin tahun SETELAH pembuatan data yang rawan (~9 test). Fix bersifat struktural: tidak ada lagi pembuatan RkasItem/TahunAnggaran tersembunyi di test K7. Factory global (`TahunAnggaranFactory` tahun acak) SENGAJA tidak diubah (blast radius besar).
+- **3 test baru**: `test_k7b_memiliki_tombol_k7c_dengan_id`, `test_k7c_menampilkan_data_live_dari_k7b_via_query_string`, `test_k7c_menghormati_override_kas_fisik`.
+
+## Verifikasi
+
+- `vendor\bin\phpunit --filter LaporanK7Test` → OK (18 tests, 71 assertions).
+- Full suite → **OK (485 tests, 1506 assertions)**; PHPStan level 6 `[OK] No errors`.
+- Catatan: test lama ~line 122 masih lemah (`'kertas_100000' => 20` vs rule `kertas_lembar_100000`) tapi lolos via fallback — sengaja tidak disentuh di sesi ini.
+- K7c view TIDAK merender `penjelasan_perbedaan` — jangan di-assert di test K7c.
+
+## Status
+
+- BELUM commit — 4 file berubah di working tree (`LaporanController.php`, `k7b.blade.php`, `k7c.blade.php`, `LaporanK7Test.php`). File xlsm referensi tetap untracked, TIDAK di-commit.
+- Backlog: keluhan user "Monitoring Juknis belum full tampilannya" (makna belum jelas — kandidat: chart CDN kosong offline / hanya 3 kategori seed / layout sempit) menunggu klarifikasi atau baca ulang view penuh.

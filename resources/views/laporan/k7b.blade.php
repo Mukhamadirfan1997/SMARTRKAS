@@ -8,7 +8,7 @@
                 @endif
             </div>
             <div class="flex items-center gap-2">
-                <a href="{{ route('laporan.k7c', request()->query()) }}" class="btn btn-secondary btn-sm">
+                <a href="{{ route('laporan.k7c', request()->query()) }}" id="btn-k7c" class="btn btn-secondary btn-sm">
                     <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Buka Berita Acara (K-7c)
                 </a>
@@ -380,6 +380,7 @@
             const tglIniInput = document.getElementById('tanggal_penutupan');
             const tglLaluInput = document.getElementById('tanggal_penutupan_lalu');
             const btnPdf = document.getElementById('btn-unduh-pdf');
+            const btnK7c = document.getElementById('btn-k7c');
 
             function formatRupiah(num) {
                 return num.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -477,6 +478,13 @@
                 });
 
                 btnPdf.href = "{{ route('laporan.k7b') }}?" + params.toString();
+
+                // Tombol "Buka Berita Acara (K-7c)" membawa nilai live form yang
+                // sama (tanpa cetak=pdf) agar K-7c menampilkan data K-7b meski
+                // penutupan kas belum disimpan.
+                let paramsK7c = new URLSearchParams(params);
+                paramsK7c.delete('cetak');
+                if (btnK7c) btnK7c.href = "{{ route('laporan.k7c') }}?" + paramsK7c.toString();
             }
 
             kertasInputs.forEach(i => i.addEventListener('input', hitungSemua));

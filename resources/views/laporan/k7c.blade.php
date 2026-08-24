@@ -318,6 +318,14 @@
                 if (skBendaharaInput.value) params.set('sk_bupati_bendahara', skBendaharaInput.value);
                 if (bankInput.value) params.set('saldo_bank', parseNominal(bankInput.value));
 
+                // Halaman ini hanya punya satu input "Saldo Kas Tunai"; kirim
+                // nilai hasil edit manual ke PDF via kas_fisik (override server).
+                if (kasInput.value.trim() !== '') {
+                    params.set('kas_fisik', parseNominal(kasInput.value));
+                } else {
+                    params.delete('kas_fisik');
+                }
+
                 btnPdf.href = "{{ route('laporan.k7c') }}?" + params.toString();
             }
 
