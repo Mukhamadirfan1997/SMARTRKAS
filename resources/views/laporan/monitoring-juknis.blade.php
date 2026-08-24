@@ -1,17 +1,13 @@
 <x-app-layout>
     <x-slot name="header">
         <div>
-            <h2 class="font-semibold text-xl text-slate-800 leading-tight">
-                {{ __('Monitoring Kepatuhan Juknis BOSP') }}
-            </h2>
-            <p class="text-sm text-slate-500 mt-1">Proporsi rencana &amp; realisasi terhadap Total Pagu dibanding batas juknis.</p>
+            <div class="page-title">{{ __('Monitoring Kepatuhan Juknis BOSP') }}</div>
+            <p class="text-sm text-slate-500 mt-0.5">Proporsi rencana &amp; realisasi terhadap Total Pagu dibanding batas juknis.</p>
         </div>
     </x-slot>
 
-    <div class="py-6 max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-
         {{-- Filter tahun --}}
-        <div class="card">
+        <div class="card mb-6">
             <div class="card-body py-4">
                 <form method="GET" action="{{ route('laporan.monitoring-juknis') }}" class="flex flex-wrap items-center gap-3">
                     <input type="hidden" name="basis" value="{{ $basis }}">
@@ -76,7 +72,7 @@
 
             {{-- Kartu per kategori juknis --}}
             @if ($kategoriCards->isEmpty())
-                <div class="card">
+                <div class="card mb-6">
                     <div class="card-body text-center py-12 text-slate-400">
                         <p class="text-sm font-medium">Belum ada kategori juknis yang dipetakan ke kode rekening.</p>
                         <p class="text-xs mt-1">Atur di menu Pengaturan → Kategori Juknis BOSP.</p>
@@ -84,7 +80,7 @@
                     </div>
                 </div>
             @else
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mb-6">
                     @foreach ($kategoriCards as $card)
                         @php
                             $statusColor = match ($card['status']) {
@@ -95,7 +91,7 @@
                             };
                         @endphp
                         <div class="card">
-                            <div class="card-header flex items-start justify-between gap-2">
+                            <div class="card-header">
                                 <span class="card-title">{{ $card['nama'] }}</span>
                                 <span class="badge {{ $card['arah'] === 'minimal' ? 'badge-green' : 'badge-red' }} whitespace-nowrap">
                                     {{ $card['arah'] === 'minimal' ? 'Minimal' : 'Maksimal' }} {{ rtrim(rtrim(number_format($card['batas'], 2, ',', '.'), '0'), ',') }}%
@@ -175,7 +171,6 @@
                 </div>
             </div>
         @endif
-    </div>
 
     @if ($tahunAnggaranAktif && $kategoriCards->isNotEmpty())
         @php

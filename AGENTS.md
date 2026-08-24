@@ -3512,5 +3512,39 @@ Implementasi saldo bank pada Formulir BOS-K7b/K7c sesuai panduan resmi (keputusa
 
 ## Status
 
-- BELUM commit — 4 file berubah di working tree (`LaporanController.php`, `k7b.blade.php`, `k7c.blade.php`, `LaporanK7Test.php`). File xlsm referensi tetap untracked, TIDAK di-commit.
+- ~~BELUM commit~~ → SUDAH di-commit sebagai `779b97c` (5 file incl. AGENTS.md, +128/−1) — BELUM push. File xlsm referensi tetap untracked, TIDAK di-commit.
 - Backlog: keluhan user "Monitoring Juknis belum full tampilannya" (makna belum jelas — kandidat: chart CDN kosong offline / hanya 3 kategori seed / layout sempit) menunggu klarifikasi atau baca ulang view penuh.
+
+---
+
+# Sesi 25 Agu 2026 (lanjutan) — Commit K7c Live Data + Rapikan Layout Monitoring Juknis BOSP
+
+## Goal
+
+(1) Commit pekerjaan K7c live data + flaky fix yang sudah terverifikasi (user: "Ya, commit saja dulu" — lokal saja). (2) Tindak lanjut keluhan "Monitoring Juknis belum full tampilannya" — diklarifikasi user via question tool: maksudnya **tampilan berantakan/kurang rapi** (layout), BUKAN chart CDN atau jumlah kategori seed.
+
+## Root Cause Layout Berantakan (bukti keras, bukan dugaan)
+
+- Konvensi app: `layouts/app.blade.php:99` merender `<main id="main-content" class="page-content">`; `resources/css/app.css` line 263 `.page-content { @apply flex-1 p-6 lg:p-8 }` → padding SUDAH disediakan layout.
+- Dashboard & `rkas/index` meletakkan konten LANGSUNG di bawah `<x-app-layout>` dengan spasi `mb-6`.
+- monitoring-juknis membungkus konten dgn wrapper Breeze lama `py-6 max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6` → padding DOBEL (48–56px atas, hingga 64px horizontal), kolom sempit center tidak konsisten dgn halaman lain, gap tak rata (`space-y-6` + `mb-6` anak).
+
+## Changes (hanya `resources/views/laporan/monitoring-juknis.blade.php`)
+
+- Header `<h2 class="font-semibold text-xl ...">` → `<div class="page-title">` (+ subtitle `mt-0.5`) — pola sama dgn dashboard/rkas.
+- Wrapper Breeze (pembuka + penutup yatim setelah `@endif`) DIHAPUS — konten langsung di bawah layout.
+- Spasi dinormalkan ke `mb-6`: card filter, card empty-state (cabang `$kategoriCards->isEmpty()`), grid kartu kategori.
+- Card-header dibersihkan: hapus utility flex berlebih (`flex items-start justify-between gap-2`) — cukup class `card-header`.
+- Indentasi dalam sengaja tidak dirapikan penuh (kosmetik; diff minimal).
+- TIDAK tersentuh: Chart.js CDN (issue terpisah — offline donut kosong, belum diminta fix) dan seed kategori (by design 3 default dari migrasi 000030).
+
+## Verifikasi
+
+- `php artisan view:cache` OK; PHPStan level 6 `[OK] No errors`.
+- `vendor\bin\phpunit --filter MonitoringJuknisTest` → OK (8 tests, 30 assertions).
+- Full suite → **OK (485 tests, 1506 assertions)**.
+
+## Status
+
+- Commit lokal (monitoring-juknis.blade.php + AGENTS.md ini); BELUM push/build/rilis. xlsm tetap untracked.
+- Backlog tetap: test lemah ~line 122 `LaporanK7Test.php`; Chart.js CDN offline.
