@@ -175,4 +175,103 @@ class LaporanK7Test extends TestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/pdf');
     }
+
+    public function test_k7b_default_tanggal_penutupan_adalah_akhir_bulan(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 1000000,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+        ]));
+
+        // 31 Januari 2026 = Sabtu
+        $response->assertOk();
+        $response->assertSee('31 Januari 2026');
+    }
+
+    public function test_k7b_mengabaikan_tanggal_stale_saat_bulan_filter_tidak_cocok(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 1000000,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        // User sebelumnya membuka bulan 2 (tanggal 28 Feb), lalu pindah ke bulan 1
+        // tanpa mengubah input tanggal -> server harus pakai akhir Januari.
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+            'tanggal_penutupan' => '2026-02-28',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('31 Januari 2026');
+        $response->assertDontSee('28 Februari 2026');
+    }
+
+    public function test_k7b_tanggal_valid_custom_dipakai_sebagaimana_adanya(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 1000000,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => 2026,
+            'tanggal_penutupan' => '2026-01-20',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('20 Januari 2026');
+        $response->assertDontSee('31 Januari 2026');
+    }
+
+    public function test_k7c_narasi_memuat_nama_hari_indonesia(): void
+    {
+        $this->tahunAnggaran->update(['tahun' => 2026]);
+
+        TransaksiBku::factory()->create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'bulan' => 1,
+            'jenis' => 'penerimaan',
+            'jumlah' => 1000000,
+            'tanggal' => '2026-01-05',
+        ]);
+
+        // 20 Januari 2026 = Selasa
+        $response = $this->actingAs($this->user)->get(route('laporan.k7c', [
+            'bulan' => 1,
+            'tahun' => 2026,
+            'tanggal_penutupan' => '2026-01-20',
+            'sk_bupati_kepsek' => '821.2/TEST/2026',
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Selasa');
+        $response->assertSee('20 Januari 2026');
+    }
 }

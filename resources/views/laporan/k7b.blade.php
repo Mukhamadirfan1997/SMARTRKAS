@@ -27,7 +27,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                     <div>
                         <label for="bulan" class="form-label">Bulan Penutupan</label>
-                        <select name="bulan" id="bulan" class="form-select" onchange="this.form.submit()">
+                        <select name="bulan" id="bulan" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
                             @foreach(range(1, 12) as $m)
                                 <option value="{{ $m }}" {{ $bulan == $m ? 'selected' : '' }}>
                                     {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
@@ -38,7 +38,7 @@
 
                     <div>
                         <label for="tahun" class="form-label">Tahun Anggaran</label>
-                        <select name="tahun" id="tahun" class="form-select" onchange="this.form.submit()">
+                        <select name="tahun" id="tahun" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
                             @foreach($tahunList as $t)
                                 <option value="{{ $t->tahun }}" {{ ($tahunAnggaranAktif?->tahun ?? date('Y')) == $t->tahun ? 'selected' : '' }}>
                                     {{ $t->tahun }}
@@ -330,6 +330,25 @@
     </div>
 
     {{-- Script Realtime Calculator & PDF Link Sync --}}
+    <script>
+        // Sinkronkan tanggal penutupan dengan bulan/tahun terpilih sebelum submit
+        // filter, supaya nilai GET tidak membawa tanggal bulan lama (sticky date).
+        function syncTanggalFilter() {
+            var bulanSel = document.getElementById('bulan');
+            var tahunSel = document.getElementById('tahun');
+            if (!bulanSel) return;
+            var bulan = parseInt(bulanSel.value, 10);
+            var tahun = tahunSel ? parseInt(tahunSel.value, 10) : new Date().getFullYear();
+            if (!bulan || !tahun || isNaN(tahun)) return;
+            function pad(n) { return n < 10 ? '0' + n : '' + n; }
+            var tglIni = document.getElementById('tanggal_penutupan');
+            var tglLalu = document.getElementById('tanggal_penutupan_lalu');
+            var lastIni = new Date(tahun, bulan, 0);
+            var lastLalu = new Date(tahun, bulan - 1, 0);
+            if (tglIni) tglIni.value = lastIni.getFullYear() + '-' + pad(lastIni.getMonth() + 1) + '-' + pad(lastIni.getDate());
+            if (tglLalu) tglLalu.value = lastLalu.getFullYear() + '-' + pad(lastLalu.getMonth() + 1) + '-' + pad(lastLalu.getDate());
+        }
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const saldoBkuA = {{ (float) $saldoBkuA }};

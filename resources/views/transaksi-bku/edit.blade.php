@@ -222,6 +222,23 @@
                         @enderror
                     </div>
 
+                    @php
+                        $oldSumberDana = old('sumber_dana_id', $transaksiBku->sumber_dana_id);
+                    @endphp
+                    <div class="mb-5 hidden" id="row_sumber_dana">
+                        <label for="sumber_dana_id" class="form-label">Sumber Dana</label>
+                        <select name="sumber_dana_id" id="sumber_dana_id" class="form-select">
+                            <option value="">-- Pilih Sumber Dana --</option>
+                            @foreach ($sumberDanas as $sd)
+                                <option value="{{ $sd->id }}" {{ (string) $oldSumberDana === (string) $sd->id ? 'selected' : '' }}>{{ $sd->kode }} - {{ $sd->nama }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">Wajib dipilih untuk transaksi penerimaan (tarik tunai) agar saldo per sumber dana akurat.</p>
+                        @error('sumber_dana_id')
+                            <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
                         <div>
                             <label for="toko_penerima" class="form-label">Toko / Penerima / Sumber Dana</label>
@@ -286,6 +303,7 @@
             const rowRkas = document.getElementById('row_rkas_item');
             const rowKalkulator = document.getElementById('row_kalkulator');
             const rowJumlah = document.getElementById('row_jumlah');
+            const rowSumberDana = document.getElementById('row_sumber_dana');
             const rowMetodePengadaan = document.getElementById('row_metode_pengadaan');
             const metodePengadaanSelect = document.getElementById('metode_pengadaan');
             const rowNoInvoiceSiplah = document.getElementById('row_no_invoice_siplah');
@@ -483,6 +501,7 @@
                     rowChecklist.classList.add('hidden');
                     rowKalkulator.style.display = 'none';
                     rowJumlah.classList.remove('hidden');
+                    rowSumberDana.classList.remove('hidden');
                     rowMetodePengadaan.style.display = 'none';
                     volumeInput.value = '';
                     volumeHidden.value = '';
@@ -497,6 +516,7 @@
                     rowChecklist.classList.remove('hidden');
                     rowKalkulator.style.display = 'none';
                     rowJumlah.classList.toggle('hidden', !isNota);
+                    rowSumberDana.classList.add('hidden');
                     rowMetodePengadaan.style.display = 'block';
                 }
             }

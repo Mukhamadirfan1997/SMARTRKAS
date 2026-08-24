@@ -27,7 +27,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                     <div>
                         <label for="bulan" class="form-label">Bulan Pemeriksaan</label>
-                        <select name="bulan" id="bulan" class="form-select" onchange="this.form.submit()">
+                        <select name="bulan" id="bulan" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
                             @foreach(range(1, 12) as $m)
                                 <option value="{{ $m }}" {{ $bulan == $m ? 'selected' : '' }}>
                                     {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
@@ -38,7 +38,7 @@
 
                     <div>
                         <label for="tahun" class="form-label">Tahun Anggaran</label>
-                        <select name="tahun" id="tahun" class="form-select" onchange="this.form.submit()">
+                        <select name="tahun" id="tahun" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
                             @foreach($tahunList as $t)
                                 <option value="{{ $t->tahun }}" {{ ($tahunAnggaranAktif?->tahun ?? date('Y')) == $t->tahun ? 'selected' : '' }}>
                                     {{ $t->tahun }}
@@ -152,7 +152,7 @@
                 <div class="text-center font-bold text-xs uppercase mb-6 tracking-wider">PERIODE : <span id="pv-periode">{{ $tanggalPenutupan }}</span></div>
 
                 <p class="text-justify mb-3 leading-relaxed">
-                    Pada hari <span id="pv-tgl-narasi">{{ $tanggalPenutupan }}</span> yang bertanda tangan di bawah ini, Saya Kepala Sekolah yang ditunjuk berdasarkan Surat Keputusan Bupati Kab. {{ $profil?->kabupaten ?? 'Pasuruan' }} No. <span id="pv-sk-kepsek" class="font-sans font-medium">{{ $skBupatiKepsek }}</span>
+                    Pada hari <span id="pv-hari-narasi">{{ $hariPenutupan }}</span>, tanggal <span id="pv-tgl-narasi">{{ $tanggalPenutupan }}</span> yang bertanda tangan di bawah ini, Saya Kepala Sekolah yang ditunjuk berdasarkan Surat Keputusan Bupati Kab. {{ $profil?->kabupaten ?? 'Pasuruan' }} No. <span id="pv-sk-kepsek" class="font-sans font-medium">{{ $skBupatiKepsek }}</span>
                 </p>
 
                 <table class="w-full mb-3 ml-6 text-xs">
@@ -242,6 +242,22 @@
     </div>
 
     {{-- Script Realtime K7c --}}
+    <script>
+        // Sinkronkan tanggal berita acara dengan bulan/tahun terpilih sebelum
+        // submit filter (tanggal_penutupan_lalu tidak ada di halaman ini).
+        function syncTanggalFilter() {
+            var bulanSel = document.getElementById('bulan');
+            var tahunSel = document.getElementById('tahun');
+            if (!bulanSel) return;
+            var bulan = parseInt(bulanSel.value, 10);
+            var tahun = tahunSel ? parseInt(tahunSel.value, 10) : new Date().getFullYear();
+            if (!bulan || !tahun || isNaN(tahun)) return;
+            function pad(n) { return n < 10 ? '0' + n : '' + n; }
+            var tglIni = document.getElementById('tanggal_penutupan');
+            var lastIni = new Date(tahun, bulan, 0);
+            if (tglIni) tglIni.value = lastIni.getFullYear() + '-' + pad(lastIni.getMonth() + 1) + '-' + pad(lastIni.getDate());
+        }
+    </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const saldoBkuA = {{ (float) $saldoBkuA }};

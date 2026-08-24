@@ -40,7 +40,7 @@
     <div class="periode">PERIODE : {{ $tanggalPenutupan }}</div>
 
     <div class="p-narasi">
-        Pada hari {{ $tanggalPenutupan }} yang bertanda tangan di bawah ini, Saya Kepala Sekolah yang ditunjuk berdasarkan Surat Keputusan Bupati Kab. {{ $profil?->kabupaten ?? 'Pasuruan' }} No. {{ $skBupatiKepsek }}
+        Pada hari <strong>{{ $hariPenutupan }}</strong> tanggal {{ $tanggalPenutupan }} yang bertanda tangan di bawah ini, Saya Kepala Sekolah yang ditunjuk berdasarkan Surat Keputusan Bupati Kab. {{ $profil?->kabupaten ?? 'Pasuruan' }} No. {{ $skBupatiKepsek }}
     </div>
 
     <table class="table-person">

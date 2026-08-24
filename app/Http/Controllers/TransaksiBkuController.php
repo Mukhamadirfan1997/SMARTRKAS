@@ -148,6 +148,7 @@ class TransaksiBkuController extends Controller
         $kegiatans = MasterProgram::orderBy('kode')->get();
         $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
         $templates = TransaksiTemplate::orderBy('nama_template')->get();
+        $sumberDanas = SumberDana::orderBy('kode')->get();
 
         $pickerInitial = null;
         $oldItemId = old('rkas_item_id');
@@ -170,7 +171,7 @@ class TransaksiBkuController extends Controller
 
         return view('transaksi-bku.create', compact(
             'npsn', 'nextSeqPenerimaan', 'nextSeqPengeluaran', 'pickerInitial',
-            'kegiatans', 'kodeRekenings', 'templates'
+            'kegiatans', 'kodeRekenings', 'templates', 'sumberDanas'
         ));
     }
 
@@ -263,12 +264,27 @@ class TransaksiBkuController extends Controller
             $validated['no_bukti'] = $noBukti;
         }
 
+        // Sumber dana TIDAK masuk rules validate() (field opsional di form edit nota
+        // bisa meng-null-kan nilai via validated array). Logika digerakkan manual:
+        // item RKAS → turunkan dari item; penerimaan (tarik tunai) → wajib dipilih;
+        // lainnya → ikuti input apa adanya.
         if (!empty($rkasItemId)) {
             $rkasItem = RkasItem::find($rkasItemId);
             $validated['sumber_dana_id'] = $rkasItem?->sumber_dana_id;
             if ($rkasItem && empty($request->input('satuan'))) {
                 $validated['satuan'] = $rkasItem->satuan;
             }
+        } elseif ($jenis === 'penerimaan') {
+            $inputSumberDana = trim((string) $request->input('sumber_dana_id'));
+            if ($inputSumberDana === '' || !SumberDana::where('id', $inputSumberDana)->exists()) {
+                throw ValidationException::withMessages([
+                    'sumber_dana_id' => 'Sumber Dana wajib dipilih untuk transaksi penerimaan (tarik tunai).',
+                ]);
+            }
+            $validated['sumber_dana_id'] = $inputSumberDana;
+        } else {
+            $inputSumberDana = trim((string) $request->input('sumber_dana_id'));
+            $validated['sumber_dana_id'] = $inputSumberDana !== '' ? $inputSumberDana : null;
         }
 
         $isOverriding = false;
@@ -350,9 +366,10 @@ class TransaksiBkuController extends Controller
 
         $kegiatans = MasterProgram::orderBy('kode')->get();
         $kodeRekenings = MasterKodeRekening::orderBy('kode')->get();
+        $sumberDanas = SumberDana::orderBy('kode')->get();
 
         return view('transaksi-bku.edit', compact(
-            'transaksiBku', 'selectedRkas', 'kegiatans', 'kodeRekenings'
+            'transaksiBku', 'selectedRkas', 'kegiatans', 'kodeRekenings', 'sumberDanas'
         ));
     }
 
@@ -419,12 +436,23 @@ class TransaksiBkuController extends Controller
         $taRec = TahunAnggaran::where('status', true)->first(['id']);
         $validated['tahun_anggaran_id'] = $taRec ? $taRec->id : '';
 
+        // Sumber dana manual seperti store(): item RKAS → dari item; penerimaan
+        // (tarik tunai) → wajib dipilih; lainnya → JANGAN menyentuh nilai lama
+        // (form edit tidak selalu mengirim field ini).
         if (!empty($rkasItemId)) {
             $rkasItem = RkasItem::find($rkasItemId);
             $validated['sumber_dana_id'] = $rkasItem?->sumber_dana_id;
             if ($rkasItem && empty($request->input('satuan'))) {
                 $validated['satuan'] = $rkasItem->satuan;
             }
+        } elseif ($jenis === 'penerimaan') {
+            $inputSumberDana = trim((string) $request->input('sumber_dana_id'));
+            if ($inputSumberDana === '' || !SumberDana::where('id', $inputSumberDana)->exists()) {
+                throw ValidationException::withMessages([
+                    'sumber_dana_id' => 'Sumber Dana wajib dipilih untuk transaksi penerimaan (tarik tunai).',
+                ]);
+            }
+            $validated['sumber_dana_id'] = $inputSumberDana;
         }
 
         if ($jenis === 'pengeluaran' && !empty($rkasItemId)) {

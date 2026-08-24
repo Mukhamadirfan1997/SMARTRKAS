@@ -949,17 +949,50 @@ class LaporanController extends Controller
         $lastDayOfMonth = Carbon::create($tahun, $bulan, 1)->endOfMonth();
         $prevMonthLastDay = Carbon::create($tahun, $bulan, 1)->subMonth()->endOfMonth();
 
+        // Guard sticky-date: field tanggal ikut ter-submit ulang saat user mengganti
+        // Bulan/Tahun lewat filter GET. Bila bulan/tahun tanggal yang dikirim tidak
+        // cocok dengan periode terpilih, abaikan dan pakai akhir bulan terpilih.
         $rawTanggalPenutupan = $request->input('tanggal_penutupan');
-        $tanggalPenutupan = $rawTanggalPenutupan && Carbon::hasFormat((string) $rawTanggalPenutupan, 'Y-m-d')
-            ? Carbon::parse((string) $rawTanggalPenutupan)->translatedFormat('d F Y')
-            : $lastDayOfMonth->translatedFormat('d F Y');
-        $tanggalPenutupanInput = $rawTanggalPenutupan ? (string) $rawTanggalPenutupan : $lastDayOfMonth->format('Y-m-d');
+        if (is_string($rawTanggalPenutupan) && Carbon::hasFormat($rawTanggalPenutupan, 'Y-m-d')) {
+            $parsedTanggal = Carbon::parse($rawTanggalPenutupan);
+            if ((int) $parsedTanggal->month !== $bulan || (int) $parsedTanggal->year !== $tahun) {
+                $rawTanggalPenutupan = null;
+            }
+        } else {
+            $rawTanggalPenutupan = null;
+        }
 
         $rawTanggalPenutupanLalu = $request->input('tanggal_penutupan_lalu');
-        $tanggalPenutupanLalu = $rawTanggalPenutupanLalu && Carbon::hasFormat((string) $rawTanggalPenutupanLalu, 'Y-m-d')
-            ? Carbon::parse((string) $rawTanggalPenutupanLalu)->translatedFormat('d F Y')
-            : $prevMonthLastDay->translatedFormat('d F Y');
-        $tanggalPenutupanLaluInput = $rawTanggalPenutupanLalu ? (string) $rawTanggalPenutupanLalu : $prevMonthLastDay->format('Y-m-d');
+        if (is_string($rawTanggalPenutupanLalu) && Carbon::hasFormat($rawTanggalPenutupanLalu, 'Y-m-d')) {
+            $parsedTanggalLalu = Carbon::parse($rawTanggalPenutupanLalu);
+            if ((int) $parsedTanggalLalu->month !== (int) $prevMonthLastDay->month || (int) $parsedTanggalLalu->year !== (int) $prevMonthLastDay->year) {
+                $rawTanggalPenutupanLalu = null;
+            }
+        } else {
+            $rawTanggalPenutupanLalu = null;
+        }
+
+        $tanggalPenutupanCarbon = $rawTanggalPenutupan !== null
+            ? Carbon::parse($rawTanggalPenutupan)
+            : $lastDayOfMonth;
+        $tanggalPenutupanLaluCarbon = $rawTanggalPenutupanLalu !== null
+            ? Carbon::parse($rawTanggalPenutupanLalu)
+            : $prevMonthLastDay;
+
+        $tanggalPenutupan = $tanggalPenutupanCarbon->translatedFormat('d F Y');
+        $tanggalPenutupanInput = $tanggalPenutupanCarbon->format('Y-m-d');
+
+        $tanggalPenutupanLalu = $tanggalPenutupanLaluCarbon->translatedFormat('d F Y');
+        $tanggalPenutupanLaluInput = $tanggalPenutupanLaluCarbon->format('Y-m-d');
+
+        // Nama hari eksplisit via mapping EN→ID agar tidak tergantung APP_LOCALE
+        // yang bisa berbeda antara web dan bundle desktop.
+        $hariIndonesia = [
+            'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
+            'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat',
+            'Saturday' => 'Sabtu',
+        ];
+        $hariPenutupan = $hariIndonesia[$tanggalPenutupanCarbon->format('l')] ?? '';
 
         // BKU Calculations
         $saldoAwalRecord = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
@@ -1062,7 +1095,7 @@ class LaporanController extends Controller
 
         return compact(
             'profil', 'tahunAnggaranAktif', 'tahun', 'bulan', 'sumberDanaId',
-            'tanggalPenutupan', 'tanggalPenutupanInput', 'tanggalPenutupanLalu', 'tanggalPenutupanLaluInput',
+            'tanggalPenutupan', 'tanggalPenutupanInput', 'tanggalPenutupanLalu', 'tanggalPenutupanLaluInput', 'hariPenutupan',
             'saldoAwal', 'penerimaanBulanIni', 'totalPenerimaanD', 'totalPengeluaranK', 'saldoBkuA',
             'rincianKertas', 'subtotalKertas', 'rincianLogam', 'subtotalLogam', 'subtotalFisikKas',
             'saldoBank', 'totalKasB', 'perbedaan', 'penjelasanPerbedaan',

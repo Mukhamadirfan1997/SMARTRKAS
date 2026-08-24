@@ -3412,3 +3412,31 @@ Commit fitur Formulir BOS-K7b/K7c (yang sebelumnya terverifikasi tapi belum di-c
 ## Test Status
 
 - PHPUnit full suite OK (467 tests, 1437 assertions), PHPStan level 6 [OK] No errors.
+
+---
+
+# Sesi 24 Agu 2026 - Fix K7b Saldo Minus Filter Sumber Dana + Tanggal Sticky + Hari Indonesia (commit lokal, BELUM push/build)
+
+## Goal
+
+3 temuan user pada fitur Formulir BOS-K7b/K7c: (1) saldo A minus saat filter Sumber Dana (6 baris Tarik Tunai BBU001-BBU006 tanpa sumber_dana_id), (2) label tanggal penutupan sticky saat ubah Bulan Penutupan, (3) narasi berita acara K7c tidak menyebut nama hari. User setuju "Ya, keduanya" untuk backfill DB + wajibkan Sumber Dana di form penerimaan.
+
+## Changes
+
+- **app/Http/Controllers/TransaksiBkuController.php** - fix 1b: `create()`/`edit()` load `$sumberDanas`; branching manual di `storeSingleItem()` (~:266-288) & `update()` (~:442-456): item RKAS -> derive dari RkasItem; penerimaan -> wajib + exists check (`ValidationException` key `sumber_dana_id`, pesan "Sumber Dana wajib dipilih untuk transaksi penerimaan (tarik tunai)."); update lainnya tidak menyentuh nilai existing. Sengaja TIDAK menambah rule `sumber_dana_id` ke `validate()` agar nilai nota tidak ter-null saat edit.
+- **create.blade.php / edit.blade.php** - div `row_sumber_dana` + select (TANPA atribut HTML required agar tidak blok submit pengeluaran; field toggled hidden) + `@error`; JS `const rowSumberDana` + wiring `toggleVisibility()` kedua halaman; edit prefill `$oldSumberDana = old('sumber_dana_id', $transaksiBku->sumber_dana_id)` (BBU lama NULL -> user harus pilih saat edit, by design).
+- **LaporanController::prepareK7Data()** - guard tanggal sticky (tanggal dikirim bulan/tahun != periode terpilih -> pakai akhir bulan terpilih) + mapping hari EN->ID via Carbon translatedFormat dayName (`$hariPenutupan`) masuk compact.
+- **k7b.blade.php / k7c.blade.php** - JS `syncTanggalFilter()` reset field tanggal saat ganti bulan/tahun; **k7c-pdf.blade.php** narasi memuat nama hari `<strong>{{ $hariPenutupan }}</strong>`.
+- **Backfill produksi**: 6 baris BBU001-BBU006 (total Rp 90.160.000) -> "BOSP Reguler" (`019fd0b9-4bc1-...`). Protokol: rehearsal di salinan VACUUM INTO -> verifikasi end-to-end via controller nyata -> backup snapshot `backup-sebelum-backfill.sqlite` -> apply produksi -> verifikasi 0 baris NULL tersisa + AuditLog `transaksi_bku/backfill_sumber_dana`.
+
+## Tests
+
+- `tests/Feature/BKU/TransaksiBkuTest.php`: patch 3 test POST/PUT penerimaan existing (+sumber_dana_id); test baru: store tanpa sumber dana ditolak, sumber dana id tak dikenal ditolak, update wajib sumber dana & nilai lama utuh, create page render row_sumber_dana.
+- Full suite OK (475 tests, 1460 assertions), PHPStan level 6 [OK] No errors, view:cache OK.
+
+## Catatan
+
+- Verifikasi K7b pasca-backfill (produksi): filter BOSP Reguler A = Rp 10.901.500 = tanpa filter; Perbedaan 0,00; D=90.160.000 K=79.258.500.
+- Fix kode belum masuk instalasi v0.6.9 (butuh build baru); backfill data sudah aktif seketika di app jalan.
+- Backup pra-backfill: %TEMP%\opencode\backup-sebelum-backfill.sqlite (1.87MB).
+- User setuju "Commit saja dulu" via question tool; BELUM push/build/rilis - bump versi + build installer menyusul bila diminta.

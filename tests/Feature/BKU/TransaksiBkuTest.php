@@ -199,6 +199,7 @@ class TransaksiBkuTest extends TestCase
             'no_bukti' => 'BBU001/20519260/01/2026',
             'jenis' => 'penerimaan',
             'jumlah' => 1000000,
+            'sumber_dana_id' => $this->sumber->id,
             'toko_penerima' => 'BOS Reguler',
             'uraian' => 'Penerimaan BOS Tahap 1',
         ]);
@@ -210,6 +211,7 @@ class TransaksiBkuTest extends TestCase
             'no_bukti' => 'BBU001/20519260/01/2026',
             'bulan' => 1,
             'tahun_anggaran_id' => $this->tahun->id,
+            'sumber_dana_id' => $this->sumber->id,
             'created_by' => $this->user->id,
         ]);
 
@@ -929,6 +931,7 @@ class TransaksiBkuTest extends TestCase
             'no_bukti' => 'BPU001/20519260/02/2026',
             'jenis' => 'penerimaan',
             'jumlah' => 750000,
+            'sumber_dana_id' => $this->sumber->id,
             'toko_penerima' => 'BOS Reguler',
         ]);
 
@@ -1127,6 +1130,7 @@ class TransaksiBkuTest extends TestCase
             'no_bukti' => '',
             'jenis' => 'penerimaan',
             'jumlah' => 500000,
+            'sumber_dana_id' => $this->sumber->id,
         ]);
 
         $response->assertRedirect(route('transaksi-bku.index'));
@@ -1227,5 +1231,73 @@ class TransaksiBkuTest extends TestCase
         $response->assertSee('"bulan":1', false);
         $response->assertSee('"sisa":1400000', false);
         $response->assertSee('Sisa s.d. bulan', false);
+    }
+
+    public function test_store_penerimaan_wajib_sumber_dana(): void
+    {
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'no_bukti' => '',
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+            'toko_penerima' => 'BOS Reguler',
+        ]);
+
+        $response->assertSessionHasErrors('sumber_dana_id');
+
+        $this->assertDatabaseMissing('transaksi_bku', [
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+        ]);
+    }
+
+    public function test_store_penerimaan_tolak_sumber_dana_tidak_ada(): void
+    {
+        $response = $this->actingAs($this->user)->post('/transaksi-bku', [
+            'tanggal' => '2026-01-15',
+            'no_bukti' => '',
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+            'sumber_dana_id' => '019f0000-0000-7000-8000-000000000000',
+        ]);
+
+        $response->assertSessionHasErrors('sumber_dana_id');
+    }
+
+    public function test_update_penerimaan_wajib_sumber_dana_dan_nilai_lama_utuh(): void
+    {
+        $transaksi = $this->makeTransaksi([
+            'tanggal' => '2026-01-10',
+            'bulan' => 1,
+            'no_bukti' => 'BBU001/20519260/01/2026',
+            'jenis' => 'penerimaan',
+            'jumlah' => 500000,
+        ]);
+
+        $response = $this->actingAs($this->user)->put('/transaksi-bku/' . $transaksi->id, [
+            'tanggal' => '2026-01-20',
+            'no_bukti' => 'BBU001/20519260/01/2026',
+            'jenis' => 'penerimaan',
+            'jumlah' => 750000,
+        ]);
+
+        $response->assertSessionHasErrors('sumber_dana_id');
+
+        // Nilai lama tidak boleh berubah saat validasi menolak.
+        $this->assertDatabaseHas('transaksi_bku', [
+            'id' => $transaksi->id,
+            'jumlah' => 500000.0,
+            'bulan' => 1,
+        ]);
+    }
+
+    public function test_create_page_menampilkan_pilihan_sumber_dana(): void
+    {
+        $response = $this->actingAs($this->user)->get('/transaksi-bku/create');
+
+        $response->assertOk();
+        $response->assertSee('id="row_sumber_dana"', false);
+        $response->assertSee('id="sumber_dana_id"', false);
+        $response->assertSee($this->sumber->nama, false);
     }
 }
