@@ -111,6 +111,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('laporan/rekap-rekening/preview', [LaporanController::class, 'rekapRekeningWeb'])->name('laporan.rekap-rekening.preview');
     Route::get('laporan/rekap-kuartal/preview', [LaporanController::class, 'rekapKuartalWeb'])->name('laporan.rekap-kuartal.preview');
     Route::get('laporan/rekap-siplah/preview', [LaporanController::class, 'rekapSiplahWeb'])->name('laporan.rekap-siplah.preview');
+    Route::get('laporan/k7b', [LaporanController::class, 'k7b'])->name('laporan.k7b');
+    Route::get('laporan/k7c', [LaporanController::class, 'k7c'])->name('laporan.k7c');
 
     Route::resource('tahun-anggaran', TahunAnggaranController::class)->except(['show']);
     Route::post('/tahun-anggaran/{tahunAnggaran}/set-active', [TahunAnggaranController::class, 'setActive'])->name('tahun-anggaran.set-active');
@@ -139,4 +141,4 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

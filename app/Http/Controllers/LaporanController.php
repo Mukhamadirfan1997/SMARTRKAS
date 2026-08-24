@@ -16,6 +16,7 @@ use App\Models\TahunAnggaran;
 use App\Models\TransaksiBku;
 use App\Support\RealisasiQuery;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -880,5 +881,192 @@ class LaporanController extends Controller
         return compact('grouped', 'profil', 'tahunAnggaranAktif',
             'qLabel', 'periodeLabel', 'bulanMonths', 'bulanNames', 'kuartal', 'bulan', 'tahunList',
             'sumberDanaList', 'sumberDanaId', 'programs', 'programId');
+    }
+
+    public function k7b(Request $request): \Illuminate\Http\Response|\Illuminate\View\View
+    {
+        $authUser = auth()->user();
+        if ($authUser === null) {
+            abort(403);
+        }
+        if ($request->get('cetak') == 'pdf') {
+            set_time_limit(0);
+            ini_set('memory_limit', -1);
+        }
+
+        $data = $this->prepareK7Data($request);
+
+        if ($request->get('cetak') == 'pdf') {
+            $namaSekolah = $data['profil'] ? preg_replace('/[^a-zA-Z0-9]/', '_', (string) $data['profil']->nama) : 'sekolah';
+            $bulanLabel = $data['bulan'] ? Carbon::createFromDate(null, (int) $data['bulan'], 1)->translatedFormat('F') : '';
+            $tahunLabel = (string) $data['tahun'];
+            $pdf = Pdf::loadView('laporan.k7b-pdf', $data)->setPaper('a4', 'portrait');
+
+            return $this->streamPdf($pdf, 'Formulir_BOS_K7b-' . $namaSekolah . '-' . $bulanLabel . '_' . $tahunLabel . '.pdf');
+        }
+
+        return view('laporan.k7b', $data);
+    }
+
+    public function k7c(Request $request): \Illuminate\Http\Response|\Illuminate\View\View
+    {
+        $authUser = auth()->user();
+        if ($authUser === null) {
+            abort(403);
+        }
+        if ($request->get('cetak') == 'pdf') {
+            set_time_limit(0);
+            ini_set('memory_limit', -1);
+        }
+
+        $data = $this->prepareK7Data($request);
+
+        if ($request->get('cetak') == 'pdf') {
+            $namaSekolah = $data['profil'] ? preg_replace('/[^a-zA-Z0-9]/', '_', (string) $data['profil']->nama) : 'sekolah';
+            $bulanLabel = $data['bulan'] ? Carbon::createFromDate(null, (int) $data['bulan'], 1)->translatedFormat('F') : '';
+            $tahunLabel = (string) $data['tahun'];
+            $pdf = Pdf::loadView('laporan.k7c-pdf', $data)->setPaper('a4', 'portrait');
+
+            return $this->streamPdf($pdf, 'Formulir_BOS_K7c-' . $namaSekolah . '-' . $bulanLabel . '_' . $tahunLabel . '.pdf');
+        }
+
+        return view('laporan.k7c', $data);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function prepareK7Data(Request $request): array
+    {
+        $bulanVal = $request->input('bulan', date('n'));
+        $bulan = is_numeric($bulanVal) ? (int) $bulanVal : (int) date('n');
+        $tahunAnggaranAktif = $this->resolveTahunAnggaran($request);
+        $sumberDanaId = $request->input('sumber_dana_id');
+        $profil = PengaturanSekolah::get();
+        $tahun = $tahunAnggaranAktif !== null ? (int) $tahunAnggaranAktif->tahun : (int) date('Y');
+
+        // Tanggal Penutupan Kas Bulan ini & Bulan lalu
+        $lastDayOfMonth = Carbon::create($tahun, $bulan, 1)->endOfMonth();
+        $prevMonthLastDay = Carbon::create($tahun, $bulan, 1)->subMonth()->endOfMonth();
+
+        $rawTanggalPenutupan = $request->input('tanggal_penutupan');
+        $tanggalPenutupan = $rawTanggalPenutupan && Carbon::hasFormat((string) $rawTanggalPenutupan, 'Y-m-d')
+            ? Carbon::parse((string) $rawTanggalPenutupan)->translatedFormat('d F Y')
+            : $lastDayOfMonth->translatedFormat('d F Y');
+        $tanggalPenutupanInput = $rawTanggalPenutupan ? (string) $rawTanggalPenutupan : $lastDayOfMonth->format('Y-m-d');
+
+        $rawTanggalPenutupanLalu = $request->input('tanggal_penutupan_lalu');
+        $tanggalPenutupanLalu = $rawTanggalPenutupanLalu && Carbon::hasFormat((string) $rawTanggalPenutupanLalu, 'Y-m-d')
+            ? Carbon::parse((string) $rawTanggalPenutupanLalu)->translatedFormat('d F Y')
+            : $prevMonthLastDay->translatedFormat('d F Y');
+        $tanggalPenutupanLaluInput = $rawTanggalPenutupanLalu ? (string) $rawTanggalPenutupanLalu : $prevMonthLastDay->format('Y-m-d');
+
+        // BKU Calculations
+        $saldoAwalRecord = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+            ->where('bulan', '<', $bulan)
+            ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
+            ->selectRaw("SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END) as saldo")
+            ->first();
+        $saldoAwal = $saldoAwalRecord ? (float) $saldoAwalRecord->getAttribute('saldo') : 0.0;
+
+        $monthTotals = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
+            ->where('bulan', $bulan)
+            ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
+            ->first();
+
+        $penerimaanBulanIni = $monthTotals ? (float) $monthTotals->getAttribute('total_penerimaan') : 0.0;
+        $totalPengeluaranK = $monthTotals ? (float) $monthTotals->getAttribute('total_pengeluaran') : 0.0;
+        $totalPenerimaanD = $saldoAwal + $penerimaanBulanIni;
+        $saldoBkuA = $totalPenerimaanD - $totalPengeluaranK;
+
+        // Rincian Pecahan Uang Kertas
+        $denominasiKertas = [
+            '100000' => ['label' => '100.000', 'nominal' => 100000],
+            '50000' => ['label' => '50.000', 'nominal' => 50000],
+            '20000' => ['label' => '20.000', 'nominal' => 20000],
+            '10000' => ['label' => '10.000', 'nominal' => 10000],
+            '5000' => ['label' => '5.000', 'nominal' => 5000],
+            '2000' => ['label' => '2.000', 'nominal' => 2000],
+            '1000' => ['label' => '1.000', 'nominal' => 1000],
+        ];
+
+        $rincianKertas = [];
+        $subtotalKertas = 0.0;
+        foreach ($denominasiKertas as $key => $d) {
+            $lembar = max(0, (int) $request->input('kertas_' . $key, 0));
+            $total = $lembar * $d['nominal'];
+            $subtotalKertas += $total;
+            $rincianKertas[$key] = [
+                'nominal' => $d['nominal'],
+                'label' => $d['label'],
+                'lembar' => $lembar,
+                'total' => $total,
+            ];
+        }
+
+        // Rincian Pecahan Uang Logam
+        $denominasiLogam = [
+            '500' => ['label' => '500', 'nominal' => 500],
+            '200' => ['label' => '200', 'nominal' => 200],
+            '100' => ['label' => '100', 'nominal' => 100],
+            '50' => ['label' => '50', 'nominal' => 50],
+        ];
+
+        $rincianLogam = [];
+        $subtotalLogam = 0.0;
+        foreach ($denominasiLogam as $key => $d) {
+            $keping = max(0, (int) $request->input('logam_' . $key, 0));
+            $total = $keping * $d['nominal'];
+            $subtotalLogam += $total;
+            $rincianLogam[$key] = [
+                'nominal' => $d['nominal'],
+                'label' => $d['label'],
+                'keping' => $keping,
+                'total' => $total,
+            ];
+        }
+
+        // Subtotal Fisik Kas (1 + 2)
+        $subtotalFisikKas = $subtotalKertas + $subtotalLogam;
+
+        // Saldo Bank (3)
+        $rawSaldoBank = $request->input('saldo_bank');
+        if ($rawSaldoBank !== null && $rawSaldoBank !== '') {
+            $cleanBank = is_string($rawSaldoBank) ? str_replace(['.', ','], ['', '.'], $rawSaldoBank) : $rawSaldoBank;
+            $saldoBank = (float) $cleanBank;
+        } else {
+            // Default: bila lembaran kas belum diinput, saldo bank = sisa saldo BKU
+            $saldoBank = $subtotalFisikKas > 0 ? max(0.0, $saldoBkuA - $subtotalFisikKas) : $saldoBkuA;
+        }
+
+        // Total Kas (1 + 2 + 3 = B)
+        $totalKasB = $subtotalFisikKas + $saldoBank;
+
+        // Perbedaan (A - B)
+        $perbedaan = $saldoBkuA - $totalKasB;
+        $defaultPenjelasan = abs($perbedaan) < 0.01 ? 'NIHIL' : 'Selisih Rp ' . number_format(abs($perbedaan), 0, ',', '.');
+        $rawPenjelasan = $request->input('penjelasan_perbedaan');
+        $penjelasanPerbedaan = is_string($rawPenjelasan) && trim($rawPenjelasan) !== '' ? trim($rawPenjelasan) : $defaultPenjelasan;
+
+        // SK Pengangkatan (untuk K-7c)
+        $rawSkKepsek = $request->input('sk_bupati_kepsek');
+        $skBupatiKepsek = is_string($rawSkKepsek) && trim($rawSkKepsek) !== '' ? trim($rawSkKepsek) : '821.2/421/424.103/2021';
+
+        $rawSkBendahara = $request->input('sk_bupati_bendahara');
+        $skBupatiBendahara = is_string($rawSkBendahara) && trim($rawSkBendahara) !== '' ? trim($rawSkBendahara) : '420/ 220 /HK /424.013/2024';
+
+        $tahunList = TahunAnggaran::orderBy('tahun', 'desc')->get();
+        $sumberDanaList = SumberDana::orderBy('kode')->get();
+
+        return compact(
+            'profil', 'tahunAnggaranAktif', 'tahun', 'bulan', 'sumberDanaId',
+            'tanggalPenutupan', 'tanggalPenutupanInput', 'tanggalPenutupanLalu', 'tanggalPenutupanLaluInput',
+            'saldoAwal', 'penerimaanBulanIni', 'totalPenerimaanD', 'totalPengeluaranK', 'saldoBkuA',
+            'rincianKertas', 'subtotalKertas', 'rincianLogam', 'subtotalLogam', 'subtotalFisikKas',
+            'saldoBank', 'totalKasB', 'perbedaan', 'penjelasanPerbedaan',
+            'skBupatiKepsek', 'skBupatiBendahara', 'tahunList', 'sumberDanaList'
+        );
     }
 }

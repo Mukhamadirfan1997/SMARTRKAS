@@ -10,7 +10,7 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <a href="{{ route('laporan.bku.preview', ['bulan' => date('n'), 'tahun' => ($tahunAnggaranAktif?->tahun ?? date('Y')), 'sumber_dana_id' => request('sumber_dana_id')]) }}"
            class="group block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-emerald-300 transition-all duration-300 overflow-hidden">
             <div class="h-2 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
@@ -56,6 +56,30 @@
                 </div>
                 <h3 class="text-base font-bold text-slate-800 mb-1">Rekap SIPLAH</h3>
                 <p class="text-xs text-slate-500 leading-relaxed">Proporsi pengeluaran SIPLAH vs Non-SIPLAH</p>
+            </div>
+        </a>
+
+        <a href="{{ route('laporan.k7b', ['bulan' => date('n'), 'tahun' => ($tahunAnggaranAktif?->tahun ?? date('Y')), 'sumber_dana_id' => request('sumber_dana_id')]) }}"
+           class="group block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-teal-300 transition-all duration-300 overflow-hidden">
+            <div class="h-2 bg-gradient-to-r from-teal-400 to-teal-600"></div>
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                    <svg aria-hidden="true" class="w-8 h-8 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </div>
+                <h3 class="text-base font-bold text-slate-800 mb-1">Register Kas (K-7b)</h3>
+                <p class="text-xs text-slate-500 leading-relaxed">Penutupan kas bulanan &amp; rincian fisik uang kas</p>
+            </div>
+        </a>
+
+        <a href="{{ route('laporan.k7c', ['bulan' => date('n'), 'tahun' => ($tahunAnggaranAktif?->tahun ?? date('Y')), 'sumber_dana_id' => request('sumber_dana_id')]) }}"
+           class="group block bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-rose-300 transition-all duration-300 overflow-hidden">
+            <div class="h-2 bg-gradient-to-r from-rose-400 to-rose-600"></div>
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-rose-50 to-rose-100 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                    <svg aria-hidden="true" class="w-8 h-8 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+                <h3 class="text-base font-bold text-slate-800 mb-1">Pemeriksaan Kas (K-7c)</h3>
+                <p class="text-xs text-slate-500 leading-relaxed">Berita Acara Pemeriksaan Kas oleh Kepala Sekolah</p>
             </div>
         </a>
     </div>
