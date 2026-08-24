@@ -3552,3 +3552,35 @@ Implementasi saldo bank pada Formulir BOS-K7b/K7c sesuai panduan resmi (keputusa
 ## Next (instruksi user)
 
 - **Nanti malam: BUILD TANPA RILIS** — user mau uji manual dulu. Urutan: cek tidak ada build rangkap → `npm run build` → `tauri build --bundles nsis,msi` → reinstall di mesin ini → verifikasi `/login` 200 + fix layout Monitoring Juknis terbundle → serahkan ke user untuk uji manual. Push & `gh release create` MENUNGGU hasil uji user (jangan rilis otomatis).
+
+---
+
+# Sesi 24 Agu 2026 (malam) - Build v0.6.10 TANPA RILIS + Reinstall Terverifikasi
+
+## Goal
+
+Eksekusi instruksi user "build tanpa rilis": build installer dari seluruh commit lokal sejak v0.6.9 (fix K7b/K7c saldo bank + mutasi netral + persistensi opname kas + register PDF, K7c live data kas_fisik, rapikan layout Monitoring Juknis), reinstall di mesin ini, verifikasi penuh, lalu serahkan ke user untuk uji manual. Push & rilis GitHub MENUNGGU hasil uji user.
+
+## Build
+
+- Bump 0.6.9 -> **0.6.10** di 5 file (config/app.php, .env.example, src-tauri/tauri.conf.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock blok name="smartrkas" saja) via Edit tool (anti-BOM). Diff tepat 5 file 1+/1-, first-byte bukan 239.
+- npm run build OK (60 modules, app-P-PfVrUt.css / app-CA7a7cYK.js).
+- tauri build --bundles nsis,msi via background process (log %TEMP%\opencode\build-v0610.log): compile 10m10s -> NSIS SmartRKAS_0.6.10_x64-setup.exe (**61.7MB**) + MSI SmartRKAS_0.6.10_x64_en-US.msi (**94.7MB**).
+
+## Reinstall & Verifikasi Instalasi Nyata v0.6.10
+
+- Cek pra-install: tidak ada proses app/build berjalan (hanya VS Code PHP language servers). Uninstall v0.6.9 (/S exit bersih) -> folder %LOCALAPPDATA%\SmartRKAS hilang, **DB Roaming utuh** (1.871.872 bytes). Install NSIS v0.6.10 /S -> exe ProductVersion **0.6.10**, php\php.exe + php\extras\ssl\cacert.pem (186.446 bytes) terbundle.
+- **7/7 cek fix terbundle PASS**: monitoring-juknis.blade.php punya page-title & wrapper Breeze max-w-7xl HILANG; LaporanController memuat kas_fisik; model KasPenutupan.php ada; migrasi 000031 ada; k7b-register-pdf.blade.php ada; config/app.php 0.6.10.
+- App jalan -> server php -S 127.0.0.1:55497 (PID 64456), router TANPA prefix \\?\. /login = **200/200/200**.
+- php-server-error.log: 756 -> **756 bytes** (tidak bertambah; isi lama fatal era \\?\ 08-Agu).
+- Auto-migrate startup terverifikasi no-op: migrate:status DB Roaming -> semua Ran, 000031 batch 9 (sudah di-apply saat backfill sesi 24 Agu).
+
+## Status
+
+- Commit lokal (bump versi + AGENTS.md ini); BELUM push, BELUM tag/release GitHub.
+- App v0.6.10 DIBIARKAN BERJALAN (port 55497) untuk uji manual user: fokus uji = (1) K7b saldo bank + tarik tunai mutasi netral + simpan/persistensi opname per bulan + register PDF multi-bulan, (2) K7c menerima data live kas fisik dari K7b, (3) layout Monitoring Juknis sudah rapi konsisten dgn halaman lain, (4) wajib Sumber Dana utk penerimaan BKU.
+- Bila user lolos -> push master + gh release create v0.6.10 (2 asset). xlsm referensi tetap untracked.
+
+## Test Status
+
+- Tidak ada perubahan logika PHP pada sesi ini (hanya bump versi + AGENTS) -> suite tetap OK (485 tests, 1506 assertions), PHPStan level 6 [OK] No errors.
