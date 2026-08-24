@@ -3375,3 +3375,40 @@ Menambahkan modul laporan resmi penatausahaan BOSP/BOS sekolah format **Formulir
 ## Test Status
 
 - PHPUnit full suite `OK (467 tests, 1437 assertions)`, PHPStan level 6 `[OK] No errors`. BELUM commit — semua pekerjaan sesi ini aman di working tree.
+
+---
+
+# Sesi 24 Agu 2026 - Release v0.6.9 (Fitur BOS-K7b & K7c + ide-helper)
+
+## Goal
+
+Commit fitur Formulir BOS-K7b/K7c (yang sebelumnya terverifikasi tapi belum di-commit dari sesi 23 Agu), bump versi 0.6.9, build installer, clean-install verifikasi, push, dan rilis GitHub.
+
+## Summary
+
+- Commit `88943fd` (14 file): fitur K7b/K7c (controller +188 baris, 4 view baru, routes, test 178 baris) + artefak laravel-ide-helper (_ide_helper.php, config/ide-helper.php, stubs/, composer.json/lock) + AGENTS.md.
+- Full suite diverifikasi ulang SEBELUM commit: `OK (467 tests, 1437 assertions)`, PHPStan level 6 `[OK] No errors`.
+- Secret scan diff bersih.
+- Build: NSIS `SmartRKAS_0.6.9_x64-setup.exe` (58.8MB) + MSI `SmartRKAS_0.6.9_x64_en-US.msi` (90.1MB).
+
+## Bump Versi
+
+- 0.6.8 -> 0.6.9 di 5 file (config/app.php, .env.example, src-tauri/tauri.conf.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock blok `name = "smartrkas"` saja).
+- Metode aman anti-BOM: `[System.IO.File]::WriteAllText(, , (New-Object System.Text.UTF8Encoding(False)))`; Cargo.lock via replace string persis `name = "smartrkas"`+newline+`version = "0.6.8"` (bukan regex global). Verifikasi: diff 5 file 1+/1-, first-byte semua bukan 239 (no BOM).
+
+## Clean-install & Verifikasi Instalasi Nyata v0.6.9
+
+- Kill app v0.6.8 -> uninstall `/S` -> folder %LOCALAPPDATA% hilang, DB Roaming utuh (1.87MB).
+- Install NSIS v0.6.9 `/S` -> exe ProductVersion **0.6.9**, php bundle + cacert.pem (186KB) terbundle.
+- Fitur K7 terverifikasi terbundle: view k7b/k7c ada, controller punya `function k7b`, routes memuat `laporan.k7b`, config versi 0.6.9.
+- App jalan -> server `php -S 127.0.0.1:50847` (router TANPA prefix `\\\\?\\`, arg `-d opcache.enable=0 log_errors=1 error_log=... curl.cainfo=... openssl.cafile=...` lengkap).
+- `/login` = **200/200/200** (len 11272).
+- `php-server-error.log` tetap **756 bytes** (tidak bertambah); `laravel.log` tidak ada error baru (semua timestamp 15-21 Agu; error "sqlite3 not recognized" yang muncul saat grep = entri LAMA era pra-v0.6.6, terverifikasi dari timestamp).
+
+## Release
+
+- Push master + tag/release v0.6.9 dengan 2 asset (NSIS + MSI).
+
+## Test Status
+
+- PHPUnit full suite OK (467 tests, 1437 assertions), PHPStan level 6 [OK] No errors.
