@@ -3584,3 +3584,32 @@ Eksekusi instruksi user "build tanpa rilis": build installer dari seluruh commit
 ## Test Status
 
 - Tidak ada perubahan logika PHP pada sesi ini (hanya bump versi + AGENTS) -> suite tetap OK (485 tests, 1506 assertions), PHPStan level 6 [OK] No errors.
+---
+
+# Sesi 25 Agu 2026 (malam) - Modul Data Pencairan Terpisah + BKU Penerimaan Selalu Tarik Tunai (commit f92ea49, BELUM push)
+
+## Goal
+
+Pisahkan pencatatan Pencairan/SP2D dari BKU: modul "Data Pencairan" baru, form BKU tidak lagi menyediakan opsi Pencairan (radio kategori_arus dihapus), penerimaan BKU = selalu Tarik Tunai (mutasi). Laporan K7b/K7c menggabungkan kedua sumber.
+
+## Changes
+
+- Tahap 1 - Modul Pencairan: migrasi 000032 tabel pencairan (uuid, tahun_anggaran_id restrict, sumber_dana_id nullable nullOnDelete, tanggal date, bulan tinyint, nominal decimal(15,2), keterangan string nullable, created_by, timestamps); model Pencairan (HasUuids+SoftDeletes+HasFactory) + factory; PencairanController (index/store/edit/update/destroy, NumberParser::rupiah, bulan dari tanggal, AuditLog pencairan create/update/delete); routes pencairan.index/store/edit/update/destroy; sidebar dropdown Pengaturan -> "Data Pencairan"; views pencairan/index + edit.
+- Tahap 2 - Integrasi K7b/K7c: prepareK7Data() query pencairan via closure $pencairanScope (tahun + filter sumber dana bila ada): totalPencairan = sum nominal bulan terpilih (masuk D), pencairanSdBulanLalu = sum s.d. bulan sebelumnya -> saldoAwal += itu; registerK7b() sama ($pencairanAwal/$pencairanBulan); estimasiSaldoBank = max(0.0, pencairanSdBulan - tarikTunaiBulan) hanya sbg DEFAULT (dipakai bila TANPA input saldo_bank DAN TANPA record KasPenutupan tersimpan; bila kas fisik terisi tetap max(0, A - fisik)); view k7b.blade.php hint "Termasuk pencairan SP2D s.d. bulan ini: Rp X" di kartu D + hint estimasi di input_saldo_bank. compact += totalPencairan, estimasiSaldoBank.
+- Tahap 3 - BKU penerimaan selalu mutasi: hapus div #row_kategori_arus (create ~170-183, edit ~216-229) + semua JS (rowKategoriArus/kategoriArusRadios/getSelectedKategoriArus/listener); syncMutasiUraian() kini cek jenisSelect.value==='penerimaan' (auto uraian "Tarik tunai bulan X"); TransaksiBkuController store (~328) & update (~469) hardcode $validated['kategori_arus'] = penerimaan ? 'mutasi' : null (request field diabaikan; rule validasi nullable|in:mutasi dipertahankan).
+- Tests: PencairanTest (9 tests/46 assertions: CRUD + validasi); LaporanK7Test +3 (pencairan masuk D & hint; default saldo bank = pencairan - tarik tunai = value="6.000.000"; register PDF smoke dgn pencairan); TransaksiBkuTest: test_create_page_tidak_lagi_menyediakan_opsi_pencairan (pengganti test radio), test_update_penerimaan_selalu_tarik_tunai_mutasi + test_store_penerimaan_tanpa_kategori_arus_tetap_mutasi (pengganti test update->pencairan yang tidak valid lagi).
+
+## Gotcha
+
+- JANGAN assertDontSee('4.000.000') pada test pencairan K7b: defaultPenjelasan menampilkan "Selisih Rp 4.000.000" sehingga assertion gagal; pakai assert positif saja.
+- Karena modul pencairan produksi masih kosong, default saldo bank produksi jatuh ke max(0,...) = Rp 0 sampai user mengisi Data Pencairan / record KasPenutupan.
+
+## Verifikasi
+
+- vendor\bin\phpunit --filter TransaksiBkuTest -> OK (52 tests, 205 assertions); --filter PencairanTest -> OK (9/46); --filter LaporanK7Test -> OK (21 tests, 79 assertions).
+- Full suite -> OK (498 tests, 1559 assertions); PHPStan level 6 [OK] No errors; view:cache OK.
+- Commit f92ea49 diverifikasi (git log + diff-tree: 16 file, +942/-98). xlsm referensi tetap untracked.
+
+## Status
+
+- Commit lokal; BELUM push/build/rilis (menunggu uji manual user v0.6.10 + konfirmasi).
