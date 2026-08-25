@@ -153,14 +153,16 @@
     {{-- Tanda Tangan --}}
     <table class="signature-table">
         <tr>
-            <td>
+            <td style="text-align: center;">
+                Pasuruan, {{ $tanggalPenutupan }}<br>
                 Yang diperiksa,<br>
-                <strong>Bendahara</strong>
+                <strong>Bendahara</strong><br>
+                <strong>{{ $profil?->nama ?? 'Sekolah' }}</strong>
                 <div class="ttd-space"></div>
                 <strong>{{ $profil?->nama_bendahara ?? '....................................' }}</strong><br>
                 NIP. {{ $profil?->nip_bendahara ?? '....................................' }}
             </td>
-            <td>
+            <td style="text-align: center;">
                 Tanggal, {{ $tanggalPenutupan }}<br>
                 Yang Memeriksa,<br>
                 <strong>Kepala Sekolah</strong><br>

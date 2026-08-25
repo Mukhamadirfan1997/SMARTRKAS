@@ -548,20 +548,24 @@ class LaporanController extends Controller
         $saldoAwal = (float) TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', '<', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
-            ->selectRaw("SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END) as saldo")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
             ->value('saldo');
 
         $saldo = $saldoAwal;
         foreach ($transaksis as $t) {
-            $saldo += strtolower($t->jenis) == 'penerimaan' ? $t->jumlah : -$t->jumlah;
+            if (strtolower($t->jenis) === 'penerimaan' && ($t->kategori_arus ?? '') === 'mutasi') {
+                // mutasi netral — tidak mengubah saldo berjalan
+            } else {
+                $saldo += strtolower($t->jenis) === 'penerimaan' ? $t->jumlah : -$t->jumlah;
+            }
             $t->saldo_berjalan = $saldo;
         }
 
         $totals = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
-            ->selectRaw("COALESCE(SUM(CASE WHEN jenis = 'penerimaan' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
-            ->selectRaw("COALESCE(SUM(CASE WHEN jenis = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
             ->firstOrFail();
         $totalPenerimaan = (float) $totals->getAttribute('total_penerimaan');
         $totalPengeluaran = (float) $totals->getAttribute('total_pengeluaran');
@@ -1341,6 +1345,13 @@ class LaporanController extends Controller
         $tahunList = TahunAnggaran::orderBy('tahun', 'desc')->get();
         $sumberDanaList = SumberDana::orderBy('kode')->get();
 
+        // Riwayat penutupan kas tersimpan tahun anggaran terpilih (semua bulan &
+        // semua sumber dana) utk tabel riwayat di bawah form.
+        $riwayatPenutupan = $tahunAnggaranAktif !== null
+            ? KasPenutupan::query()->where('tahun_anggaran_id', $tahunAnggaranAktif->id)
+                ->with('sumberDana')->orderBy('bulan')->orderBy('sumber_dana_id')->get()
+            : collect();
+
         return compact(
             'profil', 'tahunAnggaranAktif', 'tahun', 'bulan', 'sumberDanaId', 'kasPenutupan',
             'tanggalPenutupan', 'tanggalPenutupanInput', 'tanggalPenutupanLalu', 'tanggalPenutupanLaluInput', 'hariPenutupan',
@@ -1348,7 +1359,7 @@ class LaporanController extends Controller
             'rincianKertas', 'subtotalKertas', 'rincianLogam', 'subtotalLogam', 'subtotalFisikKas',
             'saldoBank', 'totalKasB', 'perbedaan', 'penjelasanPerbedaan',
             'skBupatiKepsek', 'skBupatiBendahara', 'tahunList', 'sumberDanaList',
-            'totalPencairan', 'estimasiSaldoBank'
+            'totalPencairan', 'estimasiSaldoBank', 'riwayatPenutupan'
         );
     }
 }

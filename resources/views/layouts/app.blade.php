@@ -194,8 +194,17 @@
             }
 
             document.getElementById('break-reminder-ok').addEventListener('click', function() {
-                markNow();
-                close();
+                try { localStorage.removeItem(KEY); } catch (e) {}
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '{{ route("logout") }}';
+                var token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '_token';
+                token.value = '{{ csrf_token() }}';
+                form.appendChild(token);
+                document.body.appendChild(form);
+                form.submit();
             });
             document.getElementById('break-reminder-snooze').addEventListener('click', function() {
                 try { localStorage.setItem(KEY, String(Date.now() - TWO_HOURS + 15 * 60 * 1000)); } catch (e) {}

@@ -52,14 +52,18 @@ class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping,
         $saldoRecord = TransaksiBku::where('tahun_anggaran_id', $this->tahunAnggaranId)
             ->where('bulan', '<', $this->bulan)
             ->when($this->sumberDanaId, fn ($q) => $q->where('sumber_dana_id', $this->sumberDanaId))
-            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE -jumlah END), 0) as saldo")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
             ->first();
         $saldoAwal = $saldoRecord ? (float) $saldoRecord->getAttribute('saldo') : 0;
 
         $saldo = $saldoAwal;
         foreach ($transaksis as $t) {
-            $saldo += strtolower($t->jenis) == 'penerimaan' ? $t->jumlah : -$t->jumlah;
-            $t->saldo_berjalan = $saldo;
+            if (strtolower($t->jenis) === 'penerimaan' && ($t->kategori_arus ?? '') === 'mutasi') {
+                $t->saldo_berjalan = $saldo;
+            } else {
+                $saldo += strtolower($t->jenis) === 'penerimaan' ? $t->jumlah : -$t->jumlah;
+                $t->saldo_berjalan = $saldo;
+            }
         }
 
         $t = new TransaksiBku();
@@ -77,7 +81,8 @@ class BkuExport implements FromCollection, WithHeadings, WithTitle, WithMapping,
         $t2->setAttribute('penerimaan', (float) TransaksiBku::where('tahun_anggaran_id', $this->tahunAnggaranId)
             ->where('bulan', $this->bulan)
             ->when($this->sumberDanaId, fn ($q) => $q->where('sumber_dana_id', $this->sumberDanaId))
-            ->where('jenis', 'penerimaan')->sum('jumlah'));
+            ->where('jenis', 'penerimaan')
+            ->whereRaw("COALESCE(kategori_arus,'') <> 'mutasi'")->sum('jumlah'));
         $t2->setAttribute('pengeluaran', (float) TransaksiBku::where('tahun_anggaran_id', $this->tahunAnggaranId)
             ->where('bulan', $this->bulan)
             ->when($this->sumberDanaId, fn ($q) => $q->where('sumber_dana_id', $this->sumberDanaId))

@@ -638,4 +638,130 @@ class LaporanK7Test extends TestCase
         $pdf->assertOk();
         $pdf->assertHeader('Content-Type', 'application/pdf');
     }
+
+    public function test_k7b_menampilkan_tabel_riwayat_penutupan_kas(): void
+    {
+        // Buat 3 record KasPenutupan: Januari tanpa sumber dana, Februari + Maret dgn sumber dana.
+        $rp1 = KasPenutupan::create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'bulan' => 1,
+            'sumber_dana_id' => null,
+            'tanggal_penutupan' => '2026-01-31',
+            'lembar_100000' => 5,
+            'saldo_bank' => 2500000,
+            'catatan' => 'NIHIL',
+            'created_by' => $this->user->id,
+        ]);
+
+        $rp2 = KasPenutupan::create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'bulan' => 2,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'tanggal_penutupan' => '2026-02-28',
+            'lembar_100000' => 3,
+            'lembar_50000' => 2,
+            'saldo_bank' => 1000000,
+            'catatan' => 'Selisih Rp 10.000',
+            'created_by' => $this->user->id,
+        ]);
+
+        $rp3 = KasPenutupan::create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'bulan' => 3,
+            'sumber_dana_id' => $this->sumberDana->id,
+            'tanggal_penutupan' => '2026-03-31',
+            'saldo_bank' => 500000,
+            'catatan' => '',
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+        ]));
+
+        $response->assertOk();
+
+        // Badge counter: 3 opname tersimpan
+        $response->assertSee('3 opname tersimpan', false);
+
+        // Nama bulan (Indonesia via translatedFormat)
+        $response->assertSee('Januari');
+        $response->assertSee('Februari');
+        $response->assertSee('Maret');
+
+        // Sumber Dana: Januari = "Kas Umum" (sumber_dana_id null), lainnya = nama sumber dana
+        $response->assertSee('Kas Umum');
+        $response->assertSee($this->sumberDana->nama);
+
+        // Tanggal penutupan
+        $response->assertSee('31 Jan 2026');
+        $response->assertSee('28 Feb 2026');
+        $response->assertSee('31 Mar 2026');
+
+        // Nilai kas fisik & bank (subtotalFisik / saldo_bank / totalRiil) — format number_format id
+        $response->assertSee('500.000', false);  // subtotalFisik Jan = 5×100000 = 500000
+        $response->assertSee('2.500.000', false); // saldo_bank Jan
+        $response->assertSee('3.000.000', false); // totalRiil Jan = 500000 + 2500000
+
+        // Catatan
+        $response->assertSee('NIHIL');
+        $response->assertSee('Selisih Rp 10.000', false);
+
+        // Muat links: harus ada 3 tombol "Muat" (none is "Dibuka" karena tanpa param kasPenutupan match)
+        $response->assertSee('Muat', false);
+
+        // Baris aktif (Januari = bulan terpilih) tidak punya tombol "Muat" —
+        // tombol hanya tampil untuk baris non-aktif. Cek Februari & Maret.
+        $muatFeb = route('laporan.k7b', array_filter([
+            'bulan' => 2,
+            'tahun' => $this->tahunAnggaran->tahun,
+            'sumber_dana_id' => $this->sumberDana->id,
+        ]));
+        $response->assertSee($muatFeb);
+
+        $muatMar = route('laporan.k7b', array_filter([
+            'bulan' => 3,
+            'tahun' => $this->tahunAnggaran->tahun,
+            'sumber_dana_id' => $this->sumberDana->id,
+        ]));
+        $response->assertSee($muatMar);
+    }
+
+    public function test_k7b_riwayat_menampilkan_badge_dibuka_saat_baris_aktif(): void
+    {
+        // Simpan record opname Januari, lalu muat via GET params yang cocok
+        $rp = KasPenutupan::create([
+            'tahun_anggaran_id' => $this->tahunAnggaran->id,
+            'bulan' => 1,
+            'sumber_dana_id' => null,
+            'tanggal_penutupan' => '2026-01-31',
+            'lembar_100000' => 1,
+            'saldo_bank' => 0,
+            'catatan' => 'NIHIL',
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+        ]));
+
+        $response->assertOk();
+        // Baris aktif (Januari, tanpa sumber dana) harus menampilkan badge "Dibuka"
+        $response->assertSee('Dibuka');
+    }
+
+    public function test_k7b_riwayat_kosong_tanpa_data(): void
+    {
+        // Tanpa KasPenutupan -> empty state
+        $response = $this->actingAs($this->user)->get(route('laporan.k7b', [
+            'bulan' => 1,
+            'tahun' => $this->tahunAnggaran->tahun,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('0 opname tersimpan', false);
+        $response->assertSee('Belum ada data penutupan kas tersimpan');
+    }
 }

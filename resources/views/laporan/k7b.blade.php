@@ -354,6 +354,72 @@
         </div>
     </div>
 
+    {{-- Riwayat Penutupan Kas Tersimpan --}}
+    <div class="card mt-6 no-print">
+        <div class="card-header flex items-center justify-between">
+            <span class="card-title">Riwayat Penutupan Kas Tersimpan</span>
+            <span class="text-xs text-slate-500 font-normal">
+                {{ $riwayatPenutupan->count() }} opname tersimpan
+                @if($tahunAnggaranAktif) &middot; TA {{ $tahunAnggaranAktif->tahun }} @endif
+            </span>
+        </div>
+        <div class="card-body p-0 overflow-x-auto">
+            @if($riwayatPenutupan->isEmpty())
+                <p class="p-6 text-sm text-slate-500 text-center">
+                    Belum ada data penutupan kas tersimpan untuk tahun anggaran ini.
+                    Isi formulir di atas lalu klik <strong>Simpan Penutupan Kas</strong>.
+                </p>
+            @else
+                <table class="data-table w-full text-xs">
+                    <thead>
+                        <tr>
+                            <th>Bulan</th>
+                            <th>Sumber Dana</th>
+                            <th>Tgl Penutupan</th>
+                            <th class="text-right">Kas Tunai Fisik (1+2)</th>
+                            <th class="text-right">Saldo Bank (3)</th>
+                            <th class="text-right">Total Riil</th>
+                            <th>Catatan Selisih</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($riwayatPenutupan as $rp)
+                            @php
+                                $rpAktif = $kasPenutupan !== null && $kasPenutupan->id === $rp->id;
+                                $muatUrl = route('laporan.k7b', array_filter([
+                                    'bulan' => $rp->bulan,
+                                    'tahun' => $tahunAnggaranAktif?->tahun,
+                                    'sumber_dana_id' => $rp->sumber_dana_id,
+                                ]));
+                                $rpCatatan = trim((string) $rp->catatan);
+                            @endphp
+                            <tr class="{{ $rpAktif ? 'bg-emerald-50/70 dark:bg-emerald-900/20' : '' }}">
+                                <td class="font-medium whitespace-nowrap">
+                                    {{ \Carbon\Carbon::create()->month((int) $rp->bulan)->translatedFormat('F') }}
+                                    @if($rpAktif)
+                                        <span class="ml-1 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">Dibuka</span>
+                                    @endif
+                                </td>
+                                <td class="whitespace-nowrap">{{ $rp->sumberDana?->nama ?? 'Kas Umum' }}</td>
+                                <td class="whitespace-nowrap">{{ $rp->tanggal_penutupan?->translatedFormat('d M Y') ?? '-' }}</td>
+                                <td class="text-right whitespace-nowrap">Rp {{ number_format($rp->subtotalFisik(), 2, ',', '.') }}</td>
+                                <td class="text-right whitespace-nowrap">Rp {{ number_format((float) $rp->saldo_bank, 2, ',', '.') }}</td>
+                                <td class="text-right font-semibold whitespace-nowrap">Rp {{ number_format($rp->totalRiil(), 2, ',', '.') }}</td>
+                                <td class="max-w-[220px] truncate" title="{{ $rpCatatan }}">{{ $rpCatatan !== '' ? $rpCatatan : '-' }}</td>
+                                <td class="whitespace-nowrap">
+                                    @if(!$rpAktif)
+                                        <a href="{{ $muatUrl }}" class="btn btn-secondary btn-xs">Muat</a>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+        </div>
+    </div>
+
     {{-- Script Realtime Calculator & PDF Link Sync --}}
     <script>
         // Sinkronkan tanggal penutupan dengan bulan/tahun terpilih sebelum submit

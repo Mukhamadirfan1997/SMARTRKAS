@@ -123,6 +123,7 @@ class DashboardController extends Controller
                 $trenBulanValues = array_values($realisasiPerBulan);
 
                 $transaksiBulanIni = TransaksiBku::where('bulan', (int) Carbon::now()->month)
+                    ->whereRaw("COALESCE(kategori_arus,'') <> 'mutasi'")
                     ->where(function ($q) use ($filteredIds): void {
                         $q->whereIn('rkas_item_id', $filteredIds)
                             ->orWhereHas('notaBku', function ($q2) use ($filteredIds): void {

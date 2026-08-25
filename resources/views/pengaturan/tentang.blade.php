@@ -83,9 +83,12 @@
                 <li><strong>Pengaturan → Profil Sekolah</strong> — isi identitas sekolah (dipakai di kop laporan).</li>
                 <li><strong>Master data</strong> — Tahun Anggaran, Sumber Dana, Jenis Belanja, Master Program, Kode Rekening.</li>
                 <li><strong>Data RKAS</strong> — isi rencana kegiatan per item per bulan, atau impor dari file Excel; gunakan filter program/rekening/bulan dan pantau capaian realisasi per jenis belanja di bagian atas halaman.</li>
-                <li><strong>Buku Kas Umum</strong> — catat setiap transaksi kas masuk/keluar. Untuk pengeluaran, pilih kegiatan → kode rekening → centang item belanja; 2+ item disimpan sebagai Nota Multi-Item (riwayat tersedia di menu terkait).</li>
-                <li><strong>Laporan</strong> — BKU, Rekap Rekening, Rekap Kuartal, Rekap SIPLAH (preview, PDF, export Excel).</li>
+                <li><strong>Buku Kas Umum</strong> — catat setiap transaksi kas masuk/keluar. Penerimaan = Tarik Tunai (mutasi netral); pengeluaran: pilih kegiatan → kode rekening → centang item belanja; 2+ item disimpan sebagai Nota Multi-Item.</li>
+                <li><strong>Data Pencairan</strong> — catat pencairan SP2D dari bank. Nominal pencairan masuk sebagai penerimaan di laporan K7b/K7c.</li>
+                <li><strong>Laporan</strong> — BKU, Rekap Rekening, Rekap Kuartal, Rekap SIPLAH, Formulir BOS-K7b (Register Penutupan Kas / Opname), Formulir BOS-K7c (Berita Acara Pemeriksaan Kas) — preview interaktif, PDF, export Excel.</li>
                 <li><strong>Notifikasi Telegram</strong> — pengingat otomatis cetak kwitansi (setiap Senin) dan peringatan realisasi anggaran rendah menjelang akhir tahun (tanggal 25 tiap bulan). Aktifkan di menu <em>Pengaturan → Notifikasi Telegram</em>.</li>
+                <li><strong>Monitoring Juknis BOSP</strong> — pantau kepatuhan alokasi anggaran terhadap Juknis BOS per kategori (Honor, Pemeliharaan, dll). Konfigurasi di <em>Pengaturan → Kategori Juknis BOSP</em>.</li>
+                <li><strong>Pengingat Istirahat</strong> — setiap 2 jam, muncul pengingat untuk beristirahat sejenak. Pilih "Istirahat" untuk keluar (logout) atau "Tunda" untuk mengingatkan kembali 15 menit kemudian.</li>
                 <li><strong>Backup rutin</strong> — lakukan di Pengaturan → Backup &amp; Pemulihan, terutama sebelum memperbarui aplikasi.</li>
             </ol>
             <p>Untuk panduan lengkap (mode web/desktop, env, CLI, build), baca <code class="text-xs">README.md</code> pada repositori.</p>
