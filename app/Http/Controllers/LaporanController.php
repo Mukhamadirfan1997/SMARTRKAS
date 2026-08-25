@@ -548,23 +548,19 @@ class LaporanController extends Controller
         $saldoAwal = (float) TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', '<', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
-            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as saldo")
             ->value('saldo');
 
         $saldo = $saldoAwal;
         foreach ($transaksis as $t) {
-            if (strtolower($t->jenis) === 'penerimaan' && ($t->kategori_arus ?? '') === 'mutasi') {
-                // mutasi netral — tidak mengubah saldo berjalan
-            } else {
-                $saldo += strtolower($t->jenis) === 'penerimaan' ? $t->jumlah : -$t->jumlah;
-            }
+            $saldo += strtolower($t->jenis) === 'penerimaan' ? $t->jumlah : -$t->jumlah;
             $t->saldo_berjalan = $saldo;
         }
 
         $totals = TransaksiBku::where('tahun_anggaran_id', $tahunAnggaranAktif?->id)
             ->where('bulan', $bulan)
             ->when($sumberDanaId, fn($q) => $q->where('sumber_dana_id', $sumberDanaId))
-            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
+            ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as total_penerimaan")
             ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran")
             ->firstOrFail();
         $totalPenerimaan = (float) $totals->getAttribute('total_penerimaan');

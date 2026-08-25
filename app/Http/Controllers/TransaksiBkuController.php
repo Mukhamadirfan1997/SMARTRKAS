@@ -87,17 +87,14 @@ class TransaksiBkuController extends Controller
                              ->where('id', '<', $first->id);
                       });
                 })
-                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as saldo")
+                ->selectRaw("COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN -jumlah WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as saldo")
                 ->value('saldo');
         }
 
-        // Baris mutasi internal kas<->bank (tarik tunai) bernilai netral:
-        // tidak mengubah saldo berjalan, hanya memindahkan uang antar tempat.
+        // Semua penerimaan (termasuk tarik tunai) mengubah saldo berjalan.
         $saldo = $saldoAwal;
         foreach ($transaksis as $transaksi) {
-            if (! $transaksi->isMutasi()) {
-                $saldo += strtolower($transaksi->jenis) === 'penerimaan' ? $transaksi->jumlah : -$transaksi->jumlah;
-            }
+            $saldo += strtolower($transaksi->jenis) === 'penerimaan' ? $transaksi->jumlah : -$transaksi->jumlah;
             $transaksi->saldo_berjalan = $saldo;
         }
 
@@ -106,7 +103,7 @@ class TransaksiBkuController extends Controller
             ->when($bulanQuery, fn (Builder $q) => $q->where('bulan', $bulanQuery))
             ->when($sumberDanaId, fn (Builder $q) => $q->where('sumber_dana_id', $sumberDanaId))
             ->selectRaw("
-                COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' AND COALESCE(kategori_arus,'') <> 'mutasi' THEN jumlah ELSE 0 END), 0) as total_penerimaan,
+                COALESCE(SUM(CASE WHEN LOWER(jenis) = 'penerimaan' THEN jumlah ELSE 0 END), 0) as total_penerimaan,
                 COALESCE(SUM(CASE WHEN LOWER(jenis) = 'pengeluaran' THEN jumlah ELSE 0 END), 0) as total_pengeluaran
             ")->firstOrFail();
         $totalPenerimaan = (float) $totals->getAttribute('total_penerimaan');
