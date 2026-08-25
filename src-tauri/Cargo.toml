@@ -1,6 +1,6 @@
 [package]
 name = "smartrkas"
-version = "0.6.11"
+version = "0.6.12"
 description = "SmartRKAS Desktop - Perencanaan dan Monitoring RKAS"
 authors = ["SmartRKAS"]
 edition = "2021"
