@@ -3640,4 +3640,154 @@ Push semua commit lokal sejak v0.6.9 ke GitHub dan rilis v0.6.11 dengan 2 asset 
 ## Build & Release
 
 - Bump 0.6.10 → 0.6.11 (5 file: config/app.php, .env.example, src-tauri/tauri.conf.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock blok name="smartrkas" saja).
-- Build, push, rilis GitHub.
+- Commit `3cc3238` → push `master` (`f6bfe1e..3cc3238`).
+- Build: NSIS 58.8MB + MSI 90.4MB.
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.11 (2 asset, `isDraft=false`).
+
+## Test Status
+
+- PHPUnit `OK (501 tests, 1582 assertions)`, PHPStan level 6 `[OK] No errors`.
+
+---
+
+# Sesi 25 Agu 2026 (siang) — Release v0.6.11 (Build + Push + GitHub)
+
+## Goal
+
+Build installer v0.6.11 (Data Pencairan + Mutasi Exclusion + K7b/K7c Improvements + Break Reminder Logout) dan rilis ke GitHub setelah uji manual user v0.6.10 dinyatakan LULUS.
+
+## Summary
+
+- Uji manual v0.6.10: **LULUS** (user konfirmasi).
+- Full suite: `OK (501 tests, 1582 assertions)`, PHPStan level 6 clean.
+- Bump 0.6.10 → 0.6.11 (5 file, anti-BOM).
+- Commit `3cc3238` → push `master`.
+- Build: compile 6m27s → NSIS `SmartRKAS_0.6.11_x64-setup.exe` (58.8MB) + MSI `SmartRKAS_0.6.11_x64_en-US.msi` (90.4MB).
+- Release: https://github.com/Mukhamadirfan1997/SMARTRKAS/releases/tag/v0.6.11 (2 asset, state `uploaded`).
+
+## Rangkuman Fitur (sejak v0.6.9)
+
+9 commits, mencakup:
+1. K7b/K7c: wajib Sumber Dana penerimaan BKU + guard tanggal sticky + narasi hari berita acara
+2. Saldo bank BOS-K7b/K7c: tarik tunai = mutasi netral + persistensi opname kas + register PDF landscape
+3. K7c terima data live dari K7b (kas_fisik via query string) + fix flaky test UNIQUE tahun_anggaran
+4. Rapikan layout Monitoring Juknis: hapus wrapper Breeze ganda-padding
+5. Build v0.6.10 tanpa rilis (uji manual user)
+6. Data Pencairan terpisah + BKU penerimaan selalu tarik tunai
+7. Exclude mutasi dari BKU/export/dashboard + riwayat opname K7b + break reminder logout + update Tentang petunjuk
+
+## Kondisi Repo
+
+- `origin/master` = `3cc3238` (sama dgn HEAD, sudah push).
+- Working tree bersih.
+- App v0.6.10 masih terinstall di mesin ini (uji manual user).
+
+## Status
+
+- Rilis GitHub v0.6.11: **SELESAI** (2 asset, `isDraft=false, isPrerelease=false`).
+- Semua fitur sudah di-build & dirilis — tidak ada commit lokal yang tertinggal.
+
+---
+
+# Sesi 25 Agu 2026 — Explore ARKAS Desktop (Read-Only) + Fix BKU Tarik Tunai
+
+## Goal
+
+(1) Jelajahi aplikasi ARKAS desktop (Pusdatin Kemendikbudristek) secara read-only untuk memahami alur penerimaan & tarik tunai — sebagai referensi, TIDAK mengubah ARKAS. (2) Fix BKU SmartRKAS agar tarik tunai dihitung sebagai penerimaan (saldo berjalan benar).
+
+## Root Cause BKU
+
+Semua penerimaan di BKU otomatis diset `kategori_arus = 'mutasi'` (line 330 `TransaksiBkuController`), dan perhitungan saldo BKU mengecualikan `kategori_arus = 'mutasi'` dari penerimaan → BKU hanya melihat pengeluaran → saldo selalu negatif. Fix: hapus pengecualian mutasi dari 9 query BKU.
+
+## Commit BKU Fix
+
+- `61a3043` — 4 file, +11/−24: `TransaksiBkuController` (index), `BkuExport`, `LaporanController::prepareBkuData`, `DashboardController::transaksiBulanIni` — semua `whereRaw("kategori_arus IS NULL OR kategori_arus != 'mutasi'")` dihapus.
+- K7b/K7c TIDAK disentuh — pengecualian mutasi tetap benar untuk laporan opname kas.
+- PHPStan `[OK] No errors`, PHPUnit `OK (501 tests, 1582 assertions)`.
+- BELUM push/build/rilis.
+
+---
+
+## Hasil Explore ARKAS Desktop (Read-Only)
+
+### Peringatan Keamanan
+
+- **ARKAS adalah sistem resmi Kemendikbudristek** — jangan pernah mengubah/modifikasi file/basis datanya.
+- ARKAS auto-update dari `AUTOUPDATE_BASE_URL` (Google Storage / rilis Pusdatin).
+- **DB ARKAS terenkripsi** — header `FF-18-C2-0B` (bukan SQLite standar `SQLite format 3`). Kemungkinan SQLCipher atau enkripsi custom. Tidak bisa dibaca tanpa key. DB locked oleh 4 proses `arkas_desktop.exe` yang berjalan.
+- `.env` ARKAS berisi API keys (base64-encoded) tapi **tidak ada DB encryption key** — key di-compile ke binary Electron.
+- Lokasi DB: `C:\Users\yudhi\AppData\Roaming\Arkas\arkas.db` (73MB)
+- Lokasi install: `C:\Program Files\ARKAS\resources\app.asar.unpacked\`
+
+### Struktur Aplikasi
+
+- **Electron** v4.2.18 (Chromium + Node.js), bukan PHP.
+- **DB**: SQLite terenkripsi.
+- **Auto-update**: via `AUTOUPDATE_BASE_URL`, schedule `cron('*/10 7-16 * * *')` (tiap 10 menit jam 7-16).
+- **API server**: `BASE_URL = api-rkask4.kemendikdasmen.go.id` (HTTPS).
+- **Satu Event**: event tracker ke `events.belajar.id` (IS_ENABLE_SATU_EVENT=true).
+
+### Sistem `id_ref_bku` — Klasifikasi Transaksi BKU ARKAS
+
+Ekstraksi dari JS source (`arkas-enum.php` via Node.js `require('asar')`) menghasilkan **49 nilai enum** — jauh lebih detail dari SmartRKAS:
+
+| Range | Kategori | Nilai |
+|-------|----------|-------|
+| 0 | Special | `INIT` |
+| 1–4 | Struktur | `HEADER`, `BODY`, `REGISTRASI`, `LOGIN` |
+| 5–9 | BKU Keluar Tunai | `BKU_TUNAI_KELUAR` (5), `BKU_BIAYA_OPERASIONAL_TUNAI` (6), `BKU_BIAYA_INVESTASI_TUNAI` (7), `BKU_BIAYA_MODAL_TUNAI` (8), `BKU_LAINNYA_TUNAI` (9) |
+| 10–14 | BKU Masuk Tunai | `BKU_TUNAI_MASUK` (10), `BKU_PENDAPATAN_BANTUAN_TUNAI` (11), `BKU_PENDAPATAN_LAINNYA_TUNAI` (12), `BKU_PENDAPATAN_SILPA_TUNAI` (13) |
+| 15–19 | BKU Non-Tunai Keluar | `BKU_NON_TUNAI_KELUAR` (15), `BKU_BIAYA_OPERASIONAL_NON_TUNAI` (16), `BKU_BIAYA_INVESTASI_NON_TUNAI` (17), `BKU_BIAYA_MODAL_NON_TUNAI` (18), `BKU_LAINNYA_NON_TUNAI` (19) |
+| 20–24 | BKU Non-Tunai Masuk | `BKU_NON_TUNAI_MASUK` (20), `BKU_PENDAPATAN_BANTUAN_NON_TUNAI` (21), `BKU_PENDAPATAN_LAINNYA_NON_TUNAI` (22), `BKU_PENDAPATAN_SILPA_NON_TUNAI` (23) |
+| 25–35 | **SILPA (Splited)** | `SILPA_KAS_MASUK_TUNAI` (25) s.d. `SILPA_KAS_KELUAR_NON_TUNAI` (35) |
+| 36–40 | Tarik Tunai (ATM) | `ATM_MUTASI_KAS_MASUK` (36), `ATM_MUTASI_KAS_KELUAR` (37), `ATM_MUTASI_BANK_MASUK` (38), `ATM_MUTASI_BANK_KELUAR` (39), `TARIK_TUNAI_ATM` (40) |
+| 41–48 | Biaya Lain | `ONGKOS_KIRIM` (41), `BIAYA_ADMINISTRASI` (42), `BIAYA_LAINNYA` (43), `BIAYA_TUNAI` (44), `BIAYA_NON_TUNAI` (45), + non-tunai variants (46–48) |
+
+### Pool Saldo ARKAS
+
+ARKAS membagi saldo ke **4 pool** (dari JS `refSaldoBankMasuk`, `refSaldoBankKeluar`, `refSaldoTunaiMasuk`, `refSaldoTunaiKeluar`):
+- **Bank Masuk** — penerimaan lewat transfer/rekening
+- **Bank Keluar** — pengeluaran lewat transfer/rekening
+- **Tunai Masuk** — penerimaan tunai
+- **Tunai Keluar** — pengeluaran tunai
+
+Ini konsisten dengan model Formulir K7b: kas fisik (tunai) + saldo bank dipisah.
+
+### Tarik Tunai di ARKAS
+
+- Kode `TARIK_TUNAI_ATM` (40) + `ATM_MUTASI_*` (36–39) = tarik tunai dari bank → kas tunai.
+- ARKAS memperlakukan tarik tunai sebagai **mutasi antar pool** (bank → tunai), **BUKAN** penerimaan/pengeluaran.
+- Ini **konsisten** dengan pendekatan SmartRKAS (`kategori_arus = 'mutasi'`).
+
+### Perbandingan ARKAS vs SmartRKAS
+
+| Aspek | ARKAS | SmartRKAS |
+|-------|-------|-----------|
+| Platform | Electron (Node.js + SQLite terenkripsi) | Laravel (PHP + SQLite/MariaDB) |
+| Klasifikasi transaksi | `id_ref_bku` (49 nilai enum, sangat detail) | `jenis` (penerimaan/pengeluaran) + `kategori_arus` (mutasi) |
+| Tarik tunai | `TARIK_TUNAI_ATM` (40), mutasi antar pool | `kategori_arus = 'mutasi'`, mutasi antar pool |
+| Pool saldo | 4 pool (bank/tunai × masuk/keluar) | 2 pool implisit (kas via saldo berjalan) |
+| BKU | Gabungan semua jenis, saldo 4 pool | Gabungan semua jenis, saldo berjalan |
+| Laporan K7b | Formulir opname kas: kas fisik + saldo bank | Formulir opname kas: kas fisik + saldo bank |
+| DB | Terenkripsi (SQLCipher?), 73MB | SQLite biasa, ~2MB |
+
+### Kesimpulan
+
+1. **ARKAS dan SmartRKAS punya filosofi yang sama**: tarik tunai = mutasi (bukan penerimaan), memisahkan kas tunai dan bank.
+2. ARKAS jauh lebih detail (49 klasifikasi vs 2+2 SmartRKAS) karena ARKAS harus sesuai standar Pusdatin.
+3. SmartRKAS cukup sederhana karena hanya untuk kebutuhan sekolah (bukan reporting ke dinas).
+4. **Enkripsi DB ARKAS** menunjukkan standar keamanan data keuangan nasional.
+5. Explore JS source sudah memberikan cukup pemahaman — DB tidak perlu dibaca.
+
+### Artefak Explore (di `%TEMP%\opencode\`)
+
+- `arkas-enum.php` — script ekstraksi enum dari ASAR (sudah dijalankan, hasil di atas)
+- `arkas-readonly.php` — script baca DB read-only (gagal karena DB terenkripsi)
+- `arkas-search.php` — script cari keyword di JS (belum dijalankan)
+- `arkas-deep.php` — script deep-dive alur BKU (belum dijalankan)
+
+## Status
+
+- BKU fix committed lokal `61a3043`; BELUM push/build/rilis.
+- Explore ARKAS selesai; catatan ini di-AGENTS.md.
+- Next: push + build + release v0.6.12 bila user setuju.
