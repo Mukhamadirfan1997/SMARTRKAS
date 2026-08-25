@@ -3613,3 +3613,31 @@ Pisahkan pencatatan Pencairan/SP2D dari BKU: modul "Data Pencairan" baru, form B
 ## Status
 
 - Commit lokal; BELUM push/build/rilis (menunggu uji manual user v0.6.10 + konfirmasi).
+
+---
+
+# Sesi 25 Agu 2026 — Push & Release v0.6.11 (Data Pencairan + Mutasi Exclusion + K7b/K7c Improvements + Break Reminder Logout)
+
+## Goal
+
+Push semua commit lokal sejak v0.6.9 ke GitHub dan rilis v0.6.11 dengan 2 asset installer (NSIS + MSI). Uji manual user v0.6.10 dinyatakan LULUS.
+
+## Rangkuman Fitur (sejak v0.6.9)
+
+9 commits, mencakup:
+1. Fix K7b/K7c: wajib Sumber Dana penerimaan BKU + guard tanggal sticky + narasi hari berita acara
+2. Fitur saldo bank BOS-K7b/K7c: tarik tunai = mutasi netral + persistensi opname kas + register PDF landscape
+3. K7c terima data live dari K7b (kas_fisik via query string) + fix flaky test UNIQUE tahun_anggaran
+4. Rapikan layout Monitoring Juknis: hapus wrapper Breeze ganda-padding
+5. Build v0.6.10 tanpa rilis (uji manual user)
+6. Fitur Data Pencairan terpisah + BKU penerimaan selalu tarik tunai
+7. Fix: exclude mutasi dari BKU/export/dashboard + riwayat opname K7b + break reminder logout + update Tentang petunjuk
+
+## Test Status
+
+- PHPUnit `OK (501 tests, 1582 assertions)`, PHPStan level 6 `[OK] No errors`.
+
+## Build & Release
+
+- Bump 0.6.10 → 0.6.11 (5 file: config/app.php, .env.example, src-tauri/tauri.conf.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock blok name="smartrkas" saja).
+- Build, push, rilis GitHub.
