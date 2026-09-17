@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\KategoriJuknis;
 use App\Models\RkasItem;
 use App\Models\TahunAnggaran;
+use App\Support\JuknisValidator;
 use App\Support\RealisasiQuery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,8 @@ class MonitoringJuknisController extends Controller
         /** @var \Illuminate\Support\Collection<int, array{label: string, total: float, persen: float}> $jenisBelanjaBreakdown */
         $jenisBelanjaBreakdown = collect();
         $belumDikategorikanCount = 0;
+        /** @var list<array{nama: string, status: string, persentase: float, sisa: float, isError: bool, detail: string}> $juknisResults */
+        $juknisResults = [];
 
         if ($tahunAnggaranAktif) {
             $totalPagu = (float) RkasItem::where('tahun_anggaran_id', $tahunAnggaranAktif->id)->sum('jumlah');
@@ -84,6 +87,15 @@ class MonitoringJuknisController extends Controller
             $jenisBelanjaBreakdown = $this->jenisBelanjaBreakdown($tahunAnggaranAktif->id, $basis, $totalPagu);
 
             $belumDikategorikanCount = $this->belumDikategorikanCount($tahunAnggaranAktif->id, $basis);
+
+            // ── Validasi ARKAS (Honor / Buku / Sarpras) ──
+            $validator = new JuknisValidator(
+                $totalPagu,
+                (int) $tahunAnggaranAktif->tahun,
+                $tahunAnggaranAktif->id,
+            );
+            /** @var list<array{nama: string, status: string, persentase: float, sisa: float, isError: bool, detail: string}> $juknisResults */
+            $juknisResults = $validator->validateAll();
         }
 
         return view('laporan.monitoring-juknis', compact(
@@ -94,6 +106,7 @@ class MonitoringJuknisController extends Controller
             'kategoriCards',
             'jenisBelanjaBreakdown',
             'belumDikategorikanCount',
+            'juknisResults',
         ));
     }
 
