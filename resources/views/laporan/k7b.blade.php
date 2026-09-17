@@ -2,32 +2,26 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="page-title">
-                Formulir BOS-K7b (Register Penutupan Kas)
+                Formulir BOS-K7b — Register Penutupan Kas
                 @if($tahunAnggaranAktif)
-                    <span class="text-slate-400 font-normal">({{ $tahunAnggaranAktif->tahun }})</span>
+                    <span class="text-slate-400 font-normal text-sm">TA {{ $tahunAnggaranAktif->tahun }}</span>
                 @endif
             </div>
-            <div class="flex items-center gap-2">
-                <a href="{{ route('laporan.k7c', request()->query()) }}" id="btn-k7c" class="btn btn-secondary btn-sm">
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Buka Berita Acara (K-7c)
-                </a>
-                <a href="{{ route('laporan.index') }}" class="btn btn-secondary btn-sm">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    Semua Laporan
-                </a>
-            </div>
+            <a href="{{ route('laporan.index') }}" class="btn btn-ghost btn-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Semua Laporan
+            </a>
         </div>
     </x-slot>
 
-    {{-- Filter Bar --}}
+    {{-- Filter Bar — 2 baris stabil, tidak naik-turun --}}
     <div class="card mb-6">
         <div class="card-body">
             <form method="GET" action="{{ route('laporan.k7b') }}" id="form-filter">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label for="bulan" class="form-label">Bulan Penutupan</label>
-                        <select name="bulan" id="bulan" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
+                        <select name="bulan" id="bulan" class="form-select" onchange="syncTanggalFilter()">
                             @foreach(range(1, 12) as $m)
                                 <option value="{{ $m }}" {{ $bulan == $m ? 'selected' : '' }}>
                                     {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
@@ -35,10 +29,9 @@
                             @endforeach
                         </select>
                     </div>
-
                     <div>
                         <label for="tahun" class="form-label">Tahun Anggaran</label>
-                        <select name="tahun" id="tahun" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
+                        <select name="tahun" id="tahun" class="form-select" onchange="syncTanggalFilter()">
                             @foreach($tahunList as $t)
                                 <option value="{{ $t->tahun }}" {{ ($tahunAnggaranAktif?->tahun ?? date('Y')) == $t->tahun ? 'selected' : '' }}>
                                     {{ $t->tahun }}
@@ -46,10 +39,9 @@
                             @endforeach
                         </select>
                     </div>
-
                     <div>
                         <label for="sumber_dana_id" class="form-label">Sumber Dana</label>
-                        <select name="sumber_dana_id" id="sumber_dana_id" class="form-select" onchange="this.form.submit()">
+                        <select name="sumber_dana_id" id="sumber_dana_id" class="form-select">
                             <option value="">Semua Sumber Dana</option>
                             @foreach($sumberDanaList as $sd)
                                 <option value="{{ $sd->id }}" {{ $sumberDanaId == $sd->id ? 'selected' : '' }}>
@@ -58,17 +50,22 @@
                             @endforeach
                         </select>
                     </div>
-
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 items-end">
                     <div>
-                        <label for="tanggal_penutupan" class="form-label">Tgl Penutupan Bulan Ini</label>
+                        <label for="tanggal_penutupan" class="form-label">Tgl Penutupan Bulan Ini <span class="text-slate-400 font-normal text-xs">— akhir bulan</span></label>
                         <input type="date" name="tanggal_penutupan" id="tanggal_penutupan" value="{{ $tanggalPenutupanInput }}" class="form-input">
-                        <p class="text-[11px] text-slate-400 mt-1">Tanggal opname fisik (biasanya akhir bulan).</p>
                     </div>
-
                     <div>
                         <label for="tanggal_penutupan_lalu" class="form-label">Tgl Penutupan Bulan Lalu</label>
                         <input type="date" name="tanggal_penutupan_lalu" id="tanggal_penutupan_lalu" value="{{ $tanggalPenutupanLaluInput }}" class="form-input">
-                        <p class="text-[11px] text-slate-400 mt-1">Untuk header dokumen cetak.</p>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button type="submit" class="btn btn-primary w-full md:w-auto">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            Terapkan
+                        </button>
+                        <a href="{{ route('laporan.k7c', request()->query()) }}" id="btn-k7c" class="btn btn-secondary flex-1 md:flex-none text-center">Buka K-7c</a>
                     </div>
                 </div>
             </form>

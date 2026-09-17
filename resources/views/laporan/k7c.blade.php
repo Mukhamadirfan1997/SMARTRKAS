@@ -2,32 +2,26 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="page-title">
-                Formulir BOS-K7c (Berita Acara Pemeriksaan Kas)
+                Formulir BOS-K7c — Berita Acara Pemeriksaan Kas
                 @if($tahunAnggaranAktif)
-                    <span class="text-slate-400 font-normal">({{ $tahunAnggaranAktif->tahun }})</span>
+                    <span class="text-slate-400 font-normal text-sm">TA {{ $tahunAnggaranAktif->tahun }}</span>
                 @endif
             </div>
-            <div class="flex items-center gap-2">
-                <a href="{{ route('laporan.k7b', request()->query()) }}" class="btn btn-secondary btn-sm">
-                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Buka Register Kas (K-7b)
-                </a>
-                <a href="{{ route('laporan.index') }}" class="btn btn-secondary btn-sm">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                    Semua Laporan
-                </a>
-            </div>
+            <a href="{{ route('laporan.index') }}" class="btn btn-ghost btn-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Semua Laporan
+            </a>
         </div>
     </x-slot>
 
-    {{-- Filter Bar --}}
+    {{-- Filter Bar — stabil, tidak naik-turun --}}
     <div class="card mb-6">
         <div class="card-body">
             <form method="GET" action="{{ route('laporan.k7c') }}" id="form-filter">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div>
                         <label for="bulan" class="form-label">Bulan Pemeriksaan</label>
-                        <select name="bulan" id="bulan" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
+                        <select name="bulan" id="bulan" class="form-select" onchange="syncTanggalFilter()">
                             @foreach(range(1, 12) as $m)
                                 <option value="{{ $m }}" {{ $bulan == $m ? 'selected' : '' }}>
                                     {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
@@ -35,10 +29,9 @@
                             @endforeach
                         </select>
                     </div>
-
                     <div>
                         <label for="tahun" class="form-label">Tahun Anggaran</label>
-                        <select name="tahun" id="tahun" class="form-select" onchange="syncTanggalFilter(); this.form.submit()">
+                        <select name="tahun" id="tahun" class="form-select" onchange="syncTanggalFilter()">
                             @foreach($tahunList as $t)
                                 <option value="{{ $t->tahun }}" {{ ($tahunAnggaranAktif?->tahun ?? date('Y')) == $t->tahun ? 'selected' : '' }}>
                                     {{ $t->tahun }}
@@ -46,10 +39,9 @@
                             @endforeach
                         </select>
                     </div>
-
                     <div>
                         <label for="sumber_dana_id" class="form-label">Sumber Dana</label>
-                        <select name="sumber_dana_id" id="sumber_dana_id" class="form-select" onchange="this.form.submit()">
+                        <select name="sumber_dana_id" id="sumber_dana_id" class="form-select">
                             <option value="">Semua Sumber Dana</option>
                             @foreach($sumberDanaList as $sd)
                                 <option value="{{ $sd->id }}" {{ $sumberDanaId == $sd->id ? 'selected' : '' }}>
@@ -58,11 +50,19 @@
                             @endforeach
                         </select>
                     </div>
-
-                    <div>
-                        <label for="tanggal_penutupan" class="form-label">Tanggal Berita Acara</label>
-                        <input type="date" name="tanggal_penutupan" id="tanggal_penutupan" value="{{ $tanggalPenutupanInput }}" class="form-input">
+                    <div class="flex gap-2 items-end">
+                        <div class="flex-1">
+                            <label for="tanggal_penutupan" class="form-label">Tanggal Berita Acara</label>
+                            <input type="date" name="tanggal_penutupan" id="tanggal_penutupan" value="{{ $tanggalPenutupanInput }}" class="form-input">
+                        </div>
+                        <button type="submit" class="btn btn-primary whitespace-nowrap">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            Terapkan
+                        </button>
                     </div>
+                </div>
+                <div class="mt-3">
+                    <a href="{{ route('laporan.k7b', request()->query()) }}" class="text-xs text-slate-500 hover:text-indigo-600 underline">← Buka Register Kas (K-7b) untuk bulan ini</a>
                 </div>
             </form>
         </div>
