@@ -3791,3 +3791,283 @@ Ini konsisten dengan model Formulir K7b: kas fisik (tunai) + saldo bank dipisah.
 - BKU fix committed lokal `61a3043`; BELUM push/build/rilis.
 - Explore ARKAS selesai; catatan ini di-AGENTS.md.
 - Next: push + build + release v0.6.12 bila user setuju.
+
+---
+
+# Sesi 25 Agu 2026 — Ekstraksi Logika Juknis BOSP dari ARKAS (Read-Only)
+
+## Goal
+
+Ekstrak algoritma perhitungan kepatuhan Juknis BOSP dari source code ARKAS (Electron/minified JS) sebagai referensi implementasi SmartRKAS. **TIDAK mengubah ARKAS.**
+
+## Temuan Utama
+
+- ARKAS punya **3 validator Juknis** terpisah: **Honor**, **Buku**, **Sarpras** — masing-masing punya rumus, threshold, dan periode sendiri.
+- Threshold disentralisasi di **module 45391** (constant definitions), di-import oleh validator di **module 90991**.
+- Feature flag `enable_validasi_murni_juknis_2025` (dan varian pergeseran/perubahan/tutup_bku) harus **true** agar validasi aktif.
+
+---
+
+## Hierarchy Mapping (ARKAS → SmartRKAS)
+
+```
+TahunAnggaran
+ └─ RefAnggaran (id_anggaran) — Level 0 (ta), 1 (sub_program), 2 (kegiatan), 3 (rekening), 4 (item)
+     └─ RencanaAnggaran (rapbs) — id_anggaran + id_ref_kode → ref_kode → ref_rekening → ref_kode.id_ref_rekening
+         └─ KodeRekening (ref_rekening) — kode_rekening (e.g. "5.1.02.02.02.0013"), id_level_kode, id_ref_kode
+```
+
+**SQL pattern (ARKAS):**
+```sql
+-- Kegiatan → Program/Sub Program
+SELECT ra.kode_anggaran, ra.nama_anggaran
+FROM ref_anggaran ra
+WHERE ra.id_anggaran = (
+  SELECT rapbs.id_anggaran FROM rapbs WHERE rapbs.id = :rapbs_id
+);
+
+-- Kode Rekening → Jenis Belanja
+SELECT rr.kode_rekening, rr.nama_rekening
+FROM ref_rekening rr
+WHERE rr.id_ref_rekening = (
+  SELECT rk.id_ref_rekening FROM ref_kode rk WHERE rk.id = rapbs.id_ref_kode
+);
+```
+
+**Mapping ke SmartRKAS:**
+- `ref_anggaran` → `MasterProgram` (kode/program/sub_program) + `MasterKodeRekening` (kode/nama)
+- `rapbs` → `RkasItem` (program_id → MasterProgram, kode_rekening_id → MasterKodeRekening)
+- `ref_kode` + `ref_rekening` → gabungan di `MasterKodeRekening` (kode field)
+
+---
+
+## Module Architecture
+
+### Module 90991 — Juknis Validators
+- Class `P` berisi: `validateHonor`, `validateBuku`, `validateSarpras`, `checkRealisasiAnggaranSarpras`
+- Import: `o = n(45391)` → semua threshold constants
+- `fractionDigitGraphicPercentage = 2` → pembulatan 2 desimal
+
+### Module 45391 — Threshold Constants & Utilities
+- Definisi variabel di bagian bawah module:
+  ```js
+  u = 20, d = 40, p = 81, h = 87, m = 92,
+  f = 5, g = 10, y = 20, b = !1
+  ```
+
+---
+
+## Threshold Constants (Module 45391 — Semua TERVERIFIKASI)
+
+| Ekspor  | Internal | Nilai | Keterangan |
+|---------|----------|-------|------------|
+| `NB`    | `h`      | **87** | Honor: periode awal untuk tahun < 2026 |
+| `lM`    | `p`      | **81** | Honor: periode awal untuk tahun ≥ 2026 |
+| `kb`    | `m`      | **92** | Honor: periode akhir (semua tahun) |
+| `D`     | `f`      | **5**  | Buku: threshold minimum % (2026+ sekolah khusus) |
+| `J0`    | `g`      | **10** | Buku: threshold minimum % (default) |
+| `eo`    | `y`      | **20** | Sarpras: threshold maksimum realisasi % |
+| `_R`    | `b`      | **false** | `isBypass` (selalu false) |
+| `M1`    | `u`      | **20** | Buku: id_kode value (sekolah non-khusus, dari `k()`) |
+| `rN`    | `d`      | **40** | Buku: id_kode value (2026+ sekolah khusus, dari `k()`) |
+| `hs`    | enum     | `{BOSReguler:1, BOSP2023:2, BOSP2024:3}` | Jenis regulasi |
+
+---
+
+## Validator 1: Honor
+
+### Rumus
+```
+percentage = (anggaranHonor / totalPaguHonor) * 100
+
+totalPaguHonor =
+  tahun < 2026  → jumlah / 2        (setengah tahun)
+  tahun >= 2026 → jumlah             (full year)
+```
+
+### Filter Transaksi (SQL)
+```sql
+-- Realisasi honor
+SELECT SUM(ku.jumlah)
+FROM kas_umum ku
+WHERE ku.is_hapus = 0
+  AND ku.id_ref_bku IN (4, 15, 24, 35)  -- BKU_BIAYA_OPERASIONAL_TUNAI, NON_TUNAI_KELUAR, LAINNYA_TUNAI, LAINNYA_NON_TUNAI
+  AND ku.tahun = :tahun
+  AND ku.bulan >= :periodeAwal AND ku.bulan <= :periodeAkhir
+  AND ku.kode_kegiatan IN (
+    SELECT rapbs.kode_anggaran FROM rapbs
+    WHERE rapbs.id = :rapbs_id
+  )
+  AND EXISTS (
+    SELECT 1 FROM ref_kode rk
+    WHERE rk.id = (
+      SELECT rapbs.id_ref_kode FROM rapbs WHERE rapbs.id = :rapbs_id
+    )
+    AND rk.id_kode IN ('07.12.01.', '07.12.02.', '07.12.03.', '07.12.04.')
+  )
+  AND EXISTS (
+    SELECT 1 FROM ref_rekening rr
+    WHERE rr.id_ref_rekening = rk.id_ref_rekening
+    AND rr.kode_rekening = '5.1.02.02.01.0013'
+  );
+```
+
+### Periode (hari ke-365 dalam tahun fiskal)
+| Tahun | Awal (hari ke-) | Akhir (hari ke-) |
+|-------|-----------------|-------------------|
+| < 2026 | **87** | **92** |
+| ≥ 2026 | **81** | **92** |
+
+### Kode Kegiatan Honor
+- `id_kode IN ('07.12.01.', '07.12.02.', '07.12.03.', '07.12.04.')` — 4 level kegiatan
+- `kode_rekening = '5.1.02.02.01.0013'` — Honor
+
+### Status
+- `isAnggaranTidakAdaSisa = (sisaAnggaran <= 0)`
+- `isRealisasiMelewatiJuknis = (percentage >= 100)`
+- `isError = isAnggaranTidakAdaSisa AND isRealisasiMelewatiJuknis`
+
+---
+
+## Validator 2: Buku
+
+### Rumus
+```
+percentage = (anggaranBuku / totalPagu) * 100
+```
+
+### Threshold Minimum (% dari total pagu)
+| Kondisi | Threshold | Nilai |
+|---------|-----------|-------|
+| Tahun ≥ 2026 **DAN** sekolah khusus (`id_sekolah` di `c.zi` list) | `D` | **5%** |
+| Semua lainnya | `J0` | **10%** |
+
+### Sekolah Khusus (id_kode list `c.zi`)
+```
+['05.08.01.', '05.08.06.', '05.08.12.']
+```
+
+### Filter Kode Rekening Buku (SQL)
+```sql
+-- Pagu buku
+SELECT SUM(rapbs.jumlah)
+FROM rapbs
+WHERE rapbs.id_anggaran = :idAnggaran
+  AND EXISTS (
+    SELECT 1 FROM ref_kode rk WHERE rk.id = rapbs.id_ref_kode
+    AND rk.id_level_kode = 3
+    AND rk.id_kode IN (
+      SELECT value FROM UNNEST('03.02.02.','05.02.02.','05.02.03.','05.02.04.','05.02.05.')
+    )
+  );
+
+-- Function k() menentukan id_kode filter berdasarkan sekolah:
+-- k() = sekolah_khusus ? rN(40) : M1(20)
+-- id_kode yang dikembalikan oleh k() digunakan untuk menyaring item buku
+```
+
+### id_kode Buku
+- Default (non-khusus): `id_kode IN ('03.02.02.', '05.02.02.', '05.02.03.', '05.02.04.', '05.02.05.')`
+- Sub-pilihan: `'05.02.03.'` (variabel `s`) dan `'05.02.03.', '05.02.04.', '05.02.05.'` (variabel `o`)
+
+### Status
+- `isError = (percentage < threshold)` — **meleset ke BAWAH** = error
+
+---
+
+## Validator 3: Sarpras
+
+### Rumus
+```
+percentage = (anggaranSarpras / totalPaguSarpras) * 100
+```
+
+### Filter Kode Rekening Sarpras (SQL)
+```sql
+-- Tahun >= 2026
+SELECT SUM(rapbs.jumlah)
+FROM rapbs
+WHERE rapbs.id_anggaran = :idAnggaran
+  AND EXISTS (
+    SELECT 1 FROM ref_kode rk WHERE rk.id = rapbs.id_ref_kode
+    AND rk.id_kode IN (
+      '05.08.01.', '05.08.03.', '05.08.05.', '05.08.06.',
+      '05.08.08.', '05.08.09.', '05.08.10.', '05.08.12.'
+    )
+    AND SUBSTR(
+      (SELECT rr.kode_rekening FROM ref_rekening rr WHERE rr.id_ref_rekening = rk.id_ref_rekening),
+      1, 3
+    ) = '5.1'
+  );
+
+-- Tahun < 2026: pakai id_kode i.rE (belum di-ekstrak penuh)
+```
+
+### Status
+- `isAnggaranTidakAdaSisa = (anggaranPercentage >= realisasiPercentage)` — anggaran masih ada sisa
+- `isRealisasiMelewatiJuknis = (percentage > eo(20))` — realisasi melebihi 20%
+- `isError = isAnggaranTidakAdaSisa AND isRealisasiMelewatiJuknis` — **AND** (keduanya terpenuhi)
+- **Catatan**: Juknis Sarpras = **maksimal 20%** (melebihi = error)
+
+---
+
+## Proporsi Belanja Honor (Grafik)
+
+### Function: `getProporsiBelanjaHonor2025OnwardsByIdAnggaran`
+
+```sql
+-- CASE WHEN untuk setiap item anggaran:
+CASE
+  WHEN rk.id_kode IN ('07.12.01.','07.12.02.','07.12.03.','07.12.04.')
+   AND rr.kode_rekening = '5.1.02.02.01.0013'
+  THEN 'honor_juknis'
+  ELSE 'belanja_lainnya'
+END AS kategori_belanja
+-- Group by kategori_belanja, SUM(jumlah) → persentase
+```
+
+---
+
+## Grafik Proporsi Kode KADanPM (Module 90991)
+
+- Function: `getGrafikProporsiKodingKADanPM2025ByIdAnggaran`
+- Query rapbs → ref_kode → GROUP BY `id_kode` → hitung proporsi per kode anggaran
+- `sortListKegiatan` → urutkan kegiatan berdasarkan `id_anggaran`
+- `constructGraphicJenisBelanja` → bangun data grafik pie/donut per jenis belanja
+
+---
+
+## Implementasi di SmartRKAS (Rekomendasi)
+
+### Model yang Relevan
+- `RkasItem` → pagu (jumlah), realisasi (via `RealisasiQuery::base()`)
+- `MasterProgram` → kegiatan (kode, nama)
+- `MasterKodeRekening` → kode rekening (kode, nama, jenis_belanja)
+- `RkasItemBulan` → rencana per bulan (untuk filter periode)
+- `TransaksiBku` + `NotaBkuItem` → realisasi aktual
+
+### Approach yang Disarankan
+1. **Threshold constants** → config/config juknis.php (Hardcode: 87, 81, 92, 5, 10, 20)
+2. **Validator class** → `app/Support/JuknisValidator.php` dengan 3 methods: `validateHonor()`, `validateBuku()`, `validateSarpras()`
+3. **Kode kegiatan honor** → `config('juknis.kode_kegiatan_honor')` = `['07.12.01.', ...]`
+4. **Kode rekening honor** → `config('juknis.kode_rekening_honor')` = `'5.1.02.02.01.0013'`
+5. **Sekolah khusus id** → `config('juknis.sekolah_khusus_id_kode')` = `['05.08.01.', '05.08.06.', '05.08.12.']` (opsional, default false)
+6. **Periode honor** → `$tahun < 2026 ? [87, 92] : [81, 92]`
+7. **Realisasi** → `RealisasiQuery::base()` sudah menyediakan data (transaksi + nota multi-item)
+8. **Monitoring page** → `app/Http/Controllers/MonitoringJuknisController.php` (sudah ada, perlu update logic)
+
+---
+
+# Sesi 25 Agu 2026 — BKU Fix: Pengecualian Mutasi yang Salah
+
+## Akar Masalah
+`whereRaw("kategori_arus IS NULL OR kategori_arus != 'mutasi'")` di BKU mengecualikan SEMUA penerimaan (karena `kategori_arus = 'mutasi'` di-hardcode untuk penerimaan). Akibatnya: saldo BKU hanya melihat pengeluaran → **selalu negatif**.
+
+## Fix
+Hapus pengecualian mutasi dari 4 lokasi BKU:
+- `TransaksiBkuController::index()` — saldo berjalan
+- `BkuExport` — export Excel
+- `LaporanController::prepareBkuData()` — laporan BKU
+- `DashboardController::transaksiBulanIni()` — dashboard
+
+K7b/K7c TIDAK disentuh — pengecualian mutasi tetap benar untuk laporan opname kas.
