@@ -56,12 +56,13 @@
                 <div class="stat-value text-blue-700">Rp {{ number_format($totalRealisasi, 0, ',', '.') }}</div>
             </div>
 
-            <div class="stat-card orange">
+            <div class="stat-card orange" title="Item tanpa Program atau Kode Rekening — perlu dilengkapi agar bisa dipakai di BKU">
                 <div class="stat-icon bg-amber-50">
                     <svg aria-hidden="true" class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                 </div>
-                <div class="stat-label">Belum Lengkap</div>
+                <div class="stat-label">Perlu Dilengkapi</div>
                 <div class="stat-value text-amber-700">{{ number_format($belumLengkapCount) }}</div>
+                <div class="text-[11px] text-amber-600">tanpa Program/Rekening</div>
             </div>
         </div>
     @endif
@@ -137,17 +138,23 @@
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                     Import Excel
                 </a>
-                <button type="button" class="btn btn-danger btn-sm" onclick="hapusSemuaRkas()">
+                <button type="button" class="btn btn-danger btn-sm" onclick="hapusSemuaRkas()" title="Hapus semua item pada filter aktif">
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    Hapus Semua
+                    Hapus Semua @if($rkasItems->total() > 0) ({{ $rkasItems->total() }}) @endif
                 </button>
             </div>
         </div>
         <form method="GET" action="{{ route('rkas.index') }}" class="px-6 py-4 bg-slate-50 border-b border-slate-100">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div>
-                    <label for="search" class="form-label">Cari Uraian</label>
-                    <input type="text" name="search" id="search" class="form-input" placeholder="Cari uraian item..." value="{{ request('search') }}">
+                    <label for="tahun" class="form-label">Tahun</label>
+                    <select name="tahun" id="tahun" class="form-select">
+                        @foreach($tahunList as $t)
+                            <option value="{{ $t->tahun }}" {{ request('tahun', $tahunAnggaranAktif->tahun ?? '') == $t->tahun ? 'selected' : '' }}>
+                                {{ $t->tahun }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
                 <div>
                     <label for="bulan" class="form-label">Bulan</label>
@@ -156,31 +163,6 @@
                         @foreach(range(1, 12) as $m)
                             <option value="{{ $m }}" {{ request('bulan', $bulan) == $m ? 'selected' : '' }}>
                                 {{ \Carbon\Carbon::create()->month($m)->translatedFormat('F') }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label for="program_search" class="form-label">Program</label>
-                    @include('transaksi-bku._search-picker', [
-                        'spPrefix' => 'program',
-                        'spLabel' => '',
-                        'spLabelLower' => 'program',
-                        'spRequired' => false,
-                        'spCompact' => true,
-                        'spPlaceholder' => 'Cari program (kode / nama)...',
-                        'spInitial' => (string) ($programId ?? ''),
-                        'spError' => 'program_id',
-                        'spAutoSubmit' => false,
-                        'spOptions' => $programs->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
-                    ])
-                </div>
-                <div>
-                    <label for="tahun" class="form-label">Tahun</label>
-                    <select name="tahun" id="tahun" class="form-select">
-                        @foreach($tahunList as $t)
-                            <option value="{{ $t->tahun }}" {{ request('tahun', $tahunAnggaranAktif->tahun ?? '') == $t->tahun ? 'selected' : '' }}>
-                                {{ $t->tahun }}
                             </option>
                         @endforeach
                     </select>
@@ -195,6 +177,34 @@
                             </option>
                         @endforeach
                     </select>
+                </div>
+                <div>
+                    <label for="jenis_belanja_id" class="form-label">Jenis Belanja</label>
+                    <select name="jenis_belanja_id" id="jenis_belanja_id" class="form-select">
+                        <option value="">Semua Jenis Belanja</option>
+                        @foreach($jenisBelanjas as $jb)
+                            <option value="{{ $jb->id }}" {{ request('jenis_belanja_id', $jenisBelanjaId ?? '') == $jb->id ? 'selected' : '' }}>
+                                {{ $jb->nama }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mt-4">
+                <div>
+                    <label for="program_search" class="form-label">Kegiatan <span class="text-slate-400 font-normal text-xs">(Program)</span></label>
+                    @include('transaksi-bku._search-picker', [
+                        'spPrefix' => 'program',
+                        'spLabel' => '',
+                        'spLabelLower' => 'program',
+                        'spRequired' => false,
+                        'spCompact' => true,
+                        'spPlaceholder' => 'Cari kegiatan (kode / nama)...',
+                        'spInitial' => (string) ($programId ?? ''),
+                        'spError' => 'program_id',
+                        'spAutoSubmit' => false,
+                        'spOptions' => $programs->map(fn ($p) => ['id' => (string) $p->id, 'text' => $p->kode . ' - ' . $p->nama])->values()->all(),
+                    ])
                 </div>
                 <div>
                     <label for="kode_rekening_search" class="form-label">Kode Rekening</label>
@@ -212,18 +222,12 @@
                     ])
                 </div>
                 <div>
-                    <label for="jenis_belanja_id" class="form-label">Jenis Belanja</label>
-                    <div class="flex gap-2">
-                        <select name="jenis_belanja_id" id="jenis_belanja_id" class="form-select flex-1">
-                            <option value="">Semua Jenis Belanja</option>
-                            @foreach($jenisBelanjas as $jb)
-                                <option value="{{ $jb->id }}" {{ request('jenis_belanja_id', $jenisBelanjaId ?? '') == $jb->id ? 'selected' : '' }}>
-                                    {{ $jb->nama }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <button type="submit" class="btn-primary btn-sm whitespace-nowrap">Filter</button>
-                    </div>
+                    <label for="search" class="form-label">Cari Uraian</label>
+                    <input type="text" name="search" id="search" class="form-input" placeholder="Cari uraian item..." value="{{ request('search') }}">
+                </div>
+                <div class="flex gap-2 items-end">
+                    <button type="submit" class="btn-primary flex-1">Terapkan Filter</button>
+                    <a href="{{ route('rkas.index') }}" class="btn btn-secondary">Reset</a>
                 </div>
             </div>
         </form>
@@ -387,7 +391,9 @@
 
     <script>
         function hapusSemuaRkas() {
-            if (!confirm('Hapus SEMUA item RKAS pada filter aktif?\nTindakan ini tidak bisa dibatalkan.')) return;
+            var total = {{ $rkasItems->total() }};
+            var msg = total > 0 ? 'Hapus ' + total + ' item RKAS pada filter aktif?\nTindakan ini tidak bisa dibatalkan.' : 'Hapus SEMUA item RKAS pada filter aktif?\nTindakan ini tidak bisa dibatalkan.';
+            if (!confirm(msg)) return;
             document.getElementById('form-hapus-semua-rkas').submit();
         }
     </script>

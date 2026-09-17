@@ -48,6 +48,7 @@
 
                     {{-- Section 1: Info Dasar --}}
                     <div class="mb-2">
+                    <div id="step-1">
                         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Informasi Transaksi</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -82,6 +83,21 @@
                     @include('transaksi-bku._rkas-picker', ['pickerInitial' => $pickerInitial])
 
                     {{-- Blok pilih Kegiatan -> Rekening -> checklist item (untuk Jenis Pengeluaran) --}}
+                        <div class="flex justify-end mt-4 hidden" id="step1-next-wrap">
+                            <button type="button" id="btn-step1-next" class="btn btn-primary">Lanjut ke Pilih Barang →</button>
+                        </div>
+                    </div>
+                    <!-- Wizard Progress (hanya untuk Pengeluaran) -->
+                    <div id="bku-wizard" class="hidden mb-6">
+                        <div class="flex items-center gap-2 text-xs font-semibold">
+                            <div class="wizard-step flex-1 flex items-center gap-2 p-2 rounded-lg bg-indigo-600 text-white" data-step="1"><span class="w-6 h-6 rounded-full bg-white text-indigo-600 flex items-center justify-center text-xs font-bold">1</span> Info Dasar</div>
+                            <div class="w-4 h-0.5 bg-slate-200"></div>
+                            <div class="wizard-step flex-1 flex items-center gap-2 p-2 rounded-lg bg-slate-100 text-slate-400" data-step="2"><span class="w-6 h-6 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-bold">2</span> Pilih Barang</div>
+                            <div class="w-4 h-0.5 bg-slate-200"></div>
+                            <div class="wizard-step flex-1 flex items-center gap-2 p-2 rounded-lg bg-slate-100 text-slate-400" data-step="3"><span class="w-6 h-6 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-bold">3</span> Lengkapi</div>
+                        </div>
+                    </div>
+                    <div id="step-2" class="hidden">
                     <div id="row_item_checklist" class="hidden">
                         <div class="mb-2">
                             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Pilih Kegiatan & Item Belanja</h3>
@@ -138,12 +154,17 @@
 
                         <div id="items-hidden"></div>
 
-                        <label class="flex items-start gap-3 mt-2 mb-6 cursor-pointer">
+                        <label class="flex items-start gap-3 mt-2 mb-2 cursor-pointer">
                             <input type="checkbox" id="penyelesaian" class="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                             <span class="text-sm text-slate-600">Saya sudah memasukkan <strong>semua barang</strong> dari nota ini. Jika masih ada barang tertinggal, buat nota baru.</span>
                         </label>
+                        <div class="flex justify-between mt-4">
+                            <button type="button" id="btn-step2-back" class="btn btn-secondary">← Kembali ke Info Dasar</button>
+                            <button type="button" id="btn-step2-next" class="btn btn-primary">Lanjut ke Lengkapi →</button>
+                        </div>
                     </div>
-
+                    </div>
+                    <div id="step-3" class="hidden">
                     {{-- Section 4: Nominal & Rincian --}}
                     <div class="mb-2">
                         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Nominal & Rincian</h3>
@@ -247,14 +268,16 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
-                        <a href="{{ route('transaksi-bku.index') }}" class="btn btn-secondary">
-                            Batal
-                        </a>
-                        <button type="submit" class="btn-primary">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                            Simpan
-                        </button>
+                    <div class="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
+                        <button type="button" id="btn-step3-back" class="btn btn-secondary">← Kembali ke Pilih Barang</button>
+                        <div class="flex items-center gap-2">
+                            <a href="{{ route('transaksi-bku.index') }}" class="btn btn-ghost">Batal</a>
+                            <button type="submit" class="btn-primary">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Simpan
+                            </button>
+                        </div>
+                    </div>
                     </div>
                 </form>
             </div>
@@ -551,8 +574,44 @@
                 document.getElementById('no_bukti_hint_nota').classList.toggle('hidden', count < 2);
             }
 
+            // Wizard helpers
+            const wizardEl = document.getElementById('bku-wizard');
+            const step1El = document.getElementById('step-1');
+            const step2El = document.getElementById('step-2');
+            const step3El = document.getElementById('step-3');
+            const step1NextWrap = document.getElementById('step1-next-wrap');
+            function updateWizard(n) {
+                if (!wizardEl) return;
+                wizardEl.querySelectorAll('.wizard-step').forEach(function(el) {
+                    var s = parseInt(el.getAttribute('data-step'), 10);
+                    if (s === n) { el.className = 'wizard-step flex-1 flex items-center gap-2 p-2 rounded-lg bg-indigo-600 text-white'; el.querySelector('span').className = 'w-6 h-6 rounded-full bg-white text-indigo-600 flex items-center justify-center text-xs font-bold'; }
+                    else if (s < n) { el.className = 'wizard-step flex-1 flex items-center gap-2 p-2 rounded-lg bg-emerald-500 text-white'; el.querySelector('span').className = 'w-6 h-6 rounded-full bg-white text-emerald-600 flex items-center justify-center text-xs font-bold'; }
+                    else { el.className = 'wizard-step flex-1 flex items-center gap-2 p-2 rounded-lg bg-slate-100 text-slate-400'; el.querySelector('span').className = 'w-6 h-6 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-bold'; }
+                });
+            }
+            function showWizardStep(n) {
+                if (jenisSelect.value === 'penerimaan') {
+                    if (wizardEl) wizardEl.classList.add('hidden');
+                    if (step1El) step1El.classList.remove('hidden');
+                    if (step2El) step2El.classList.add('hidden');
+                    if (step3El) step3El.classList.remove('hidden');
+                    return;
+                }
+                if (wizardEl) wizardEl.classList.remove('hidden');
+                if (step1El) step1El.classList.toggle('hidden', n !== 1);
+                if (step2El) step2El.classList.toggle('hidden', n !== 2);
+                if (step3El) step3El.classList.toggle('hidden', n !== 3);
+                updateWizard(n);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
             function toggleVisibility() {
                 if (jenisSelect.value === 'penerimaan') {
+                    if (wizardEl) wizardEl.classList.add('hidden');
+                    if (step1El) step1El.classList.remove('hidden');
+                    if (step2El) step2El.classList.add('hidden');
+                    if (step3El) step3El.classList.remove('hidden');
+                    if (step1NextWrap) step1NextWrap.classList.add('hidden');
                     rowRkas.style.display = 'none';
                     rowChecklist.classList.add('hidden');
                     rowKalkulator.style.display = 'none';
@@ -568,6 +627,8 @@
                     hargaInput.value = '';
                     hargaInput.dataset.val = 0;
                 } else {
+                    if (step1NextWrap) step1NextWrap.classList.remove('hidden');
+                    showWizardStep(1);
                     rowRkas.style.display = 'none';
                     rowChecklist.classList.remove('hidden');
                     rowKalkulator.style.display = 'none';
@@ -639,6 +700,10 @@
                 }
             });
             document.getElementById('btn-tambah-item').addEventListener('click', addManualRow);
+            document.getElementById('btn-step1-next')?.addEventListener('click', function() { if (!tanggalInput.value) { alert('Pilih tanggal terlebih dahulu.'); tanggalInput.focus(); return; } if (!jenisSelect.value) { alert('Pilih jenis transaksi.'); return; } showWizardStep(2); });
+            document.getElementById('btn-step2-back')?.addEventListener('click', function() { showWizardStep(1); });
+            document.getElementById('btn-step2-next')?.addEventListener('click', function() { if (selectedCount()===0) { alert('Centang minimal satu item belanja terlebih dahulu.'); return; } if (!document.getElementById('penyelesaian').checked) { alert('Centang konfirmasi bahwa semua barang sudah dimasukkan.'); return; } showWizardStep(3); });
+            document.getElementById('btn-step3-back')?.addEventListener('click', function() { showWizardStep(2); });
 
             const bulanNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 

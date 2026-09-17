@@ -55,7 +55,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
                 <div>
                     <label class="form-label">Tahun</label>
-                    <select name="tahun" class="form-select" onchange="this.form.submit()">
+                    <select name="tahun" class="form-select">
                         @foreach($tahunList as $t)
                             <option value="{{ $t->tahun }}" {{ request('tahun', $tahunAnggaranAktif->tahun ?? '') == $t->tahun ? 'selected' : '' }}>
                                 {{ $t->tahun }}
@@ -75,7 +75,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Program</label>
+                    <label class="form-label">Kegiatan <span class="text-slate-400 font-normal text-xs">(Program)</span></label>
                     @include('transaksi-bku._search-picker', [
                         'spPrefix' => 'program',
                         'spLabel' => '',
@@ -106,7 +106,7 @@
                 </div>
                 <div>
                     <label class="form-label">Sumber Dana</label>
-                    <select name="sumber_dana_id" class="form-select" onchange="this.form.submit()">
+                    <select name="sumber_dana_id" class="form-select">
                         <option value="">Semua Sumber Dana</option>
                         @foreach($sumberDanas as $sd)
                             <option value="{{ $sd->id }}" {{ request('sumber_dana_id', $sumberDanaId ?? '') == $sd->id ? 'selected' : '' }}>
@@ -117,18 +117,19 @@
                 </div>
                 <div>
                     <label class="form-label">Jenis Belanja</label>
-                    <div class="flex gap-2">
-                        <select name="jenis_belanja_id" class="form-select flex-1">
-                            <option value="">Semua</option>
-                            @foreach($jenisBelanjas as $jenisB)
-                                <option value="{{ $jenisB->id }}" {{ request('jenis_belanja_id') == $jenisB->id ? 'selected' : '' }}>
-                                    {{ $jenisB->nama }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <button type="submit" class="btn-primary btn-sm whitespace-nowrap">Filter</button>
-                    </div>
+                    <select name="jenis_belanja_id" class="form-select">
+                        <option value="">Semua</option>
+                        @foreach($jenisBelanjas as $jenisB)
+                            <option value="{{ $jenisB->id }}" {{ request('jenis_belanja_id') == $jenisB->id ? 'selected' : '' }}>
+                                {{ $jenisB->nama }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button type="submit" class="btn-primary">Terapkan Filter</button>
+                <a href="{{ route('dashboard') }}" class="btn btn-secondary">Reset</a>
             </div>
         </form>
     </div>
