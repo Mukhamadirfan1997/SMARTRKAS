@@ -4071,3 +4071,41 @@ Hapus pengecualian mutasi dari 4 lokasi BKU:
 - `DashboardController::transaksiBulanIni()` — dashboard
 
 K7b/K7c TIDAK disentuh — pengecualian mutasi tetap benar untuk laporan opname kas.
+
+---
+
+# Sesi 26 Agu 2026 — Implementasi Validasi Juknis ARKAS di Monitoring (Honor/Buku/Sarpras) + Release v0.6.13
+
+## Goal
+
+Lanjutkan ekstraksi Juknis ARKAS sesi 25 Agu: implementasikan `JuknisValidator` + `config/juknis.php` dan integrasikan 3 kartu validasi (Honor/Buku/Sarpras) di halaman Monitoring Juknis BOSP, lalu rilis v0.6.13.
+
+## Summary
+
+- Commit `1c961f1` (validator + config + controller/view + test) + `74aedf1` (AGENTS) + `152e7f8` (bump 0.6.13).
+- Build: compile 8m03s -> NSIS 58.8MB + MSI 89.9MB. Reinstall v0.6.13 terverifikasi: exe 0.6.13, php+cacert bundled, /login 200/200/200, error log tidak bertambah, 0 orphan.
+- Full suite OK (504 tests, 1589 assertions) naik dari 501/1582 (+3 JuknisValidatorTest), PHPStan level 6 [OK] No errors.
+
+## Changes
+
+- `config/juknis.php` (BARU) - threshold ARKAS module 45391: honor kode_kegiatan 07.12.01. s.d. 07.12.04., kode_rekening 5.1.02.02.01.0013, periode 87/81-92; buku kode_kegiatan 03.02.02. dkk, threshold 5%/10%, sekolah khusus 05.08.01. dkk; sarpras kode_kegiatan 05.08.01. dkk, threshold 20%, epsilon 0.000001.
+- `app/Support/JuknisValidator.php` (BARU, 267 baris) - 3 methods validateHonor/validateBuku/validateSarpras + validateAll + isSekolahKhusus. Honor: denominator tahun<2026 ? totalHonor/2 : totalHonor, realisasi periode kritis via RealisasiQuery bulan <= periodeAkhirBulan, isError = sisa<=eps && persentase>=100. Buku: persentase = totalBuku/totalPagu*100, threshold 5/10, isError = persentase < threshold. Sarpras: filter kode 5.1%, persentase totalSarpras/totalPagu*100, isError = sisa>eps && persentase>threshold. **Fix penting**: tambah param tahunAnggaranId (string|null) dan filter RkasItem where tahun_anggaran_id bila tersedia (sebelumnya query lintas tahun).
+- `app/Http/Controllers/MonitoringJuknisController.php:49` - tambah juknisResults = [] init (fix undefined variable saat tanpa tahun), `new JuknisValidator(totalPagu, (int)tahun, tahunAnggaranId)` dan validateAll.
+- `resources/views/laporan/monitoring-juknis.blade.php:67` - blok 3 kartu validasi ARKAS (grid 3, badge Sesuai/Melanggar, icon Honor/Buku/Sarpras, persentase 2 desimal, label periode kritis/proporsi, detail box emerald/red).
+- `tests/Feature/Juknis/JuknisValidatorTest.php` (BARU, 3 tests) - tahun filter: Honor lintas tahun tidak bocor, Buku/Sarpras tahun filter, validateAll returns 3.
+
+## Verifikasi
+
+- PHPStan [OK] No errors, phpunit OK (504/1589), view:cache OK.
+- Prod bundle check: app/Support/JuknisValidator.php + config/juknis.php terbundle di C:\Users\yudhi\AppData\Local\SmartRKAS\app\...
+
+## Build & Release v0.6.13
+
+- Bump 0.6.12 -> 0.6.13 di 5 file (config/app.php, .env.example, src-tauri/tauri.conf.json, src-tauri/Cargo.toml, src-tauri/Cargo.lock blok name=smartrkas saja, anti-BOM).
+- npm run build OK (app-Ckk9KmT2.css/app-CA7a7cYK.js).
+- tauri build --bundles nsis,msi: 8m03s -> NSIS SmartRKAS_0.6.13_x64-setup.exe (58.8MB) + MSI SmartRKAS_0.6.13_x64_en-US.msi (89.9MB).
+- Reinstall: uninstall v0.6.12 (/S) -> folder Local SmartRKAS hilang, DB Roaming utuh 1.81MB -> install v0.6.13 (/S) -> exe 0.6.13, php+cacert 186KB terbundle -> app jalan php -S 127.0.0.1:57615 (/login 200x3), php-server-error.log 756 bytes tidak bertambah.
+
+## Test Status
+
+- PHPUnit OK (504 tests, 1589 assertions), PHPStan level 6 [OK] No errors.
