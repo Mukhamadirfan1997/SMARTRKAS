@@ -895,8 +895,8 @@ class RkasControllerTest extends TestCase
         // Ringkasan Capaian summary card juga kumulatif: tidak ada "Rp -100.000"
         $response->assertDontSee('Rp -100.000');
 
-        // Badge kumulatif: Hampir Habis 98% (≥90%), BUKAN Over Budget 197%
+        // Badge kumulatif: Hampir Habis 98% (≥90%), BUKAN Melebihi Anggaran 197%
         $response->assertSee('Hampir Habis (98%)');
-        $response->assertDontSee('Over Budget');
+        $response->assertDontSee('Melebihi Anggaran');
     }
 }

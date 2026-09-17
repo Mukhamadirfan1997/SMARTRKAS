@@ -332,17 +332,17 @@
                                 </td>
                                 <td class="text-center">
                                     @if($persen > 100)
-                                        <span class="badge badge-red">Over Budget ({{ number_format($persen, 0) }}%)</span>
+                                        <span class="badge badge-red">Melebihi Anggaran ({{ number_format($persen, 0) }}%)</span>
                                     @elseif($persen >= 90)
                                         <span class="badge badge-orange">Hampir Habis ({{ number_format($persen, 0) }}%)</span>
                                     @elseif($persen == 0)
                                         @if(!$isLengkap)
-                                            <span class="badge badge-yellow">Koreksi</span>
+                                            <span class="badge badge-yellow">Perlu Koreksi</span>
                                         @else
                                             <span class="badge badge-yellow">Belum Realisasi</span>
                                         @endif
                                     @else
-                                        <span class="badge badge-green">Normal ({{ number_format($persen, 0) }}%)</span>
+                                        <span class="badge badge-green">Aman ({{ number_format($persen, 0) }}%)</span>
                                     @endif
                                 </td>
                                 <td class="text-center">

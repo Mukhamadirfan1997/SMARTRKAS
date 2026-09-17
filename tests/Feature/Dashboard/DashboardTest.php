@@ -134,7 +134,7 @@ class DashboardTest extends TestCase
             ->assertSee('5.1.2.01.0001')
             ->assertSee('10 buah')
             ->assertSee('4 buah')
-            ->assertSee('Normal (40%)');
+            ->assertSee('Aman (40%)');
     }
 
     public function test_dashboard_bulan_filter_affects_item_rencana(): void
@@ -263,7 +263,7 @@ class DashboardTest extends TestCase
         $this->actingAs($this->user)
             ->get('/dashboard?bulan=1')
             ->assertOk()
-            ->assertSee('Over Budget (150%)');
+            ->assertSee('Melebihi Anggaran (150%)');
     }
 
     /**
@@ -309,9 +309,9 @@ class DashboardTest extends TestCase
         $response->assertSee('Rp 3.500');
         $response->assertDontSee('Rp -100.000');
 
-        // Badge kumulatif: Hampir Habis 98%, BUKAN Over Budget 197%
+        // Badge kumulatif: Hampir Habis 98%, BUKAN Melebihi Anggaran 197%
         $response->assertSee('Hampir Habis (98%)');
-        $response->assertDontSee('Over Budget');
+        $response->assertDontSee('Melebihi Anggaran');
     }
 
     // =================== RECENT TRANSACTIONS (incl. NOTA) ===================

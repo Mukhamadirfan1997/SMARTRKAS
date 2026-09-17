@@ -190,13 +190,13 @@
                         </td>
                         <td class="text-center">
                             @if($item->persentase > 100)
-                                <span class="badge badge-red">Over Budget ({{ number_format($item->persentase, 0) }}%)</span>
+                                <span class="badge badge-red">Melebihi Anggaran ({{ number_format($item->persentase, 0) }}%)</span>
                             @elseif($item->persentase >= 90)
                                 <span class="badge badge-orange">Hampir Habis ({{ number_format($item->persentase, 0) }}%)</span>
                             @elseif($item->persentase == 0)
                                 <span class="badge badge-yellow">Belum Realisasi</span>
                             @else
-                                <span class="badge badge-green">Normal ({{ number_format($item->persentase, 0) }}%)</span>
+                                <span class="badge badge-green">Aman ({{ number_format($item->persentase, 0) }}%)</span>
                             @endif
                         </td>
                     </tr>
