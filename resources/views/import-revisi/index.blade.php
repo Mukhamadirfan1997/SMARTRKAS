@@ -27,15 +27,17 @@
     <div class="card mb-6">
         <div class="card-header">
             <span class="card-title">Petunjuk</span>
+            <span class="badge badge-blue text-xs">Bahasa tugas</span>
         </div>
         <div class="card-body text-sm text-slate-600 space-y-2">
-            <p>Upload hasil pergeseran / Perubahan Anggaran (PAK) yang dikerjakan di <strong>ARKAS</strong>. Format file sama dengan template import RKAS (No Urut, Kode Rekening, Kode Program, Uraian, Volume, Satuan, Tarif, Jumlah) — satu file per bulan, boleh hanya bulan yang berubah.</p>
+            <p>Upload hasil <strong>pergeseran / Perubahan Anggaran (PAK)</strong> yang dikerjakan di <strong>ARKAS</strong>. Format file sama dengan template import RKAS (No Urut, Kode Rekening, Kode Program, Uraian, Volume, Satuan, Tarif, Jumlah) — satu file per bulan, boleh hanya bulan yang berubah.</p>
             <ul class="list-disc list-inside space-y-1">
-                <li>Item yang <strong>tidak ada</strong> di file revisi dibiarkan apa adanya (tidak dihapus).</li>
-                <li>Item yang sudah ber-realisasi tidak boleh menjadi sumber (turun).</li>
-                <li>Revisi bersifat <strong>all-or-nothing</strong>: bila ada satu saja item yang melanggar, seluruh revisi ditolak.</li>
-                <li>Pergeseran harus net-zero per (sumber dana + jenis belanja); PAK net-zero per sumber dana.</li>
+                <li>Barang yang <strong>tidak ada</strong> di file revisi <strong>tidak dihapus</strong> — tetap seperti semula.</li>
+                <li><strong>Barang yang sudah dibeli tidak bisa dikurangi anggarannya</strong> — hanya bisa ditambah. Jika ada yang sudah dibeli lalu dikurangi, revisi akan ditolak.</li>
+                <li>Jika <strong>1 baris saja salah, semua bulan ditolak</strong> (tidak ada yang diterapkan) — perbaiki file lalu upload ulang.</li>
+                <li><strong>Pergeseran:</strong> pindah anggaran antar barang, <strong>total per Jenis Belanja harus tetap</strong>. <strong>PAK:</strong> perubahan total anggaran yang disetujui Dinas, <strong>total per Sumber Dana boleh berubah</strong>.</li>
             </ul>
+            <p class="text-xs text-slate-400 mt-2">Jenis: <strong>Pergeseran</strong> = pindah anggaran antar barang, total tetap. <strong>PAK</strong> = perubahan total anggaran.</p>
         </div>
     </div>
 

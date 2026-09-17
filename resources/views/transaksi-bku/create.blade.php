@@ -109,12 +109,12 @@
                         </div>
 
                         <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl mb-4 text-sm text-blue-700">
-                            Pilih kegiatan dan rekening belanja sesuai transaksi fisik, lalu <strong>centang item</strong> yang dibelanjakan dan isi <strong>Jumlah</strong> + <strong>Harga Satuan</strong>.
+                            Centang <strong>barang yang dibeli</strong> sesuai nota/kwitansi toko, lalu isi <strong>jumlah &amp; harga</strong> per barang.
                             <ul class="list-disc list-inside mt-2 space-y-1">
-                                <li><strong>1 item dicentang</strong>: transaksi tunggal (bisa gunakan opsi "Override Sisa Anggaran").</li>
-                                <li><strong>2+ item dicentang</strong>: disimpan sebagai <strong>Nota Multi-Item</strong> — seluruh nota dibatalkan bila ada satu saja item melebihi anggaran (tanpa opsi override).</li>
+                                <li><strong>1 barang</strong> → disimpan langsung sebagai 1 transaksi.</li>
+                                <li><strong>2 atau lebih barang</strong> dalam 1 nota/kwitansi → disimpan sebagai <strong>1 Nota (1 BPU)</strong>. Jika ada 1 barang melebihi sisa anggaran, <strong>seluruh nota ditolak</strong> — perbaiki dulu anggarannya.</li>
                             </ul>
-                            Nomor bukti / nomor nota dibuat otomatis oleh sistem.
+                            <p class="text-xs text-blue-500 mt-2">Nomor bukti (BPU) dibuat otomatis. Tidak perlu tulis manual.</p>
                         </div>
 
                         @error('items')
@@ -140,7 +140,7 @@
 
                         <label class="flex items-start gap-3 mt-2 mb-6 cursor-pointer">
                             <input type="checkbox" id="penyelesaian" class="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                            <span class="text-sm text-slate-600">Semua item dalam transaksi untuk kegiatan dan rekening ini sudah dimasukkan semua.</span>
+                            <span class="text-sm text-slate-600">Saya sudah memasukkan <strong>semua barang</strong> dari nota ini. Jika masih ada barang tertinggal, buat nota baru.</span>
                         </label>
                     </div>
 
@@ -234,8 +234,8 @@
                         <div class="flex items-start gap-3">
                             <input type="checkbox" name="override_anggaran" id="override_anggaran" value="1" class="mt-1 rounded border-amber-300 text-amber-600 focus:ring-amber-500" {{ old('override_anggaran') ? 'checked' : '' }}>
                             <div class="flex-1">
-                                <label for="override_anggaran" class="text-sm font-semibold text-amber-800 cursor-pointer">Override Sisa Anggaran</label>
-                                <p class="text-xs text-amber-600 mt-0.5">Hanya tersedia saat <strong>tepat 1 item</strong> dicentang. Centang jika ingin melanjutkan meskipun melebihi sisa anggaran. Wajib isi catatan minimal 10 karakter. Kwitansi transaksi ini akan terkunci sampai dilakukan pergeseran / Perubahan Anggaran (PA).</p>
+                                <label for="override_anggaran" class="text-sm font-semibold text-amber-800 cursor-pointer">Izinkan melebihi sisa anggaran</label>
+                                <p class="text-xs text-amber-600 mt-0.5">Hanya untuk <strong>1 barang</strong>. Centang jika terpaksa melebihi sisa (mis. harga naik). Wajib tulis alasan minimal 10 karakter. <strong>Kwitansi akan terkunci</strong> sampai anggaran diperbaiki lewat pergeseran/PA di ARKAS.</p>
                                 <div id="row_override_note" class="mt-3 {{ old('override_anggaran') ? '' : 'hidden' }}">
                                     <label for="override_note" class="block text-xs font-medium text-amber-700 mb-1">Catatan Override</label>
                                     <textarea name="override_note" id="override_note" rows="2" class="form-input text-sm" placeholder="Sebutkan alasan override secara jelas (min. 10 karakter), contoh: harga barang naik karena penyesuaian harga" maxlength="500">{{ old('override_note') }}</textarea>

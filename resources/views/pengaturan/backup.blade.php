@@ -54,10 +54,11 @@
     <div class="alert-info mb-6">
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         <div>
-            Backup otomatis dijalankan setiap hari pukul <strong>01:30</strong> dan dibersihkan pukul <strong>01:00</strong>
-            (saat aplikasi desktop sedang berjalan / server scheduler aktif). Pemulihan dilakukan manual: unduh file backup lalu
+            Backup otomatis dijalankan setiap hari pukul <strong>20:15</strong> dan pembersihan backup lama pukul <strong>20:00</strong>
+            (hanya saat aplikasi desktop dibuka — scheduler tidak jalan saat aplikasi tertutup). Pemulihan dilakukan manual: unduh file backup lalu
             pulihkan database dari file tersebut.
             <span class="block mt-1">Jika ada <strong>pembaruan aplikasi</strong> (lihat menu Tentang Aplikasi), pastikan backup terakhir masih baru sebelum menginstal.</span>
+            <span class="block mt-1 text-xs text-slate-500">Jika aplikasi tidak dibuka jam 20:00-20:40, jadwal otomatis hari itu terlewat — klik <strong>Backup Sekarang</strong> manual.</span>
         </div>
     </div>
 

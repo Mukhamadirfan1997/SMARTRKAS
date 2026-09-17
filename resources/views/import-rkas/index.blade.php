@@ -51,7 +51,7 @@
                             <span class="text-sm font-semibold text-slate-700 w-24">
                                 {{ \Carbon\Carbon::create()->month($i)->translatedFormat('F') }}
                             </span>
-                            <input type="file" name="files[{{ $i }}]" accept=".xlsx,.xls" class="flex-1 ml-4 text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            <input type="file" name="files[{{ $i }}]" accept=".xlsx,.xls,.csv" class="flex-1 ml-4 text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                         </div>
                         @endfor
                     </div>
@@ -100,8 +100,9 @@
                                     <span class="text-xs text-slate-400">{{ $log->uploader?->name ?? '-' }} &middot; {{ $log->created_at->translatedFormat('d M Y H:i') }}</span>
                                 </div>
                                 <div class="flex items-center gap-2">
+                                    @php $labelStatus = $log->status == 'failed' ? 'GAGAL' : ($log->status == 'success' ? 'BERHASIL' : 'DIPROSES'); @endphp
                                     <span class="badge {{ $log->status == 'failed' ? 'badge-red' : ($log->status == 'success' ? 'badge-green' : 'badge-yellow') }}">
-                                        {{ strtoupper($log->status) }}
+                                        {{ $labelStatus }}
                                     </span>
                                     @if(($log->baris_berhasil ?? 0) > 0 || ($log->total_baris ?? 0) > 0)
                                         <span class="text-xs text-slate-600 bg-white px-3 py-1 rounded-lg border border-slate-200">
@@ -149,7 +150,7 @@
                     '<span class="text-xs font-mono text-slate-500">' + date + '</span>' +
                 '</div>' +
                 '<div class="flex items-center gap-2">' +
-                    '<span class="badge ' + badgeClass + '">' + log.status.toUpperCase() + '</span>' +
+                    '<span class="badge ' + badgeClass + '">' + (log.status === 'failed' ? 'GAGAL' : (log.status === 'success' ? 'BERHASIL' : 'DIPROSES')) + '</span>' +
                     ((log.baris_berhasil || 0) > 0 || (log.total_baris || 0) > 0 ? '<span class="text-xs text-slate-600 bg-white px-3 py-1 rounded-lg border border-slate-200">' + (log.baris_berhasil || 0) + '/' + (log.total_baris || 0) + ' Baris</span>' : '') +
                 '</div>' +
                 progressBar +

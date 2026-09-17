@@ -57,15 +57,19 @@
                             </a>
                         </div>
                         <p class="text-xs text-slate-400 mt-3">
-                            Persentase = {{ $basis === 'rencana' ? 'rencana item RKAS' : 'realisasi pengeluaran' }} pada kode rekening ter-mapping ÷ Total Pagu.
+                            Persentase = {{ $basis === 'rencana' ? 'rencana item RKAS' : 'realisasi pengeluaran' }} pada kode rekening ter-mapping ÷ Total Pagu. <span class="font-semibold text-amber-600">* Hanya mempengaruhi bagian B di bawah.</span>
                         </p>
                     </div>
                 </div>
             </div>
 
+            <div class="border-l-4 border-indigo-400 bg-indigo-50/50 rounded-r-xl px-4 py-3 mb-3">
+                <div class="text-sm font-bold text-indigo-800">A. Validasi Otomatis ARKAS (tidak dapat diubah)</div>
+                <div class="text-xs text-slate-500 mt-0.5">Aturan nasional dari ARKAS — Honor/Buku/Sarpras. Honor cek realisasi s.d. Maret, Buku &amp; Sarpras cek rencana.</div>
+            </div>
             {{-- Kartu Validasi ARKAS (Honor / Buku / Sarpras) --}}
             @if (!empty($juknisResults))
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-4">
                     @foreach ($juknisResults as $juknis)
                         @php
                             $isError = $juknis['isError'];
@@ -112,12 +116,16 @@
             @endif
 
             @if ($belumDikategorikanCount > 0)
-                <div class="alert alert-info mb-6">
+                <div class="alert alert-info mb-4">
                     {{ $belumDikategorikanCount }} kode rekening yang punya {{ $basis === 'rencana' ? 'rencana' : 'realisasi' }} belum dikategorikan dan tidak ikut dihitung dalam kategori mana pun.
                     <a href="{{ route('pengaturan.kategori-juknis.pemetaan') }}" class="underline font-semibold ml-1">Petakan sekarang</a>.
                 </div>
             @endif
 
+            <div class="border-l-4 border-emerald-400 bg-emerald-50/50 rounded-r-xl px-4 py-3 mb-3">
+                <div class="text-sm font-bold text-emerald-800">B. Pantauan Kategori Sekolah (dapat diubah di Pengaturan)</div>
+                <div class="text-xs text-slate-500 mt-0.5">Kategori buatan sekolah — atur batas &amp; petakan rekening di <a href="{{ route('pengaturan.kategori-juknis.index') }}" class="underline">Pengaturan → Kategori Juknis BOSP</a>. Tombol <strong>Rencana | Realisasi</strong> di atas hanya mempengaruhi bagian B ini.</div>
+            </div>
             {{-- Kartu per kategori juknis --}}
             @if ($kategoriCards->isEmpty())
                 <div class="card mb-6">

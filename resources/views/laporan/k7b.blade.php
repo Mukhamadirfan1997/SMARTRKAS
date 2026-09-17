@@ -62,11 +62,13 @@
                     <div>
                         <label for="tanggal_penutupan" class="form-label">Tgl Penutupan Bulan Ini</label>
                         <input type="date" name="tanggal_penutupan" id="tanggal_penutupan" value="{{ $tanggalPenutupanInput }}" class="form-input">
+                        <p class="text-[11px] text-slate-400 mt-1">Tanggal opname fisik (biasanya akhir bulan).</p>
                     </div>
 
                     <div>
                         <label for="tanggal_penutupan_lalu" class="form-label">Tgl Penutupan Bulan Lalu</label>
                         <input type="date" name="tanggal_penutupan_lalu" id="tanggal_penutupan_lalu" value="{{ $tanggalPenutupanLaluInput }}" class="form-input">
+                        <p class="text-[11px] text-slate-400 mt-1">Untuk header dokumen cetak.</p>
                     </div>
                 </div>
             </form>
