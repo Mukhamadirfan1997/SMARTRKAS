@@ -128,11 +128,15 @@
 
     <form id="batch-kwitansi-form" method="POST" action="{{ route('transaksi-bku.cetak-kwitansi-batch') }}" target="_blank">
         @csrf
-        <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2">
+        <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
             <button type="button" id="btn-cetak-terpilih" class="btn btn-info btn-sm" onclick="cetakTerpilih()" disabled>
                 <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                 Cetak Terpilih
             </button>
+            <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                <input type="checkbox" id="toggle-detail" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                Tampilkan kolom detail
+            </label>
         </div>
 
             <table class="data-table">
@@ -144,11 +148,11 @@
                         <th class="text-center">No</th>
                         <th>Tanggal</th>
                         <th>No Bukti</th>
-                        <th>Kode Kegiatan</th>
-                        <th>Kode Rekening</th>
-                        <th>Jenis Belanja</th>
-                        <th>Volume</th>
-                        <th>Satuan</th>
+                        <th class="col-detail hidden">Kode Kegiatan</th>
+                        <th class="col-detail hidden">Kode Rekening</th>
+                        <th class="col-detail hidden">Jenis Belanja</th>
+                        <th class="col-detail hidden">Volume</th>
+                        <th class="col-detail hidden">Satuan</th>
                         <th>Uraian</th>
                         <th>Toko/Penerima</th>
                         <th class="text-right whitespace-nowrap" style="min-width:130px">Penerimaan</th>
@@ -187,21 +191,33 @@
                                 {{ \Carbon\Carbon::parse($transaksi->tanggal)->format('d/m/Y') }}
                             </td>
                             <td class="font-mono text-xs text-slate-800 whitespace-nowrap">{{ $transaksi->no_bukti }}</td>
-                            <td class="text-xs text-slate-600 whitespace-nowrap">
+                            <td class="col-detail hidden text-xs text-slate-600 whitespace-nowrap">
                                 {{ $kegiatanKode ?: '-' }}
                             </td>
-                            <td class="text-xs font-mono text-slate-600 whitespace-nowrap">
+                            <td class="col-detail hidden text-xs font-mono text-slate-600 whitespace-nowrap">
                                 {{ $rekeningKode ?: '-' }}
                             </td>
-                            <td class="whitespace-nowrap">
+                            <td class="col-detail hidden whitespace-nowrap">
                                 @if($jenisBelanjaNama)
                                     <span class="badge badge-blue">{{ $jenisBelanjaNama }}</span>
                                 @else
                                     <span class="text-slate-400 text-xs">&mdash;</span>
                                 @endif
                             </td>
-                            <td class="text-right text-slate-700 font-medium whitespace-nowrap">{{ $volumeTampil > 0 ? number_format($volumeTampil, 0, ',', '.') : '-' }}</td>
-                            <td class="text-slate-600 text-xs">{{ $satuanTampil ?: '-' }}</td>
+                            <td class="col-detail hidden text-right text-slate-700 font-medium whitespace-nowrap">
+                                @if($transaksi->notaBku && $transaksi->notaBku->items->isNotEmpty())
+                                    <a href="{{ route('nota-bku.show', $transaksi->notaBku) }}" class="text-blue-600 hover:underline" title="Lihat rincian nota">{{ number_format($volumeTampil, 0, ',', '.') }} item &middot; Lihat rincian</a>
+                                @else
+                                    {{ $volumeTampil > 0 ? number_format($volumeTampil, 0, ',', '.') : '-' }}
+                                @endif
+                            </td>
+                            <td class="col-detail hidden text-slate-600 text-xs">
+                                @if($transaksi->notaBku && $transaksi->notaBku->items->isNotEmpty())
+                                    @if($satuanTampil) {{ $satuanTampil }} @else <span class="text-slate-400" title="Satuan berbeda per item">campur</span> @endif
+                                @else
+                                    {{ $satuanTampil ?: '-' }}
+                                @endif
+                            </td>
                             <td class="max-w-[200px]">
                                 <div class="truncate text-slate-700" title="{{ $transaksi->uraian }}">{{ $transaksi->uraian ?? '-' }}</div>
                                 @if($transaksi->rkasItem)
@@ -410,5 +426,10 @@
         function closeModalTemplate() {
             document.getElementById('modal-save-template').classList.add('hidden');
         }
+        document.getElementById('toggle-detail')?.addEventListener('change', function() {
+            document.querySelectorAll('.col-detail').forEach(function(el) {
+                el.classList.toggle('hidden', !document.getElementById('toggle-detail').checked);
+            });
+        });
     </script>
 </x-app-layout>
