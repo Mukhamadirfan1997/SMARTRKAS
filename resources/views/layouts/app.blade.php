@@ -194,17 +194,16 @@
             }
 
             document.getElementById('break-reminder-ok').addEventListener('click', function() {
-                try { localStorage.removeItem(KEY); } catch (e) {}
-                var form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '{{ route("logout") }}';
-                var token = document.createElement('input');
-                token.type = 'hidden';
-                token.name = '_token';
-                token.value = '{{ csrf_token() }}';
-                form.appendChild(token);
-                document.body.appendChild(form);
-                form.submit();
+                try { localStorage.setItem(KEY, String(Date.now())); } catch (e) {}
+                close();
+                var isTauri = typeof window !== 'undefined' && typeof window.__TAURI_INTERNALS__ !== 'undefined';
+                if (isTauri) {
+                    if (window.SmartRKAS && typeof window.SmartRKAS.closeApp === 'function') {
+                        void window.SmartRKAS.closeApp();
+                    } else {
+                        try { window.close(); } catch (e2) {}
+                    }
+                }
             });
             document.getElementById('break-reminder-snooze').addEventListener('click', function() {
                 try { localStorage.setItem(KEY, String(Date.now() - TWO_HOURS + 15 * 60 * 1000)); } catch (e) {}

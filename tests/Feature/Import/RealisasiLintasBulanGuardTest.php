@@ -137,7 +137,7 @@ class RealisasiLintasBulanGuardTest extends TestCase
         ]);
 
         $this->postPergeseran([
-            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Kantor', '10', 'buah', '1000', '50000'],
+            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Kantor', '10', 'buah', '1000', '30000'],
         ]);
 
         $this->assertDatabaseCount('rkas_revisi', 0);
@@ -185,7 +185,7 @@ class RealisasiLintasBulanGuardTest extends TestCase
         $this->assertSame(40000.0, $realisasi);
 
         $this->postPergeseran([
-            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Kantor', '10', 'buah', '1000', '50000'],
+            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Kantor', '10', 'buah', '1000', '30000'],
         ]);
 
         $this->assertDatabaseCount('rkas_revisi', 0);
@@ -215,8 +215,8 @@ class RealisasiLintasBulanGuardTest extends TestCase
         $this->assertSame(40000.0, (float) $sumber->realisasiTotal());
 
         $this->postPergeseran([
-            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Sumber', '10', 'buah', '1000', '50000'],
-            ['2', '5.1.01.01.001', 'P.001.01', 'ATK Target', '10', 'buah', '1000', '250000'],
+            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Sumber', '10', 'buah', '1000', '30000'],
+            ['2', '5.1.01.01.001', 'P.001.01', 'ATK Target', '10', 'buah', '1000', '270000'],
         ]);
 
         $this->assertDatabaseCount('rkas_revisi', 0);

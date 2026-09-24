@@ -265,6 +265,20 @@ fn run_php(app: &tauri::AppHandle, args: &[String], wait: bool) -> Option<Child>
 /// Menampilkan dialog "Save As" native secara blocking. Return None bila user
 /// membatalkan; Some(path) bila file berhasil disimpan.
 #[tauri::command]
+fn close_app(app: tauri::AppHandle) {
+    if let Some(state) = app.try_state::<PhpServer>() {
+        let mut guard = state.children.lock().unwrap();
+        if let Some(mut children) = guard.take() {
+            for child in children.iter_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+    app.exit(0);
+}
+
+#[tauri::command]
 async fn save_download(
     app: tauri::AppHandle,
     base64_data: String,
@@ -326,7 +340,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_download])
+        .invoke_handler(tauri::generate_handler![save_download, close_app])
         .setup(|app| {
             let handle = app.handle().clone();
             let data_dir = app

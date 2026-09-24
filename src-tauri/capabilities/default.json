@@ -6,5 +6,5 @@
   "remote": {
     "urls": ["http://127.0.0.1:*", "http://localhost:*"]
   },
-  "permissions": ["core:default", "opener:default", "allow-save-download"]
+  "permissions": ["core:default", "opener:default", "allow-save-download", "allow-close-app"]
 }

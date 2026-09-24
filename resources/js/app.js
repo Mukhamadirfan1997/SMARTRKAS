@@ -58,6 +58,9 @@ function filenameFromDisposition(resp) {
 
 // Helper global untuk mode desktop. Tidak aktif di mode web.
 window.SmartRKAS = window.SmartRKAS || {};
+window.SmartRKAS.closeApp = async () => {
+    try { await invoke('close_app'); } catch (e) { window.close(); }
+};
 
 // Notifikasi toast sederhana (tanpa reload halaman).
 window.SmartRKAS.notify = (message, type = 'info') => {

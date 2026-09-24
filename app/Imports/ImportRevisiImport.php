@@ -2,10 +2,12 @@
 
 namespace App\Imports;
 
+use App\Models\JenisBelanja;
 use App\Models\MasterKodeRekening;
 use App\Models\MasterProgram;
 use App\Models\RkasItem;
 use App\Models\RkasItemBulan;
+use App\Models\SumberDana;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Facades\Excel;
@@ -22,8 +24,9 @@ use Maatwebsite\Excel\Facades\Excel;
  *    dalam tahun anggaran), bukan hanya s.d. bulan file, agar item dengan
  *    realisasi di bulan yang lebih akhir dari bulan file tetap tidak bisa
  *    dijadikan sumber;
- *  - net-zero per scope (pergeseran: per sumber_dana + jenis_belanja; PAK: per
- *    sumber_dana) dengan toleransi ~Rp1.
+ *  - net-zero per scope (pergeseran: per sumber_dana + kelompok [Modal vs Barjas];
+ *    PAK: per sumber_dana) dengan toleransi ~Rp1. Kelompok Modal = jenis_belanja
+ *    yang mengandung kata "Modal", sisanya Barjas.
  *
  * Pola header/kolom sama dengan template import RKAS (RkasImportHeaderDetector).
  */
@@ -158,6 +161,72 @@ class ImportRevisiImport
             ];
         }
 
+        // Deteksi hapus otomatis: item di DB bulan ini yang tidak ada di file
+        // File pergeseran dari PDF ARKAS diharapkan full per bulan; baris hilang
+        // berarti dihapus di ARKAS (rencana -> 0). Diperketat: hanya jika file
+        // tampak full (>=80% baris DB) agar file parsial (hanya 1-2 baris ubahan)
+        // tidak menghapus massal. Item yang sudah terpakai tidak boleh dihapus
+        // (akan ditolak di validate: sesudah 0 < realisasi).
+        $presentKeys = [];
+        for ($i = $startRow - 1; $i < count($rows); $i++) {
+            $row = $rows[$i] ?? [];
+            $noUrut = trim((string) $this->cell($row, 'no_urut', $columns));
+            $uraianTmp = trim((string) $this->cell($row, 'uraian', $columns));
+            $kodeRekTmp = trim((string) $this->cell($row, 'kode_rekening', $columns));
+            $kodeProgTmp = str_replace(' ', '', trim((string) $this->cell($row, 'kode_program', $columns)));
+            if (!is_numeric($noUrut) || $uraianTmp === '') {
+                continue;
+            }
+            $progTmp = MasterProgram::where('kode', $kodeProgTmp)->first();
+            $rekTmp = MasterKodeRekening::where('kode', rtrim($kodeRekTmp, '.'))->first();
+            if (!$progTmp || !$rekTmp) {
+                continue;
+            }
+            $presentKeys[] = RkasItem::normalizeUraian($uraianTmp) . '|' . $rekTmp->id . '|' . $progTmp->id;
+        }
+        $presentKeys = array_unique($presentKeys);
+
+        $dbItemsBulan = RkasItem::where('tahun_anggaran_id', $this->tahunAnggaranId)
+            ->where('sumber_dana_id', $this->sumberDanaId)
+            ->whereHas('bulanRencana', fn ($q) => $q->where('bulan', $bulan)->where('rencana', '>', 0))
+            ->with(['kodeRekening', 'program'])
+            ->get();
+
+        $dbCount = $dbItemsBulan->count();
+        $fileCount = count($presentKeys);
+        $isFullFile = $dbCount > 0 && $fileCount >= $dbCount * 0.8;
+
+        if ($isFullFile) {
+            foreach ($dbItemsBulan as $dbItem) {
+                $key = RkasItem::normalizeUraian((string) $dbItem->uraian) . '|' . $dbItem->kode_rekening_id . '|' . $dbItem->program_id;
+                if (in_array($key, $presentKeys, true)) {
+                    continue;
+                }
+                $sebelumHapus = (float) RkasItemBulan::where('rkas_item_id', $dbItem->id)->where('bulan', $bulan)->value('rencana');
+                if ($sebelumHapus < 0.005) {
+                    continue;
+                }
+                $diffs[] = [
+                    'rkas_item_id'    => $dbItem->id,
+                    'no_urut'         => (int) $dbItem->no_urut,
+                    'bulan'           => $bulan,
+                    'uraian'          => (string) $dbItem->uraian,
+                    'program_id'      => $dbItem->program_id,
+                    'kode_rekening_id'=> $dbItem->kode_rekening_id,
+                    'jenis_belanja_id'=> $dbItem->kodeRekening->jenis_belanja_id,
+                    'sumber_dana_id'  => $this->sumberDanaId,
+                    'volume'          => 0,
+                    'satuan'          => (string) $dbItem->satuan,
+                    'tarif'           => 0,
+                    'sebelum'         => $sebelumHapus,
+                    'sesudah'         => 0.0,
+                    'delta'           => -$sebelumHapus,
+                    'arah'            => 'turun',
+                    'realisasi'       => $dbItem->realisasiTotal(),
+                ];
+            }
+        }
+
         return ['rows' => collect($diffs), 'errors' => $errors];
     }
 
@@ -174,23 +243,59 @@ class ImportRevisiImport
 
         foreach ($rows as $row) {
             $realisasi = (float) ($row['realisasi'] ?? 0);
-            if (($row['arah'] ?? '') === 'turun' && $realisasi > 0) {
-                $errors[] = "Item '{$row['uraian']}' (bulan {$row['bulan']}) menjadi SUMBER (turun) tapi sudah ber-realisasi — tidak diizinkan.";
+            $sesudah = (float) ($row['sesudah'] ?? 0);
+            $sebelum = (float) ($row['sebelum'] ?? 0);
+            if ($sesudah < $realisasi - 0.005) {
+                $sisaBoleh = max(0.0, $sebelum - $realisasi);
+                $errors[] = "Item '{$row['uraian']}' (bulan {$row['bulan']}) sudah terpakai Rp " . number_format($realisasi, 0, ',', '.') . " — rencana baru Rp " . number_format($sesudah, 0, ',', '.') . " di bawah realisasi. Sisa yang boleh dialihkan hanya Rp " . number_format($sisaBoleh, 0, ',', '.') . " (boleh turun sampai Rp " . number_format($realisasi, 0, ',', '.') . " via pergeseran/PAK). Net-zero tidak seimbang pada item ini.";
             }
         }
 
-        $totals = [];
-        foreach ($rows as $row) {
-            $key = strtolower($this->jenis) === 'pak'
-                ? (string) $row['sumber_dana_id']
-                : (string) $row['sumber_dana_id'] . '|' . (string) $row['jenis_belanja_id'];
+        $isPak = strtolower($this->jenis) === 'pak';
 
-            $totals[$key] = ($totals[$key] ?? 0.0) + (float) $row['delta'];
-        }
+        if ($isPak) {
+            $totals = [];
+            $sumberMap = SumberDana::whereIn('id', $rows->pluck('sumber_dana_id')->filter()->unique()->values()->all())
+                ->pluck('nama', 'id');
 
-        foreach ($totals as $scope => $total) {
-            if (abs($total) > 1.0) {
-                $errors[] = "Net-zero tidak seimbang pada scope '$scope' (selisih Rp " . number_format($total, 2, ',', '.') . ').';
+            foreach ($rows as $row) {
+                $key = (string) $row['sumber_dana_id'];
+                $totals[$key] = ($totals[$key] ?? 0.0) + (float) $row['delta'];
+            }
+
+            foreach ($totals as $sumberId => $total) {
+                if (abs($total) > 1.0) {
+                    $sumberNama = (string) ($sumberMap[$sumberId] ?? $sumberId);
+                    $kelebihan = $total > 0 ? 'kelebihan' : 'kekurangan';
+                    $errors[] = "PAK tidak seimbang pada {$sumberNama} — selisih Rp " . number_format(abs($total), 2, ',', '.') . " ({$kelebihan}). Net-zero tidak seimbang pada scope '{$sumberId}' (PAK harus seimbang per Sumber Dana, Modal <-> Barjas boleh).";
+                }
+            }
+        } else {
+            $jenisIds = $rows->pluck('jenis_belanja_id')->filter()->unique()->values()->all();
+            $jenisMap = JenisBelanja::whereIn('id', $jenisIds)->pluck('nama', 'id');
+            $sumberMap = SumberDana::whereIn('id', $rows->pluck('sumber_dana_id')->filter()->unique()->values()->all())
+                ->pluck('nama', 'id');
+
+            $totals = [];
+            $kelompokMap = [];
+
+            foreach ($rows as $row) {
+                $jenisNama = (string) ($jenisMap[$row['jenis_belanja_id']] ?? '');
+                $kelompok = str_contains(mb_strtolower($jenisNama), 'modal') ? 'Modal' : 'Barjas';
+                $key = (string) $row['sumber_dana_id'] . '|' . $kelompok;
+                $totals[$key] = ($totals[$key] ?? 0.0) + (float) $row['delta'];
+                $kelompokMap[$key] = $kelompok;
+            }
+
+            foreach ($totals as $scope => $total) {
+                if (abs($total) > 1.0) {
+                    [$sumberId, $kelompok] = explode('|', $scope, 2) + ['', ''];
+                    $sumberNama = (string) ($sumberMap[$sumberId] ?? $sumberId);
+                    $kelompok = $kelompokMap[$scope] ?? $kelompok;
+                    $kelebihan = $total > 0 ? 'kelebihan' : 'kekurangan';
+                    $saran = $total > 0 ? 'Kurangi' : 'Tambah';
+                    $errors[] = "Pergeseran tidak seimbang pada {$sumberNama} — Kelompok {$kelompok} {$kelebihan} Rp " . number_format(abs($total), 2, ',', '.') . ". Net-zero tidak seimbang pada scope '{$scope}' (Pergeseran harus seimbang Modal->Modal dan Barjas->Barjas, {$saran} Rp " . number_format(abs($total), 2, ',', '.') . " di kelompok {$kelompok} yang sama).";
+                }
             }
         }
 

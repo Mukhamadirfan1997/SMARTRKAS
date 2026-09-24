@@ -163,7 +163,7 @@ class ImportRevisiImportTest extends TestCase
 
         $path = $this->makeFile('bulan1.xlsx', [
             ['No Urut', 'Kode Rekening', 'Kode Program', 'Uraian', 'Volume', 'Satuan', 'Tarif', 'Jumlah'],
-            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Kantor', '10', 'buah', '1000', '50000'],
+            ['1', '5.1.01.01.001', 'P.001.01', 'ATK Kantor', '10', 'buah', '1000', '30000'],
         ]);
 
         $diff = $this->makeParser()->diff($path, 1);
@@ -173,7 +173,7 @@ class ImportRevisiImportTest extends TestCase
         $result = $this->makeParser()->validate($diff['rows']);
 
         $this->assertFalse($result['ok']);
-        $this->assertStringContainsString('menjadi SUMBER', $result['errors'][0] ?? '');
+        $this->assertStringContainsString('sudah terpakai', $result['errors'][0] ?? '');
     }
 
     public function test_item_yang_tidak_ada_di_file_dibiarkan(): void
